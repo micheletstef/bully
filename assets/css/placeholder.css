@@ -299,7 +299,7 @@ body {
 .loop-active-window {
   position: absolute;
   top: 0;
-  height: var(--preview-track-height, 46px);
+  height: 100%;
   left: 0;
   width: 20px;
   border: 1px solid #d30000;

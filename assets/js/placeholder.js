@@ -815,12 +815,7 @@ function updateActiveWindow() {
     return;
   }
 
-  const computedTrackHeight = Number.parseFloat(
-    getComputedStyle(loopVisualization).getPropertyValue("--preview-track-height")
-  );
-  const frameHeight = Number.isFinite(computedTrackHeight)
-    ? Math.max(1, computedTrackHeight)
-    : Math.max(1, loopPreviewTrack.clientHeight);
+  const frameHeight = Math.max(1, loopVisualization.clientHeight);
   const billboardAspect = 5900 / 3480;
   const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
@@ -829,10 +824,7 @@ function updateActiveWindow() {
   const mainWidth = Math.min(activeWidth, Math.max(0, sequenceWidth - x));
   const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
-  const previewPadTB = Number.parseFloat(
-    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb")
-  );
-  const frameTopOffset = 4 + (Number.isFinite(previewPadTB) ? previewPadTB : 0);
+  const frameTopOffset = 0;
 
   loopActiveWindow.style.top = `${frameTopOffset}px`;
   loopActiveWindow.style.height = `${frameHeight}px`;
@@ -861,10 +853,7 @@ function updateActiveWindow() {
 
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
-    const rightEdge = x + activeWidth;
-    const remainingPx = rightEdge <= sequenceWidth ? sequenceWidth - rightEdge : 0;
-    const remainingSeconds = (remainingPx / Math.max(1, sequenceWidth)) * loopDurationSeconds;
-    loopElapsedTime.textContent = `${remainingSeconds.toFixed(1)}s`;
+    loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s/${Math.round(loopDurationSeconds)}s`;
     let centerX = drawX + mainWidth / 2;
     if (mainWidth <= 0 && overflowWidth > 0) {
       centerX = baseX + overflowWidth / 2;
