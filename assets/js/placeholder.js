@@ -25,7 +25,7 @@ const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
 const billboardPreview3d = document.getElementById("billboardPreview3d");
 const billboard3dTrackLeft = document.getElementById("billboard3dTrackLeft");
-const billboard3dTrackCurve = document.getElementById("billboard3dTrackCurve");
+const billboard3dCurveSlices = document.getElementById("billboard3dCurveSlices");
 const billboard3dTrackRight = document.getElementById("billboard3dTrackRight");
 const partitionEditors = document.getElementById("partitionEditors");
 const partitionTrackLeft = document.getElementById("partitionTrackLeft");
@@ -100,11 +100,6 @@ let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
 let previewViewMode = "flat";
-let preview3dMetrics = {
-  left: { distance: 1, baseOffset: 0 },
-  curve: { distance: 1, baseOffset: 0 },
-  right: { distance: 1, baseOffset: 0 }
-};
 
 function getAppBasePath() {
   const path = window.location.pathname || "/";
@@ -557,37 +552,22 @@ function sourcesFor3dFace(partitionKey) {
 }
 
 function faceStartRatio(partitionKey) {
-  if (partitionKey === "curve") {
-    return 1820 / 5900;
-  }
   if (partitionKey === "right") {
     return 2840 / 5900;
   }
   return 0;
 }
 
-async function render3dFace(trackEl, partitionKey) {
+async function build3dTrackContent(trackEl, sources, vertical, spacerWidth, gap) {
   if (!trackEl) {
-    return;
+    return 1;
   }
   trackEl.innerHTML = "";
-  const sources = sourcesFor3dFace(partitionKey);
-  if (!sources.length) {
-    preview3dMetrics[partitionKey] = { distance: 1, baseOffset: 0 };
-    return;
-  }
-
-  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
-  const trackHeight = Math.max(1, trackEl.clientHeight || 1);
-  const scale = trackHeight / stageHeight;
-  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
-  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
-  const vertical = orientationFor3dFace(partitionKey) === "vertical";
   trackEl.style.gap = `${gap}px`;
-
   let firstStart = null;
   let secondStart = null;
   const images = [];
+
   const appendSequence = (collectStart) => {
     let startNode = null;
     if (spacerWidth > 0) {
@@ -631,31 +611,93 @@ async function render3dFace(trackEl, partitionKey) {
   appendSequence(false);
   await Promise.all(images.map((image) => waitForPreviewImage(image)));
 
-  let distance = 1;
   if (firstStart && secondStart) {
     const firstRect = firstStart.getBoundingClientRect();
     const secondRect = secondStart.getBoundingClientRect();
-    distance = Math.max(1, secondRect.left - firstRect.left);
+    return Math.max(1, secondRect.left - firstRect.left);
   }
+  return 1;
+}
+
+async function render3dFace(trackEl, partitionKey) {
+  if (!trackEl) {
+    return;
+  }
+  const sources = sourcesFor3dFace(partitionKey);
+  if (!sources.length) {
+    trackEl.innerHTML = "";
+    trackEl.dataset.distance = "1";
+    trackEl.dataset.baseOffset = "0";
+    return;
+  }
+
+  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
+  const trackHeight = Math.max(1, trackEl.clientHeight || 1);
+  const scale = trackHeight / stageHeight;
+  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
+  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
+  const vertical = orientationFor3dFace(partitionKey) === "vertical";
+  const distance = await build3dTrackContent(trackEl, sources, vertical, spacerWidth, gap);
   const baseOffset = currentDirectionIsPartitioned() ? 0 : distance * faceStartRatio(partitionKey);
-  preview3dMetrics[partitionKey] = { distance, baseOffset };
+  trackEl.dataset.distance = String(distance);
+  trackEl.dataset.baseOffset = String(baseOffset);
+}
+
+async function render3dCurveSlices() {
+  if (!billboard3dCurveSlices) {
+    return;
+  }
+  billboard3dCurveSlices.innerHTML = "";
+  const sources = sourcesFor3dFace("curve");
+  if (!sources.length) {
+    return;
+  }
+
+  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
+  const hostHeight = Math.max(1, billboard3dCurveSlices.clientHeight || 1);
+  const scale = hostHeight / stageHeight;
+  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
+  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
+  const vertical = orientationFor3dFace("curve") === "vertical";
+
+  const sliceCount = 8;
+  const curveStartRatio = 1820 / 5900;
+  const curveRatio = 1020 / 5900;
+  const sliceRatio = curveRatio / sliceCount;
+
+  for (let i = 0; i < sliceCount; i += 1) {
+    const t = sliceCount <= 1 ? 0 : i / (sliceCount - 1);
+    const angle = 56 - t * 50;
+    const shift = 0.8 + t * 4.4;
+    const slice = document.createElement("div");
+    slice.className = "corner-curve-slice";
+    slice.style.left = `${(i / sliceCount) * 100}%`;
+    slice.style.width = `calc(${100 / sliceCount}% + 0.8px)`;
+    slice.style.transform = `translateX(${shift}%) rotateY(${angle}deg)`;
+
+    const track = document.createElement("div");
+    track.className = "corner-face-track";
+    slice.appendChild(track);
+    billboard3dCurveSlices.appendChild(slice);
+
+    const distance = await build3dTrackContent(track, sources, vertical, spacerWidth, gap);
+    const baseOffset = currentDirectionIsPartitioned()
+      ? 0
+      : distance * (curveStartRatio + sliceRatio * i);
+    track.dataset.distance = String(distance);
+    track.dataset.baseOffset = String(baseOffset);
+  }
 }
 
 function update3dPreviewAnimation() {
+  if (!billboardPreview3d) {
+    return;
+  }
   const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-  const trackMap = {
-    left: billboard3dTrackLeft,
-    curve: billboard3dTrackCurve,
-    right: billboard3dTrackRight
-  };
-  PARTITION_KEYS.forEach((key) => {
-    const track = trackMap[key];
-    const metrics = preview3dMetrics[key] || { distance: 1, baseOffset: 0 };
-    if (!track) {
-      return;
-    }
-    const distance = Math.max(1, Number(metrics.distance) || 1);
-    const baseOffset = Math.max(0, Number(metrics.baseOffset) || 0);
+  const tracks = billboardPreview3d.querySelectorAll(".corner-face-track");
+  tracks.forEach((track) => {
+    const distance = Math.max(1, Number(track.dataset.distance) || 1);
+    const baseOffset = Math.max(0, Number(track.dataset.baseOffset) || 0);
     const offset = -1 * progress * distance - baseOffset;
     track.style.transform = `translateX(${offset}px)`;
   });
@@ -670,11 +712,8 @@ async function render3dPreview() {
   billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
     face.style.background = faceBackground;
   });
-  await Promise.all([
-    render3dFace(billboard3dTrackLeft, "left"),
-    render3dFace(billboard3dTrackCurve, "curve"),
-    render3dFace(billboard3dTrackRight, "right")
-  ]);
+  await Promise.all([render3dFace(billboard3dTrackLeft, "left"), render3dFace(billboard3dTrackRight, "right")]);
+  await render3dCurveSlices();
   update3dPreviewAnimation();
 }
 

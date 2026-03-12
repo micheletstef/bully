@@ -115,12 +115,13 @@ body {
 
 .corner-scene {
   position: absolute;
-  left: 4%;
-  right: 4%;
-  top: 6%;
-  bottom: 8%;
+  left: 3%;
+  right: 3%;
+  top: 5%;
+  bottom: 6%;
   perspective: 1700px;
   transform-style: preserve-3d;
+  clip-path: polygon(5% 24%, 53% 8%, 90% 48%, 92% 84%, 50% 68%, 11% 73%);
 }
 
 .corner-face {
@@ -161,22 +162,31 @@ body {
   left: 0;
   width: calc(var(--billboard-left-ratio) * 100%);
   transform-origin: right center;
-  transform: translateX(8%) rotateY(62deg);
-}
-
-.corner-face-curve {
-  left: calc(var(--billboard-left-ratio) * 100%);
-  width: calc(var(--billboard-curve-ratio) * 100%);
-  border-radius: 0 28px 28px 0;
-  transform-origin: center center;
-  transform: translateX(6%) rotateY(31deg) scaleX(0.96);
+  transform: translateX(8%) rotateY(63deg);
 }
 
 .corner-face-right {
   left: calc((var(--billboard-left-ratio) + var(--billboard-curve-ratio)) * 100%);
   width: calc(var(--billboard-right-ratio) * 100%);
   transform-origin: left center;
-  transform: translateX(4%) rotateY(-8deg);
+  transform: translateX(4%) rotateY(-7deg);
+}
+
+.corner-curve-slices {
+  position: absolute;
+  top: 0;
+  left: calc(var(--billboard-left-ratio) * 100%);
+  width: calc(var(--billboard-curve-ratio) * 100%);
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.corner-curve-slice {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  transform-origin: left center;
 }
 
 .empty-state {
