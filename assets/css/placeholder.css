@@ -222,6 +222,26 @@ body {
   bottom: auto;
 }
 
+.loop-visualization {
+  margin-top: 56px;
+  width: 100%;
+  height: 38px;
+  overflow: hidden;
+  background: #f1f1f1;
+}
+
+.loop-preview-track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+}
+
+.loop-preview-track img {
+  height: 100%;
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .billboard-info {
   position: fixed;
   top: 18px;
@@ -267,6 +287,57 @@ body {
 .settings-table input[type="range"] {
   width: 100%;
   margin: 0;
+}
+
+.artwork-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.artwork-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.artwork-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artwork-remove {
+  border: 0;
+  background: transparent;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.add-artwork-row {
+  display: flex;
+  gap: 6px;
+}
+
+.add-artwork-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid #b3b3b3;
+  padding: 1px 4px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+}
+
+.add-artwork-row button {
+  border: 1px solid #b3b3b3;
+  background: #fff;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 @media (max-width: 1000px) {

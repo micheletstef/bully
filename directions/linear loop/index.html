@@ -7,6 +7,7 @@
     <style>
       :root {
         --loop-duration: 16s;
+        --loop-distance: 1024px;
       }
 
       html,
@@ -30,44 +31,128 @@
       }
 
       .loop-fill {
-        position: absolute;
+        position: relative;
         inset: 0;
-        background-image: url("../../assets/linear-loop-strip.png");
-        background-repeat: repeat-x;
-        background-size: auto 100%;
-        background-position: 0 50%;
+        display: flex;
+        width: max-content;
+        height: 100%;
         animation: loop-x var(--loop-duration) linear infinite;
         opacity: 0.98;
       }
 
       @keyframes loop-x {
         from {
-          background-position: 0 0;
+          transform: translateX(0);
         }
         to {
-          background-position: 1024px 0;
+          transform: translateX(calc(-1 * var(--loop-distance)));
         }
+      }
+
+      .loop-artwork {
+        height: 100%;
+        width: auto;
+        flex: 0 0 auto;
       }
     </style>
   </head>
   <body>
     <div class="canvas">
-      <div class="loop-fill"></div>
+      <div id="loopFill" class="loop-fill"></div>
     </div>
     <script>
+      const loopFill = document.getElementById("loopFill");
+      const state = {
+        seconds: 16,
+        artworks: ["../../assets/linear-loop-strip.png"]
+      };
+
+      function normalizeArtworkSource(path) {
+        if (/^(https?:|data:|blob:)/.test(path)) {
+          return path;
+        }
+        if (path.startsWith("../../") || path.startsWith("../")) {
+          return path;
+        }
+        if (path.startsWith("assets/")) {
+          return `../../${path}`;
+        }
+        return path;
+      }
+
+      function waitForImage(img) {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }
+
+      async function renderLoop() {
+        loopFill.innerHTML = "";
+
+        const sources = state.artworks.length
+          ? state.artworks.map(normalizeArtworkSource)
+          : ["../../assets/linear-loop-strip.png"];
+
+        const sequence = [...sources, ...sources];
+
+        const images = sequence.map((src) => {
+          const image = document.createElement("img");
+          image.className = "loop-artwork";
+          image.src = src;
+          image.alt = "";
+          loopFill.appendChild(image);
+          return image;
+        });
+
+        await Promise.all(images.map(waitForImage));
+
+        const loopDistance = loopFill.scrollWidth / 2;
+        const safeDistance = loopDistance > 0 ? loopDistance : 1024;
+
+        document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
+        document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
+      }
+
+      function applyConfig(payload) {
+        const seconds = Number(payload.seconds);
+        if (Number.isFinite(seconds) && seconds > 0) {
+          state.seconds = seconds;
+        }
+
+        if (Array.isArray(payload.artworks)) {
+          const cleaned = payload.artworks
+            .map((item) => String(item).trim())
+            .filter((item) => item.length > 0);
+          if (cleaned.length) {
+            state.artworks = cleaned;
+          }
+        }
+
+        renderLoop();
+      }
+
       window.addEventListener("message", (event) => {
         const payload = event.data;
-        if (!payload || payload.type !== "setLoopDuration") {
+        if (!payload) {
           return;
         }
 
-        const seconds = Number(payload.seconds);
-        if (!Number.isFinite(seconds) || seconds <= 0) {
+        if (payload.type === "setLoopConfig") {
+          applyConfig(payload);
           return;
         }
 
-        document.documentElement.style.setProperty("--loop-duration", `${seconds}s`);
+        if (payload.type === "setLoopDuration") {
+          applyConfig({ seconds: payload.seconds });
+        }
       });
+
+      renderLoop();
     </script>
   </body>
 </html>

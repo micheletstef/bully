@@ -3,10 +3,17 @@ const billboardPreview = document.getElementById("billboardPreview");
 const emptyState = document.getElementById("emptyState");
 const speedControl = document.getElementById("speedControl");
 const speedValue = document.getElementById("speedValue");
+const artworkList = document.getElementById("artworkList");
+const artworkInput = document.getElementById("artworkInput");
+const addArtworkButton = document.getElementById("addArtworkButton");
+const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
-  direction: "billboard.selectedDirection"
+  direction: "billboard.selectedDirection",
+  artworks: "billboard.loopArtworks"
 };
+const DEFAULT_ARTWORKS = ["assets/linear-loop-strip.png"];
+let loopArtworks = [...DEFAULT_ARTWORKS];
 
 function normalizeHref(href) {
   if (!href) {
@@ -98,12 +105,24 @@ function currentSpeedSeconds() {
   return Number(speedControl.value);
 }
 
-function saveSpeed(seconds) {
+function readStorage(key) {
   try {
-    localStorage.setItem(STORAGE_KEYS.speed, String(seconds));
+    return localStorage.getItem(key);
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
   } catch (error) {
     // Ignore storage failures.
   }
+}
+
+function saveSpeed(seconds) {
+  writeStorage(STORAGE_KEYS.speed, String(seconds));
 }
 
 function restoreSpeed() {
@@ -111,39 +130,51 @@ function restoreSpeed() {
     return;
   }
 
-  try {
-    const rawValue = localStorage.getItem(STORAGE_KEYS.speed);
-    if (!rawValue) {
-      return;
-    }
-
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed)) {
-      return;
-    }
-
-    const min = Number(speedControl.min || 0);
-    const max = Number(speedControl.max || 999);
-    const clamped = Math.min(max, Math.max(min, parsed));
-    speedControl.value = String(clamped);
-  } catch (error) {
-    // Ignore storage failures.
+  const rawValue = readStorage(STORAGE_KEYS.speed);
+  if (!rawValue) {
+    return;
   }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) {
+    return;
+  }
+
+  const min = Number(speedControl.min || 0);
+  const max = Number(speedControl.max || 999);
+  const clamped = Math.min(max, Math.max(min, parsed));
+  speedControl.value = String(clamped);
 }
 
 function saveSelectedDirection(name) {
-  try {
-    localStorage.setItem(STORAGE_KEYS.direction, name);
-  } catch (error) {
-    // Ignore storage failures.
-  }
+  writeStorage(STORAGE_KEYS.direction, name);
 }
 
 function restoreSelectedDirection() {
+  return readStorage(STORAGE_KEYS.direction);
+}
+
+function saveArtworks(artworks) {
+  writeStorage(STORAGE_KEYS.artworks, JSON.stringify(artworks));
+}
+
+function restoreArtworks() {
+  const rawValue = readStorage(STORAGE_KEYS.artworks);
+  if (!rawValue) {
+    return [...DEFAULT_ARTWORKS];
+  }
+
   try {
-    return localStorage.getItem(STORAGE_KEYS.direction);
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [...DEFAULT_ARTWORKS];
+    }
+    const cleaned = parsed
+      .map((item) => String(item).trim())
+      .filter((item) => item.length > 0);
+    return cleaned.length ? cleaned : [...DEFAULT_ARTWORKS];
   } catch (error) {
-    return null;
+    return [...DEFAULT_ARTWORKS];
   }
 }
 
@@ -154,17 +185,86 @@ function syncSpeedReadout() {
   speedValue.textContent = `${currentSpeedSeconds()}s`;
 }
 
-function sendSpeedToPreview() {
+function sendLoopConfigToPreview() {
   if (!billboardPreview.contentWindow) {
     return;
   }
-  billboardPreview.contentWindow.postMessage(
-    {
-      type: "setLoopDuration",
-      seconds: currentSpeedSeconds()
-    },
-    "*"
-  );
+  const seconds = currentSpeedSeconds();
+  const payload = {
+    type: "setLoopConfig",
+    seconds,
+    artworks: loopArtworks
+  };
+  billboardPreview.contentWindow.postMessage(payload, "*");
+  billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
+}
+
+function renderLoopPreview() {
+  if (!loopPreviewTrack) {
+    return;
+  }
+
+  loopPreviewTrack.innerHTML = "";
+  loopArtworks.forEach((src) => {
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = "";
+    loopPreviewTrack.appendChild(image);
+  });
+}
+
+function removeArtwork(index) {
+  if (loopArtworks.length <= 1) {
+    return;
+  }
+  loopArtworks.splice(index, 1);
+  saveArtworks(loopArtworks);
+  renderArtworkList();
+  renderLoopPreview();
+  sendLoopConfigToPreview();
+}
+
+function renderArtworkList() {
+  if (!artworkList) {
+    return;
+  }
+
+  artworkList.innerHTML = "";
+
+  loopArtworks.forEach((src, index) => {
+    const row = document.createElement("div");
+    row.className = "artwork-item";
+
+    const name = document.createElement("span");
+    name.className = "artwork-name";
+    name.textContent = src;
+    row.appendChild(name);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "artwork-remove";
+    removeButton.textContent = "[x]";
+    removeButton.addEventListener("click", () => removeArtwork(index));
+    row.appendChild(removeButton);
+
+    artworkList.appendChild(row);
+  });
+}
+
+function addArtworkFromInput() {
+  if (!artworkInput) {
+    return;
+  }
+  const value = artworkInput.value.trim();
+  if (!value) {
+    return;
+  }
+  loopArtworks.push(value);
+  artworkInput.value = "";
+  saveArtworks(loopArtworks);
+  renderArtworkList();
+  renderLoopPreview();
+  sendLoopConfigToPreview();
 }
 
 function renderDirectory(directions) {
@@ -209,6 +309,7 @@ function renderDirectory(directions) {
 
 async function init() {
   restoreSpeed();
+  loopArtworks = restoreArtworks();
 
   try {
     let directions = [];
@@ -228,17 +329,32 @@ async function init() {
   }
 
   syncSpeedReadout();
+  renderArtworkList();
+  renderLoopPreview();
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
       syncSpeedReadout();
       saveSpeed(currentSpeedSeconds());
-      sendSpeedToPreview();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (addArtworkButton) {
+    addArtworkButton.addEventListener("click", addArtworkFromInput);
+  }
+
+  if (artworkInput) {
+    artworkInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addArtworkFromInput();
+      }
     });
   }
 
   billboardPreview.addEventListener("load", () => {
-    sendSpeedToPreview();
+    sendLoopConfigToPreview();
   });
 }
 
