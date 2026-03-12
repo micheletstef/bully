@@ -731,7 +731,7 @@ function projectBillboardVertex(x, y, z) {
 }
 
 function clampPreview3dCamera() {
-  preview3dCamera.pitch = Math.min(1.45, Math.max(0.2, preview3dCamera.pitch));
+  preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
 }
 
@@ -879,7 +879,8 @@ function draw3dFrame() {
     const segmentDesignEnd = topPoints[i + 1].s;
     const segmentRatioStart = segmentDesignStart / totalLength;
     const segmentRatioEnd = segmentDesignEnd / totalLength;
-    const sx = ((baseOffset + segmentRatioStart * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
+    const mirroredRatioStart = 1 - segmentRatioEnd;
+    const sx = ((baseOffset + mirroredRatioStart * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
     const sw = Math.max(1, (segmentRatioEnd - segmentRatioStart) * sequenceWidth);
     const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
     const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
