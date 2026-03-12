@@ -43,7 +43,6 @@ let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
-const PREVIEW_RENDER_HEIGHT = 46;
 
 function normalizeHref(href) {
   if (!href) {
@@ -586,7 +585,7 @@ function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = PREVIEW_RENDER_HEIGHT;
+  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
   const sourceHeight = Math.max(1, loopStageHeight);
   const scaledGapRaw = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
   const scaledGap = Math.round(scaledGapRaw * 100) / 100;
@@ -598,7 +597,7 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = PREVIEW_RENDER_HEIGHT;
+  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
   const sourceHeight = Math.max(1, loopStageHeight);
   const scale = previewHeight / sourceHeight;
   const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
@@ -744,9 +743,9 @@ function updateActiveWindow() {
     return;
   }
 
-  const trackHeight = Math.max(1, loopPreviewTrack.clientHeight);
+  const frameHeight = Math.max(1, loopVisualization.clientHeight - 8);
   const billboardAspect = 5900 / 3480;
-  const activeWidth = Math.max(16, trackHeight * billboardAspect);
+  const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
   const x = sequenceWidth * normalizedProgress;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
@@ -783,8 +782,10 @@ function updateActiveWindow() {
       loopVisualization.clientWidth - 4,
       Math.max(4, centerX)
     );
-    const absoluteLeft = loopVisualization.offsetLeft + clampedCenterX;
-    const absoluteTop = loopVisualization.offsetTop + loopVisualization.offsetHeight + 2;
+    const editorRect = loopVisualization.getBoundingClientRect();
+    const absoluteLeft = editorRect.left + clampedCenterX;
+    const frameTop = editorRect.top + 4 + Number.parseFloat(getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb") || "0");
+    const absoluteTop = frameTop + frameHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";

@@ -228,8 +228,8 @@ body {
   transform: translateX(-50%);
   width: max-content;
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
-  height: 54px;
-  padding: 4px;
+  height: 72px;
+  padding: 0;
   overflow-x: visible;
   overflow-y: visible;
   background: #f1f1f1;
@@ -240,20 +240,23 @@ body {
 }
 
 .loop-preview-track {
+  position: absolute;
+  top: calc(4px + var(--preview-pad-tb, 0px));
+  bottom: calc(4px + var(--preview-pad-tb, 0px));
+  left: calc(4px + var(--preview-pad-lr, 0px));
   display: flex;
   width: fit-content;
-  height: max(8px, calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2)));
-  margin-top: var(--preview-pad-tb, 0px);
-  margin-left: var(--preview-pad-lr, 0px);
+  height: auto;
   gap: var(--preview-gap, 0px);
-  position: relative;
   z-index: 1;
 }
 
 .loop-preview-item {
   height: 100%;
   min-width: 0;
-  border: 1px solid rgba(0, 0, 0, 0.22);
+  border: 0;
+  outline: 1px solid rgba(0, 0, 0, 0.22);
+  outline-offset: -1px;
   background: transparent;
   cursor: grab;
   transition: transform 150ms ease, opacity 150ms ease;
@@ -290,7 +293,7 @@ body {
 .loop-active-window {
   position: absolute;
   top: calc(4px + var(--preview-pad-tb, 0px));
-  height: max(8px, calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2)));
+  height: calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2));
   left: 0;
   width: 20px;
   border: 1px solid #d30000;
@@ -300,7 +303,7 @@ body {
 }
 
 .loop-elapsed-time {
-  position: absolute;
+  position: fixed;
   font-size: 10px;
   color: #aa0000;
   white-space: nowrap;
