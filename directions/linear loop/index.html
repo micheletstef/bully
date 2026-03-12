@@ -111,8 +111,12 @@
 
         await Promise.all(images.map(waitForImage));
 
-        const loopDistance = loopFill.scrollWidth / 2;
-        const safeDistance = loopDistance > 0 ? loopDistance : 1024;
+        const firstSequenceImages = images.slice(0, sources.length);
+        const loopDistance = firstSequenceImages.reduce(
+          (sum, image) => sum + image.getBoundingClientRect().width,
+          0
+        );
+        const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
         document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
