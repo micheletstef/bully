@@ -1060,15 +1060,13 @@ function ensureThreePreviewSetup() {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
-  const geometry = new THREE.BoxGeometry(2200, 1300, 900);
-  const material = new THREE.MeshNormalMaterial();
+  const geometry = new THREE.PlaneGeometry(BILLBOARD_DESIGN_WIDTH, BILLBOARD_DESIGN_HEIGHT, 1, 1);
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xf7e977,
+    side: THREE.DoubleSide
+  });
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: 0x111111 })
-  );
-  mesh.add(edges);
 
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
@@ -1152,10 +1150,6 @@ function renderThreeFrame() {
   );
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
-  const time = performance.now() * 0.001;
-  mesh.rotation.x = 0.35 + Math.sin(time * 0.8) * 0.18;
-  mesh.rotation.y = time * 0.65;
-
   if (texture) {
     const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
     texture.offset.x = progress;
