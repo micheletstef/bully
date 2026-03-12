@@ -13,6 +13,7 @@ const rowGapControl = document.getElementById("rowGapControl");
 const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
 const saveVersionButton = document.getElementById("saveVersionButton");
 const saveVersionStatus = document.getElementById("saveVersionStatus");
+const settingsPanel = document.querySelector(".settings-panel");
 let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
@@ -395,16 +396,30 @@ function loadDirection(path) {
   billboardPreview.src = path;
   billboardPreview.style.display = "block";
   emptyState.style.display = "none";
+  setSettingsPanelVisibility(true);
 }
 
 function loadOutputSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot.html !== "string" || !snapshot.html.trim()) {
+  if (!snapshot) {
+    return;
+  }
+  const rawHtml = typeof snapshot.html === "string" ? snapshot.html : "";
+  const hasPlaybackEmitter = rawHtml.includes('type: "loopPlayback"');
+  const hasConfig = snapshot.config && typeof snapshot.config === "object";
+  const renderedHtml =
+    rawHtml.trim() && (hasPlaybackEmitter || !hasConfig)
+      ? rawHtml
+      : hasConfig
+        ? buildSnapshotHtml(snapshot.config)
+        : "";
+  if (!renderedHtml.trim()) {
     return;
   }
   billboardPreview.removeAttribute("src");
-  billboardPreview.srcdoc = snapshot.html;
+  billboardPreview.srcdoc = renderedHtml;
   billboardPreview.style.display = "block";
   emptyState.style.display = "none";
+  setSettingsPanelVisibility(false);
 }
 
 function setActiveDirection(button) {
@@ -416,6 +431,15 @@ function setActiveDirection(button) {
 function setActiveSidebarItem(button, key) {
   setActiveDirection(button);
   activeSidebarKey = key;
+  setSettingsPanelVisibility(!String(key || "").startsWith("output:"));
+}
+
+function setSettingsPanelVisibility(isVisible) {
+  if (!settingsPanel) {
+    return;
+  }
+  settingsPanel.style.display = isVisible ? "" : "none";
+  settingsPanel.setAttribute("aria-hidden", isVisible ? "false" : "true");
 }
 
 function currentSpeedSeconds() {
@@ -644,6 +668,8 @@ function buildSnapshotHtml(config) {
       const loopFill = document.getElementById("loopFill");
       const loopStage = document.getElementById("loopStage");
       const state = ${safeState};
+      let playbackTimer = null;
+      let primaryTrack = null;
 
       function waitForImage(img) {
         return new Promise((resolve) => {
@@ -658,6 +684,7 @@ function buildSnapshotHtml(config) {
 
       async function renderLoop() {
         loopFill.innerHTML = "";
+        primaryTrack = null;
         const sources = state.artworks.length ? state.artworks : [];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
@@ -748,6 +775,7 @@ function buildSnapshotHtml(config) {
           const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
           track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
         });
+        primaryTrack = rows[0] || null;
 
         document.documentElement.style.setProperty("--loop-distance", safeDistance + "px");
         document.documentElement.style.setProperty("--loop-duration", state.seconds + "s");
@@ -755,9 +783,53 @@ function buildSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", gapWidth + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+        emitPlayback();
+      }
+
+      function emitPlayback() {
+        const durationMs = Math.max(1, Number(state.seconds) * 1000);
+        const animationSource = primaryTrack || loopFill;
+        const animation = animationSource.getAnimations()[0];
+        let elapsedMs = 0;
+
+        if (animation && Number.isFinite(animation.currentTime)) {
+          const currentTime = Number(animation.currentTime);
+          elapsedMs = ((currentTime % durationMs) + durationMs) % durationMs;
+        } else {
+          elapsedMs = performance.now() % durationMs;
+        }
+
+        const progress = elapsedMs / durationMs;
+        const viewportWidth = loopStage ? loopStage.clientWidth : 0;
+        const stageHeight = loopStage ? loopStage.clientHeight : 0;
+        const viewportRatio =
+          state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / state.loopDistance)) : 0.25;
+
+        window.parent.postMessage(
+          {
+            type: "loopPlayback",
+            progress,
+            viewportRatio,
+            elapsedSeconds: elapsedMs / 1000,
+            durationSeconds: durationMs / 1000,
+            stageHeight,
+            assetGap: state.assetGap,
+            loopDistance: state.loopDistance
+          },
+          "*"
+        );
+      }
+
+      function startPlaybackEmitter() {
+        if (playbackTimer) {
+          clearInterval(playbackTimer);
+        }
+        emitPlayback();
+        playbackTimer = setInterval(emitPlayback, 50);
       }
 
       renderLoop();
+      startPlaybackEmitter();
     <\/script>
   </body>
 </html>`;
