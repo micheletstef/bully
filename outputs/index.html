@@ -122,34 +122,37 @@
     <script>
       const outputList = document.getElementById("outputList");
       const previewFrame = document.getElementById("previewFrame");
-      const STORAGE_KEY = "billboard.savedOutputs";
       const EMPTY_HTML = "<!doctype html><html><body style='font-family:Courier New, monospace;padding:20px;color:#666;'>Choose a saved output.</body></html>";
 
-      function readOutputs() {
+      async function readOutputs() {
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) {
+          const response = await fetch("/api/outputs", { cache: "no-store" });
+          if (!response.ok) {
             return [];
           }
-          const parsed = JSON.parse(raw);
+          const parsed = await response.json();
           return Array.isArray(parsed) ? parsed : [];
         } catch (error) {
           return [];
         }
       }
 
-      function writeOutputs(outputs) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(outputs));
+      async function deleteOutput(id) {
+        const response = await fetch(`/api/outputs/${encodeURIComponent(id)}`, {
+          method: "DELETE"
+        });
+        if (!response.ok) {
+          throw new Error("Delete failed");
+        }
       }
 
       function openSnapshot(snapshot) {
         previewFrame.srcdoc = snapshot.html || EMPTY_HTML;
       }
 
-      function removeSnapshot(id) {
-        const outputs = readOutputs().filter((item) => item && item.id !== id);
-        writeOutputs(outputs);
-        renderList();
+      async function removeSnapshot(id) {
+        await deleteOutput(id);
+        await renderList();
       }
 
       function openInNewTab(snapshot) {
@@ -159,8 +162,8 @@
         window.open(url, "_blank", "noopener,noreferrer");
       }
 
-      function renderList() {
-        const outputs = readOutputs();
+      async function renderList() {
+        const outputs = await readOutputs();
         outputList.innerHTML = "";
 
         if (!outputs.length) {
@@ -208,7 +211,9 @@
           deleteButton.type = "button";
           deleteButton.className = "action";
           deleteButton.textContent = "delete";
-          deleteButton.addEventListener("click", () => removeSnapshot(snapshot.id));
+          deleteButton.addEventListener("click", async () => {
+            await removeSnapshot(snapshot.id);
+          });
           actions.appendChild(deleteButton);
 
           item.appendChild(actions);

@@ -29,8 +29,7 @@ const STORAGE_KEYS = {
   rowGap: "billboard.loopRowGap",
   reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
-  artworks: "billboard.loopArtworks",
-  outputs: "billboard.savedOutputs"
+  artworks: "billboard.loopArtworks"
 };
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 let loopArtworks = [...DEFAULT_ARTWORKS];
@@ -52,6 +51,8 @@ let loopDistanceSource = 1;
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 let loopRowGap = 0;
 let knownDirections = [];
+let sharedOutputs = [];
+let activeSidebarKey = null;
 
 function normalizeHref(href) {
   if (!href) {
@@ -394,6 +395,11 @@ function setActiveDirection(button) {
   const allButtons = directoryPanel.querySelectorAll(".direction-item");
   allButtons.forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
+}
+
+function setActiveSidebarItem(button, key) {
+  setActiveDirection(button);
+  activeSidebarKey = key;
 }
 
 function currentSpeedSeconds() {
@@ -741,21 +747,46 @@ function buildSnapshotHtml(config) {
 </html>`;
 }
 
-function readOutputs() {
-  const rawValue = readStorage(STORAGE_KEYS.outputs);
-  if (!rawValue) {
-    return [];
-  }
+async function fetchOutputsFromServer() {
   try {
-    const parsed = JSON.parse(rawValue);
+    const response = await fetch("/api/outputs", { cache: "no-store" });
+    if (!response.ok) {
+      return [];
+    }
+    const parsed = await response.json();
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     return [];
   }
 }
 
-function saveOutputs(outputs) {
-  writeStorage(STORAGE_KEYS.outputs, JSON.stringify(outputs));
+async function createOutputOnServer(snapshot) {
+  const response = await fetch("/api/outputs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(snapshot)
+  });
+  if (!response.ok) {
+    throw new Error("Could not save output");
+  }
+}
+
+async function deleteOutputOnServer(id) {
+  const response = await fetch(`/api/outputs/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    throw new Error("Could not delete output");
+  }
+}
+
+async function refreshOutputsFromServer() {
+  sharedOutputs = await fetchOutputsFromServer();
+  if (knownDirections.length) {
+    renderDirectory(knownDirections);
+  }
 }
 
 function setSaveVersionStatus(message, isError) {
@@ -766,7 +797,7 @@ function setSaveVersionStatus(message, isError) {
   saveVersionStatus.style.color = isError ? "#8a0000" : "#2f5f2f";
 }
 
-function saveCurrentVersionSnapshot() {
+async function saveCurrentVersionSnapshot() {
   const directionName = getCurrentDirectionName();
   if (!directionName) {
     setSaveVersionStatus("Select a direction before saving.", true);
@@ -785,29 +816,28 @@ function saveCurrentVersionSnapshot() {
     html: buildSnapshotHtml(config)
   };
 
-  const existing = readOutputs();
-  existing.unshift(snapshot);
-  saveOutputs(existing);
-  setSaveVersionStatus(`Saved ${timestampName}.`);
-  if (knownDirections.length) {
-    renderDirectory(knownDirections);
+  setSaveVersionStatus(`Saving ${timestampName}...`, false);
+  try {
+    await createOutputOnServer(snapshot);
+    setSaveVersionStatus(`Saved ${timestampName}.`, false);
+    await refreshOutputsFromServer();
+  } catch (error) {
+    setSaveVersionStatus("Save failed. Server unavailable.", true);
   }
 }
 
-function removeOutputSnapshot(snapshot) {
-  const existing = readOutputs();
-  const filtered = existing.filter((item) => {
-    if (!item || typeof item !== "object") {
-      return false;
+async function removeOutputSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot.id !== "string" || !snapshot.id) {
+    return;
+  }
+  try {
+    await deleteOutputOnServer(snapshot.id);
+    if (activeSidebarKey === `output:${snapshot.id}`) {
+      activeSidebarKey = null;
     }
-    if (snapshot && snapshot.id && item.id) {
-      return item.id !== snapshot.id;
-    }
-    return !(item.name === snapshot.name && item.createdAt === snapshot.createdAt);
-  });
-  saveOutputs(filtered);
-  if (knownDirections.length) {
-    renderDirectory(knownDirections);
+    await refreshOutputsFromServer();
+  } catch (error) {
+    setSaveVersionStatus("Delete failed. Server unavailable.", true);
   }
 }
 
@@ -1314,8 +1344,10 @@ function renderDirectory(directions) {
   directionsSection.appendChild(directionsTitle);
 
   const savedDirection = restoreSelectedDirection();
+  let firstDirectionButton = null;
   let initialButton = null;
   let initialName = null;
+  let restoredActiveButton = null;
 
   directions.forEach((name) => {
     const button = document.createElement("button");
@@ -1325,14 +1357,20 @@ function renderDirectory(directions) {
     button.dataset.directionName = name;
     button.addEventListener("click", () => {
       loadDirection(directionPath(name));
-      setActiveDirection(button);
+      setActiveSidebarItem(button, `direction:${name}`);
       saveSelectedDirection(name);
     });
     directionsSection.appendChild(button);
 
+    if (!firstDirectionButton) {
+      firstDirectionButton = button;
+    }
     if (savedDirection === name) {
       initialButton = button;
       initialName = name;
+    }
+    if (activeSidebarKey === `direction:${name}`) {
+      restoredActiveButton = button;
     }
   });
 
@@ -1344,7 +1382,7 @@ function renderDirectory(directions) {
   outputsTitle.textContent = "outputs";
   outputsSection.appendChild(outputsTitle);
 
-  const outputs = readOutputs();
+  const outputs = sharedOutputs;
   if (!outputs.length) {
     const empty = document.createElement("div");
     empty.className = "settings-hint";
@@ -1361,7 +1399,7 @@ function renderDirectory(directions) {
       button.textContent = snapshot.name || snapshot.createdAt || "saved output";
       button.addEventListener("click", () => {
         loadOutputSnapshot(snapshot);
-        setActiveDirection(button);
+        setActiveSidebarItem(button, `output:${snapshot.id || ""}`);
       });
       row.appendChild(button);
 
@@ -1371,21 +1409,36 @@ function renderDirectory(directions) {
       removeButton.setAttribute("aria-label", "Delete output");
       removeButton.title = "Delete output";
       removeButton.textContent = "×";
-      removeButton.addEventListener("click", (event) => {
+      removeButton.addEventListener("click", async (event) => {
         event.stopPropagation();
-        removeOutputSnapshot(snapshot);
+        await removeOutputSnapshot(snapshot);
       });
       row.appendChild(removeButton);
 
       outputsSection.appendChild(row);
+
+      if (activeSidebarKey === `output:${snapshot.id || ""}`) {
+        restoredActiveButton = button;
+      }
     });
   }
 
   directoryPanel.appendChild(outputsSection);
 
+  if (restoredActiveButton) {
+    setActiveDirection(restoredActiveButton);
+    return;
+  }
+
   if (initialButton && initialName) {
     loadDirection(directionPath(initialName));
-    setActiveDirection(initialButton);
+    setActiveSidebarItem(initialButton, `direction:${initialName}`);
+    return;
+  }
+
+  if (firstDirectionButton && directions[0]) {
+    loadDirection(directionPath(directions[0]));
+    setActiveSidebarItem(firstDirectionButton, `direction:${directions[0]}`);
   }
 }
 
@@ -1407,6 +1460,7 @@ async function init() {
     }
 
     knownDirections = [...directions];
+    sharedOutputs = await fetchOutputsFromServer();
     renderDirectory(directions);
   } catch (error) {
     emptyState.textContent = "No directions found. Check directions/manifest.json.";
@@ -1492,8 +1546,8 @@ async function init() {
   }
 
   if (saveVersionButton) {
-    saveVersionButton.addEventListener("click", () => {
-      saveCurrentVersionSnapshot();
+    saveVersionButton.addEventListener("click", async () => {
+      await saveCurrentVersionSnapshot();
     });
   }
 
