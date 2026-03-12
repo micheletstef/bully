@@ -228,8 +228,8 @@ body {
   transform: translateX(-50%);
   width: max-content;
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
-  height: auto;
-  padding: calc(4px + var(--preview-pad-tb, 0px)) calc(4px + var(--preview-pad-lr, 0px));
+  height: 54px;
+  padding: 4px;
   overflow-x: visible;
   overflow-y: visible;
   background: #f1f1f1;
@@ -242,7 +242,9 @@ body {
 .loop-preview-track {
   display: flex;
   width: fit-content;
-  height: 46px;
+  height: max(8px, calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2)));
+  margin-top: var(--preview-pad-tb, 0px);
+  margin-left: var(--preview-pad-lr, 0px);
   gap: var(--preview-gap, 0px);
   position: relative;
   z-index: 1;
@@ -287,8 +289,8 @@ body {
 
 .loop-active-window {
   position: absolute;
-  top: 3px;
-  height: 46px;
+  top: calc(4px + var(--preview-pad-tb, 0px));
+  height: max(8px, calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2)));
   left: 0;
   width: 20px;
   border: 1px solid #d30000;

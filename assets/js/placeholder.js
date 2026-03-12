@@ -667,8 +667,9 @@ function updateActiveWindow() {
     return;
   }
 
-  const ratio = Math.min(1, Math.max(0.01, loopPlaybackViewportRatio || 0.25));
-  const activeWidth = Math.max(16, sequenceWidth * ratio);
+  const trackHeight = Math.max(1, loopPreviewTrack.clientHeight);
+  const billboardAspect = 5900 / 3480;
+  const activeWidth = Math.max(16, trackHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
   const x = sequenceWidth * normalizedProgress;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
@@ -697,9 +698,16 @@ function updateActiveWindow() {
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s / ${loopDurationSeconds.toFixed(1)}s`;
-    const absoluteLeft = loopVisualization.offsetLeft + drawX + activeWidth / 2;
-    const frameTop = loopVisualization.offsetTop + loopActiveWindow.offsetTop;
-    const absoluteTop = frameTop + loopActiveWindow.offsetHeight + 2;
+    let centerX = drawX + mainWidth / 2;
+    if (mainWidth <= 0 && overflowWidth > 0) {
+      centerX = baseX + overflowWidth / 2;
+    }
+    const clampedCenterX = Math.min(
+      loopVisualization.clientWidth - 4,
+      Math.max(4, centerX)
+    );
+    const absoluteLeft = loopVisualization.offsetLeft + clampedCenterX;
+    const absoluteTop = loopVisualization.offsetTop + loopVisualization.offsetHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
