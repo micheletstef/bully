@@ -179,7 +179,7 @@ body {
 
 .anno-marker {
   position: absolute;
-  top: 0;
+  top: -16px;
   height: calc(100% + 16px);
   border-left: 1px solid rgba(17, 17, 17, 0.45);
 }
@@ -207,6 +207,8 @@ body {
 
 .anno-label-curve {
   left: 39.49155%;
+  top: -34px;
+  bottom: auto;
 }
 
 .anno-label-2840 {
