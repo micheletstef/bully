@@ -1,9 +1,14 @@
 # bully
 
-Run the app with the built-in server so shared outputs are persisted server-side:
+## Shared hosting (no Node) - recommended for your host
+
+This repo now includes a PHP API at `api/outputs.php` plus `.htaccess` routing.
+On Apache/PHP hosting, shared outputs work without Node.
+
+Verify after deploy:
 
 ```bash
-node server.js
+curl -i https://lab.stefmichelet.com/bully/api/outputs
 ```
 
-Then open [http://localhost:8080](http://localhost:8080).
+Expected: HTTP 200 and JSON.
