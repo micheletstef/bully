@@ -656,22 +656,50 @@ async function build3dSurfaceStrip(targetHeight) {
   return { canvas: stripCanvas, sequenceWidth, stripHeight };
 }
 
-function interpolateProfile(points, ratio) {
-  const clamped = Math.max(0, Math.min(1, ratio));
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const a = points[index];
-    const b = points[index + 1];
-    if (clamped <= b.r) {
-      const span = Math.max(0.0001, b.r - a.r);
-      const t = (clamped - a.r) / span;
-      return {
-        x: a.x + (b.x - a.x) * t,
-        y: a.y + (b.y - a.y) * t
-      };
-    }
+function buildTopViewSpine() {
+  const leftLength = 1820;
+  const curveLength = 1020;
+  const rightLength = 3060;
+  const totalLength = leftLength + curveLength + rightLength;
+  const radius = curveLength / (Math.PI / 2);
+  const points = [];
+  const leftSamples = 80;
+  const curveSamples = 72;
+  const rightSamples = 120;
+
+  for (let i = 0; i <= leftSamples; i += 1) {
+    const t = i / leftSamples;
+    points.push({
+      x: leftLength * t,
+      y: 0,
+      s: leftLength * t
+    });
   }
-  const last = points[points.length - 1];
-  return { x: last.x, y: last.y };
+
+  const cx = leftLength;
+  const cy = -radius;
+  for (let i = 1; i <= curveSamples; i += 1) {
+    const t = i / curveSamples;
+    const theta = Math.PI / 2 + (0 - Math.PI / 2) * t;
+    points.push({
+      x: cx + radius * Math.cos(theta),
+      y: cy + radius * Math.sin(theta),
+      s: leftLength + curveLength * t
+    });
+  }
+
+  const endX = leftLength + radius;
+  const endY = -radius;
+  for (let i = 1; i <= rightSamples; i += 1) {
+    const t = i / rightSamples;
+    points.push({
+      x: endX,
+      y: endY - rightLength * t,
+      s: leftLength + curveLength + rightLength * t
+    });
+  }
+
+  return { points, totalLength };
 }
 
 function draw3dFrame() {
@@ -684,42 +712,50 @@ function draw3dFrame() {
     return;
   }
   ctx.clearRect(0, 0, width, height);
-
-  const topProfile = [
-    { r: 0, x: 0.09, y: 0.27 },
-    { r: 1820 / 5900, x: 0.51, y: 0.1 },
-    { r: 2840 / 5900, x: 0.69, y: 0.24 },
-    { r: 1, x: 0.89, y: 0.5 }
-  ];
-  const bottomProfile = [
-    { r: 0, x: 0.08, y: 0.75 },
-    { r: 1820 / 5900, x: 0.48, y: 0.68 },
-    { r: 2840 / 5900, x: 0.61, y: 0.74 },
-    { r: 1, x: 0.91, y: 0.86 }
-  ];
-
-  const toPoint = (sample, point) => ({ x: point.x * sample.width, y: point.y * sample.height });
-  const sample = { width, height };
+  const spine = buildTopViewSpine();
+  const topDesign = spine.points;
+  const extrusionDesign = 3480;
+  const bounds = {
+    minX: Infinity,
+    maxX: -Infinity,
+    minY: Infinity,
+    maxY: -Infinity
+  };
+  topDesign.forEach((point) => {
+    bounds.minX = Math.min(bounds.minX, point.x);
+    bounds.maxX = Math.max(bounds.maxX, point.x);
+    bounds.minY = Math.min(bounds.minY, point.y);
+    bounds.maxY = Math.max(bounds.maxY, point.y + extrusionDesign);
+  });
+  const designWidth = Math.max(1, bounds.maxX - bounds.minX);
+  const designHeight = Math.max(1, bounds.maxY - bounds.minY);
+  const marginScale = 0.86;
+  const scale = Math.min((width * marginScale) / designWidth, (height * marginScale) / designHeight);
+  const offsetX = (width - designWidth * scale) / 2 - bounds.minX * scale;
+  const offsetY = (height - designHeight * scale) / 2 - bounds.minY * scale;
+  const topPoints = topDesign.map((point) => ({
+    x: point.x * scale + offsetX,
+    y: point.y * scale + offsetY,
+    s: point.s
+  }));
+  const bottomPoints = topDesign.map((point) => ({
+    x: point.x * scale + offsetX,
+    y: (point.y + extrusionDesign) * scale + offsetY
+  }));
   const shapeBg = currentBackgroundColor();
-  const slices = 260;
   const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-  const distance = preview3dSurface.sequenceWidth;
-  const baseOffset = progress * distance;
+  const baseOffset = progress * preview3dSurface.sequenceWidth;
 
   ctx.beginPath();
-  for (let i = 0; i <= slices; i += 1) {
-    const ratio = i / slices;
-    const topPoint = toPoint(sample, interpolateProfile(topProfile, ratio));
-    if (i === 0) {
-      ctx.moveTo(topPoint.x, topPoint.y);
+  topPoints.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
     } else {
-      ctx.lineTo(topPoint.x, topPoint.y);
+      ctx.lineTo(point.x, point.y);
     }
-  }
-  for (let i = slices; i >= 0; i -= 1) {
-    const ratio = i / slices;
-    const bottomPoint = toPoint(sample, interpolateProfile(bottomProfile, ratio));
-    ctx.lineTo(bottomPoint.x, bottomPoint.y);
+  });
+  for (let i = bottomPoints.length - 1; i >= 0; i -= 1) {
+    ctx.lineTo(bottomPoints[i].x, bottomPoints[i].y);
   }
   ctx.closePath();
   ctx.fillStyle = shapeBg;
@@ -728,19 +764,21 @@ function draw3dFrame() {
   const strip = preview3dSurface.canvas;
   const stripHeight = preview3dSurface.stripHeight;
   const sequenceWidth = preview3dSurface.sequenceWidth;
+  const totalLength = Math.max(1, spine.totalLength);
 
-  for (let i = 0; i < slices; i += 1) {
-    const r0 = i / slices;
-    const r1 = (i + 1) / slices;
-    const p0 = toPoint(sample, interpolateProfile(topProfile, r0));
-    const p1 = toPoint(sample, interpolateProfile(topProfile, r1));
-    const p2 = toPoint(sample, interpolateProfile(bottomProfile, r1));
-    const p3 = toPoint(sample, interpolateProfile(bottomProfile, r0));
-
-    const sx = ((baseOffset + r0 * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
-    const sw = Math.max(1, Math.ceil((r1 - r0) * sequenceWidth));
-    const dw = sw;
-    const dh = stripHeight;
+  for (let i = 0; i < topPoints.length - 1; i += 1) {
+    const p0 = topPoints[i];
+    const p1 = topPoints[i + 1];
+    const p2 = bottomPoints[i + 1];
+    const p3 = bottomPoints[i];
+    const segmentDesignStart = topPoints[i].s;
+    const segmentDesignEnd = topPoints[i + 1].s;
+    const segmentRatioStart = segmentDesignStart / totalLength;
+    const segmentRatioEnd = segmentDesignEnd / totalLength;
+    const sx = ((baseOffset + segmentRatioStart * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
+    const sw = Math.max(1, (segmentRatioEnd - segmentRatioStart) * sequenceWidth);
+    const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+    const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
 
     ctx.save();
     ctx.beginPath();
