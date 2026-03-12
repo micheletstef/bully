@@ -17,15 +17,7 @@
           <div class="billboard-frame">
             <iframe id="billboardPreview" title="Billboard preview"></iframe>
             <div id="billboardPreview3d" class="billboard-preview-3d" aria-hidden="true">
-              <div class="corner-scene">
-                <section class="corner-face corner-face-left">
-                  <div id="billboard3dTrackLeft" class="corner-face-track"></div>
-                </section>
-                <div id="billboard3dCurveSlices" class="corner-curve-slices"></div>
-                <section class="corner-face corner-face-right">
-                  <div id="billboard3dTrackRight" class="corner-face-track"></div>
-                </section>
-              </div>
+              <canvas id="billboard3dCanvas" class="billboard-3d-canvas" aria-label="3D billboard preview"></canvas>
             </div>
             <div id="emptyState" class="empty-state"></div>
           </div>

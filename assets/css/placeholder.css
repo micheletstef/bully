@@ -109,84 +109,17 @@ body {
   position: absolute;
   inset: 0;
   display: none;
-  background: var(--preview-3d-bg, #fff8a5);
-  overflow: hidden;
-}
-
-.corner-scene {
-  position: absolute;
-  left: 3%;
-  right: 3%;
-  top: 5%;
-  bottom: 6%;
-  perspective: 1700px;
-  transform-style: preserve-3d;
-  clip-path: polygon(5% 24%, 53% 8%, 90% 48%, 92% 84%, 50% 68%, 11% 73%);
-}
-
-.corner-face {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  overflow: hidden;
   background: transparent;
-  box-shadow: none;
+  overflow: hidden;
 }
 
-.corner-face-track {
+.billboard-3d-canvas {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: stretch;
-  width: max-content;
+  width: 100%;
   height: 100%;
-  gap: var(--preview-3d-gap, 0px);
-  will-change: transform;
-}
-
-.corner-face-item,
-.corner-face-spacer {
-  flex: 0 0 auto;
-  height: 100%;
-}
-
-.corner-face-item img {
   display: block;
-  height: 100%;
-  width: auto;
-  max-width: none;
-  object-fit: contain;
-}
-
-.corner-face-left {
-  left: 0;
-  width: calc(var(--billboard-left-ratio) * 100%);
-  transform-origin: right center;
-  transform: translateX(8%) rotateY(63deg);
-}
-
-.corner-face-right {
-  left: calc((var(--billboard-left-ratio) + var(--billboard-curve-ratio)) * 100%);
-  width: calc(var(--billboard-right-ratio) * 100%);
-  transform-origin: left center;
-  transform: translateX(4%) rotateY(-7deg);
-}
-
-.corner-curve-slices {
-  position: absolute;
-  top: 0;
-  left: calc(var(--billboard-left-ratio) * 100%);
-  width: calc(var(--billboard-curve-ratio) * 100%);
-  height: 100%;
-  transform-style: preserve-3d;
-}
-
-.corner-curve-slice {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  overflow: hidden;
-  transform-origin: left center;
+  background: transparent;
 }
 
 .empty-state {

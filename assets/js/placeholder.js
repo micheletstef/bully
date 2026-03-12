@@ -24,9 +24,7 @@ const settingsPanel = document.querySelector(".settings-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
 const billboardPreview3d = document.getElementById("billboardPreview3d");
-const billboard3dTrackLeft = document.getElementById("billboard3dTrackLeft");
-const billboard3dCurveSlices = document.getElementById("billboard3dCurveSlices");
-const billboard3dTrackRight = document.getElementById("billboard3dTrackRight");
+const billboard3dCanvas = document.getElementById("billboard3dCanvas");
 const partitionEditors = document.getElementById("partitionEditors");
 const partitionTrackLeft = document.getElementById("partitionTrackLeft");
 const partitionTrackCurve = document.getElementById("partitionTrackCurve");
@@ -100,6 +98,9 @@ let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
 let previewViewMode = "flat";
+let preview3dSurface = null;
+let preview3dRenderToken = 0;
+const preview3dImageCache = new Map();
 
 function getAppBasePath() {
   const path = window.location.pathname || "/";
@@ -535,186 +536,258 @@ function normalize3dArtworkSource(path) {
   return source;
 }
 
-function orientationFor3dFace(partitionKey) {
+function current3dOrientation() {
   if (currentDirectionIsPartitioned()) {
     const orientations = currentPartitionArtworkOrientations();
-    return orientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+    return orientations.left === "vertical" ? "vertical" : "horizontal";
   }
   return currentArtworkOrientation();
 }
 
-function sourcesFor3dFace(partitionKey) {
-  if (currentDirectionIsPartitioned()) {
-    const list = partitionArtworks[partitionKey] || [];
-    return list.length ? list.map((item) => normalize3dArtworkSource(item.src)) : [];
+function current3dSources() {
+  if (!currentDirectionIsPartitioned()) {
+    return loopArtworks.map((item) => normalize3dArtworkSource(item.src));
+  }
+  const merged = [...(partitionArtworks.left || []), ...(partitionArtworks.curve || []), ...(partitionArtworks.right || [])]
+    .map((item) => normalize3dArtworkSource(item.src))
+    .filter((src) => !!src);
+  if (merged.length) {
+    return merged;
   }
   return loopArtworks.map((item) => normalize3dArtworkSource(item.src));
 }
 
-function faceStartRatio(partitionKey) {
-  if (partitionKey === "right") {
-    return 2840 / 5900;
+function get3dCanvasContext() {
+  if (!billboard3dCanvas) {
+    return null;
   }
-  return 0;
+  return billboard3dCanvas.getContext("2d");
 }
 
-async function build3dTrackContent(trackEl, sources, vertical, spacerWidth, gap) {
-  if (!trackEl) {
-    return 1;
+function ensure3dCanvasSize(ctx) {
+  if (!billboard3dCanvas || !ctx) {
+    return { width: 0, height: 0 };
   }
-  trackEl.innerHTML = "";
-  trackEl.style.gap = `${gap}px`;
-  let firstStart = null;
-  let secondStart = null;
-  const images = [];
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const cssWidth = Math.max(1, billboard3dCanvas.clientWidth || 1);
+  const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
+  const width = Math.max(1, Math.round(cssWidth * dpr));
+  const height = Math.max(1, Math.round(cssHeight * dpr));
+  if (billboard3dCanvas.width !== width || billboard3dCanvas.height !== height) {
+    billboard3dCanvas.width = width;
+    billboard3dCanvas.height = height;
+  }
+  return { width, height };
+}
 
-  const appendSequence = (collectStart) => {
-    let startNode = null;
-    if (spacerWidth > 0) {
-      const spacerStart = document.createElement("div");
-      spacerStart.className = "corner-face-spacer";
-      spacerStart.style.width = `${spacerWidth}px`;
-      trackEl.appendChild(spacerStart);
-      startNode = spacerStart;
+async function load3dImage(src) {
+  if (!src) {
+    return null;
+  }
+  if (preview3dImageCache.has(src)) {
+    return preview3dImageCache.get(src);
+  }
+  const promise = new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+  preview3dImageCache.set(src, promise);
+  return promise;
+}
+
+async function build3dSurfaceStrip(targetHeight) {
+  const sources = current3dSources();
+  const orientation = current3dOrientation();
+  if (!sources.length) {
+    return null;
+  }
+  const images = (await Promise.all(sources.map((src) => load3dImage(src)))).filter((img) => !!img);
+  if (!images.length) {
+    return null;
+  }
+
+  const pad = Math.max(0, Number(currentPadLeftRight()) || 0);
+  const gap = Math.max(0, Number(currentAssetGap()) || 0);
+  const stripHeight = Math.max(64, Math.round(targetHeight));
+  const widths = images.map((img) => {
+    const sourceWidth = Math.max(1, img.naturalWidth || img.width || 1);
+    const sourceHeight = Math.max(1, img.naturalHeight || img.height || 1);
+    if (orientation === "vertical") {
+      return Math.max(1, (sourceHeight / sourceWidth) * stripHeight);
     }
-    sources.forEach((source) => {
-      const tile = document.createElement("div");
-      tile.className = "corner-face-item";
-      const image = document.createElement("img");
-      image.src = source;
-      image.alt = "";
-      if (vertical) {
-        image.style.transform = "rotate(-90deg)";
-        image.style.transformOrigin = "center center";
+    return Math.max(1, (sourceWidth / sourceHeight) * stripHeight);
+  });
+  const sequenceWidth = Math.max(
+    1,
+    Math.round(pad * 2 + widths.reduce((sum, value) => sum + value, 0) + Math.max(0, images.length - 1) * gap)
+  );
+  const stripCanvas = document.createElement("canvas");
+  stripCanvas.width = sequenceWidth * 2;
+  stripCanvas.height = stripHeight;
+  const stripCtx = stripCanvas.getContext("2d");
+  if (!stripCtx) {
+    return null;
+  }
+
+  const drawSequence = (startX) => {
+    let cursor = startX + pad;
+    images.forEach((img, idx) => {
+      const drawWidth = widths[idx];
+      if (orientation === "vertical") {
+        stripCtx.save();
+        stripCtx.translate(cursor + drawWidth / 2, stripHeight / 2);
+        stripCtx.rotate(-Math.PI / 2);
+        stripCtx.drawImage(img, -stripHeight / 2, -drawWidth / 2, stripHeight, drawWidth);
+        stripCtx.restore();
+      } else {
+        stripCtx.drawImage(img, cursor, 0, drawWidth, stripHeight);
       }
-      tile.appendChild(image);
-      trackEl.appendChild(tile);
-      images.push(image);
-      if (!startNode) {
-        startNode = tile;
+      cursor += drawWidth;
+      if (idx < images.length - 1) {
+        cursor += gap;
       }
     });
-    if (spacerWidth > 0) {
-      const spacerEnd = document.createElement("div");
-      spacerEnd.className = "corner-face-spacer";
-      spacerEnd.style.width = `${spacerWidth}px`;
-      trackEl.appendChild(spacerEnd);
-    }
-    if (collectStart) {
-      firstStart = startNode;
-    } else {
-      secondStart = startNode;
-    }
   };
+  drawSequence(0);
+  drawSequence(sequenceWidth);
 
-  appendSequence(true);
-  appendSequence(false);
-  await Promise.all(images.map((image) => waitForPreviewImage(image)));
-
-  if (firstStart && secondStart) {
-    const firstRect = firstStart.getBoundingClientRect();
-    const secondRect = secondStart.getBoundingClientRect();
-    return Math.max(1, secondRect.left - firstRect.left);
-  }
-  return 1;
+  return { canvas: stripCanvas, sequenceWidth, stripHeight };
 }
 
-async function render3dFace(trackEl, partitionKey) {
-  if (!trackEl) {
-    return;
+function interpolateProfile(points, ratio) {
+  const clamped = Math.max(0, Math.min(1, ratio));
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const a = points[index];
+    const b = points[index + 1];
+    if (clamped <= b.r) {
+      const span = Math.max(0.0001, b.r - a.r);
+      const t = (clamped - a.r) / span;
+      return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t
+      };
+    }
   }
-  const sources = sourcesFor3dFace(partitionKey);
-  if (!sources.length) {
-    trackEl.innerHTML = "";
-    trackEl.dataset.distance = "1";
-    trackEl.dataset.baseOffset = "0";
-    return;
-  }
-
-  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
-  const trackHeight = Math.max(1, trackEl.clientHeight || 1);
-  const scale = trackHeight / stageHeight;
-  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
-  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
-  const vertical = orientationFor3dFace(partitionKey) === "vertical";
-  const distance = await build3dTrackContent(trackEl, sources, vertical, spacerWidth, gap);
-  const baseOffset = currentDirectionIsPartitioned() ? 0 : distance * faceStartRatio(partitionKey);
-  trackEl.dataset.distance = String(distance);
-  trackEl.dataset.baseOffset = String(baseOffset);
+  const last = points[points.length - 1];
+  return { x: last.x, y: last.y };
 }
 
-async function render3dCurveSlices() {
-  if (!billboard3dCurveSlices) {
+function draw3dFrame() {
+  const ctx = get3dCanvasContext();
+  if (!ctx || !preview3dSurface) {
     return;
   }
-  billboard3dCurveSlices.innerHTML = "";
-  const sources = sourcesFor3dFace("curve");
-  if (!sources.length) {
+  const { width, height } = ensure3dCanvasSize(ctx);
+  if (!width || !height) {
     return;
   }
+  ctx.clearRect(0, 0, width, height);
 
-  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
-  const hostHeight = Math.max(1, billboard3dCurveSlices.clientHeight || 1);
-  const scale = hostHeight / stageHeight;
-  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
-  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
-  const vertical = orientationFor3dFace("curve") === "vertical";
+  const topProfile = [
+    { r: 0, x: 0.09, y: 0.27 },
+    { r: 1820 / 5900, x: 0.51, y: 0.1 },
+    { r: 2840 / 5900, x: 0.69, y: 0.24 },
+    { r: 1, x: 0.89, y: 0.5 }
+  ];
+  const bottomProfile = [
+    { r: 0, x: 0.08, y: 0.75 },
+    { r: 1820 / 5900, x: 0.48, y: 0.68 },
+    { r: 2840 / 5900, x: 0.61, y: 0.74 },
+    { r: 1, x: 0.91, y: 0.86 }
+  ];
 
-  const sliceCount = 8;
-  const curveStartRatio = 1820 / 5900;
-  const curveRatio = 1020 / 5900;
-  const sliceRatio = curveRatio / sliceCount;
+  const toPoint = (sample, point) => ({ x: point.x * sample.width, y: point.y * sample.height });
+  const sample = { width, height };
+  const shapeBg = currentBackgroundColor();
+  const slices = 260;
+  const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
+  const distance = preview3dSurface.sequenceWidth;
+  const baseOffset = progress * distance;
 
-  for (let i = 0; i < sliceCount; i += 1) {
-    const t = sliceCount <= 1 ? 0 : i / (sliceCount - 1);
-    const angle = 56 - t * 50;
-    const shift = 0.8 + t * 4.4;
-    const slice = document.createElement("div");
-    slice.className = "corner-curve-slice";
-    slice.style.left = `${(i / sliceCount) * 100}%`;
-    slice.style.width = `calc(${100 / sliceCount}% + 0.8px)`;
-    slice.style.transform = `translateX(${shift}%) rotateY(${angle}deg)`;
+  ctx.beginPath();
+  for (let i = 0; i <= slices; i += 1) {
+    const ratio = i / slices;
+    const topPoint = toPoint(sample, interpolateProfile(topProfile, ratio));
+    if (i === 0) {
+      ctx.moveTo(topPoint.x, topPoint.y);
+    } else {
+      ctx.lineTo(topPoint.x, topPoint.y);
+    }
+  }
+  for (let i = slices; i >= 0; i -= 1) {
+    const ratio = i / slices;
+    const bottomPoint = toPoint(sample, interpolateProfile(bottomProfile, ratio));
+    ctx.lineTo(bottomPoint.x, bottomPoint.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = shapeBg;
+  ctx.fill();
 
-    const track = document.createElement("div");
-    track.className = "corner-face-track";
-    slice.appendChild(track);
-    billboard3dCurveSlices.appendChild(slice);
+  const strip = preview3dSurface.canvas;
+  const stripHeight = preview3dSurface.stripHeight;
+  const sequenceWidth = preview3dSurface.sequenceWidth;
 
-    const distance = await build3dTrackContent(track, sources, vertical, spacerWidth, gap);
-    const baseOffset = currentDirectionIsPartitioned()
-      ? 0
-      : distance * (curveStartRatio + sliceRatio * i);
-    track.dataset.distance = String(distance);
-    track.dataset.baseOffset = String(baseOffset);
+  for (let i = 0; i < slices; i += 1) {
+    const r0 = i / slices;
+    const r1 = (i + 1) / slices;
+    const p0 = toPoint(sample, interpolateProfile(topProfile, r0));
+    const p1 = toPoint(sample, interpolateProfile(topProfile, r1));
+    const p2 = toPoint(sample, interpolateProfile(bottomProfile, r1));
+    const p3 = toPoint(sample, interpolateProfile(bottomProfile, r0));
+
+    const sx = ((baseOffset + r0 * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
+    const sw = Math.max(1, Math.ceil((r1 - r0) * sequenceWidth));
+    const dw = sw;
+    const dh = stripHeight;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(p3.x, p3.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.setTransform(
+      (p1.x - p0.x) / dw,
+      (p1.y - p0.y) / dw,
+      (p3.x - p0.x) / dh,
+      (p3.y - p0.y) / dh,
+      p0.x,
+      p0.y
+    );
+    ctx.drawImage(strip, sx, 0, sw, stripHeight, 0, 0, dw, dh);
+    ctx.restore();
   }
 }
 
 function update3dPreviewAnimation() {
-  if (!billboardPreview3d) {
-    return;
-  }
-  const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-  const tracks = billboardPreview3d.querySelectorAll(".corner-face-track");
-  tracks.forEach((track) => {
-    const distance = Math.max(1, Number(track.dataset.distance) || 1);
-    const baseOffset = Math.max(0, Number(track.dataset.baseOffset) || 0);
-    const offset = -1 * progress * distance - baseOffset;
-    track.style.transform = `translateX(${offset}px)`;
-  });
+  draw3dFrame();
 }
 
 async function render3dPreview() {
-  if (!billboardPreview3d) {
+  if (!billboardPreview3d || !billboard3dCanvas) {
     return;
   }
-  const faceBackground = currentBackgroundColor();
-  billboardPreview3d.style.setProperty("--preview-3d-bg", faceBackground);
-  billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
-    face.style.background = faceBackground;
-  });
-  await Promise.all([render3dFace(billboard3dTrackLeft, "left"), render3dFace(billboard3dTrackRight, "right")]);
-  await render3dCurveSlices();
-  update3dPreviewAnimation();
+  const ctx = get3dCanvasContext();
+  if (!ctx) {
+    return;
+  }
+  const size = ensure3dCanvasSize(ctx);
+  const token = ++preview3dRenderToken;
+  const targetHeight = Math.min(1800, Math.max(300, Math.round(size.height * 0.8)));
+  const surface = await build3dSurfaceStrip(targetHeight);
+  if (token !== preview3dRenderToken) {
+    return;
+  }
+  preview3dSurface = surface;
+  if (!preview3dSurface) {
+    ctx.clearRect(0, 0, size.width, size.height);
+    return;
+  }
+  draw3dFrame();
 }
 
 function applyPreviewViewMode(mode) {
@@ -2102,11 +2175,8 @@ function syncVisualizationBackground() {
     return;
   }
   loopVisualization.style.background = currentBackgroundColor();
-  if (billboardPreview3d) {
-    billboardPreview3d.style.setProperty("--preview-3d-bg", currentBackgroundColor());
-    billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
-      face.style.background = currentBackgroundColor();
-    });
+  if (previewViewMode === "3d") {
+    update3dPreviewAnimation();
   }
 }
 
