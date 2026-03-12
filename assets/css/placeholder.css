@@ -329,9 +329,24 @@ body {
   display: none;
 }
 
+.partition-editors {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(76vw, 1180px);
+  top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
 .app-shell.partitioned-mode .loop-visualization,
 .app-shell.partitioned-mode #loopElapsedTime {
   display: none !important;
+}
+
+.app-shell.partitioned-mode .partition-editors {
+  display: grid;
 }
 
 .billboard-info {
@@ -559,16 +574,10 @@ body {
   cursor: pointer;
 }
 
-.partitioned-uploads {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .partition-editor {
-  border: 1px solid #d0d0d0;
-  padding: 4px;
-  background: #fff;
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .partition-editor-head {
@@ -576,16 +585,16 @@ body {
   grid-template-columns: 72px 1fr;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
-.partitioned-uploads input[type="file"] {
+.partition-editors input[type="file"] {
   width: 100%;
   font-family: "Courier New", Courier, monospace;
   font-size: 11px;
 }
 
-.partitioned-uploads input[type="file"]::file-selector-button {
+.partition-editors input[type="file"]::file-selector-button {
   border: 1px solid #b3b3b3;
   background: #fff;
   font-family: "Courier New", Courier, monospace;
@@ -599,27 +608,28 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  min-height: 26px;
-  border: 1px dashed #bdbdbd;
-  padding: 2px;
+  min-height: 54px;
+  border: 0;
+  padding: 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  background: #fafafa;
+  background: #f1f1f1;
 }
 
 .partition-preview-track.drag-over {
-  border-color: #d30000;
-  background: #f7f7f7;
+  outline: 2px dashed #d30000;
+  outline-offset: 2px;
+  background: #e6e6e6;
 }
 
 .partition-preview-item {
   position: relative;
   flex: 0 0 auto;
-  height: 20px;
-  outline: 1px solid rgba(0, 0, 0, 0.2);
+  height: 46px;
+  outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
   cursor: grab;
-  background: #fff;
+  background: transparent;
 }
 
 .partition-preview-item img {

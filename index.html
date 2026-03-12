@@ -36,6 +36,29 @@
           <div id="loopActiveWindow" class="loop-active-window"></div>
           <div id="loopActiveWindowSecondary" class="loop-active-window"></div>
         </div>
+        <div id="partitionEditors" class="partition-editors" aria-label="Partition visual editors">
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="settings-label">facing 7th</span>
+              <input id="partitionUploadLeft" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+            </div>
+            <div id="partitionTrackLeft" class="partition-preview-track" data-partition-key="left"></div>
+          </div>
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="settings-label">curve</span>
+              <input id="partitionUploadCurve" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+            </div>
+            <div id="partitionTrackCurve" class="partition-preview-track" data-partition-key="curve"></div>
+          </div>
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="settings-label">facing 47th</span>
+              <input id="partitionUploadRight" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+            </div>
+            <div id="partitionTrackRight" class="partition-preview-track" data-partition-key="right"></div>
+          </div>
+        </div>
         <div id="loopElapsedTime" class="loop-elapsed-time">0.0s</div>
 
         <section class="billboard-info" aria-label="Billboard reference details">
@@ -135,31 +158,6 @@
                 <div class="settings-row">
                   <span class="settings-label">reverse odd rows</span>
                   <input id="reverseOddRowsControl" type="checkbox" />
-                </div>
-              </section>
-              <section class="settings-group">
-                <div id="partitionedUploads" class="partitioned-uploads" style="display: none">
-                  <div class="partition-editor">
-                    <div class="partition-editor-head">
-                      <span class="settings-label">facing 7th</span>
-                      <input id="partitionUploadLeft" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
-                    </div>
-                    <div id="partitionTrackLeft" class="partition-preview-track" data-partition-key="left"></div>
-                  </div>
-                  <div class="partition-editor">
-                    <div class="partition-editor-head">
-                      <span class="settings-label">curve</span>
-                      <input id="partitionUploadCurve" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
-                    </div>
-                    <div id="partitionTrackCurve" class="partition-preview-track" data-partition-key="curve"></div>
-                  </div>
-                  <div class="partition-editor">
-                    <div class="partition-editor-head">
-                      <span class="settings-label">facing 47th</span>
-                      <input id="partitionUploadRight" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
-                    </div>
-                    <div id="partitionTrackRight" class="partition-preview-track" data-partition-key="right"></div>
-                  </div>
                 </div>
               </section>
               <section class="settings-group">

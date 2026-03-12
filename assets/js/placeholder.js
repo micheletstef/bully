@@ -16,7 +16,7 @@ const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
-const partitionedUploads = document.getElementById("partitionedUploads");
+const partitionEditors = document.getElementById("partitionEditors");
 const partitionUploadLeft = document.getElementById("partitionUploadLeft");
 const partitionUploadCurve = document.getElementById("partitionUploadCurve");
 const partitionUploadRight = document.getElementById("partitionUploadRight");
@@ -460,8 +460,8 @@ function syncDirectionModeUI() {
   if (appShell) {
     appShell.classList.toggle("partitioned-mode", partitioned);
   }
-  if (partitionedUploads) {
-    partitionedUploads.style.display = partitioned ? "flex" : "none";
+  if (partitionEditors) {
+    partitionEditors.style.display = partitioned ? "grid" : "none";
   }
   if (settingsTitle) {
     const base = activeDirectionName || "linear loop";
