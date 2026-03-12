@@ -58,6 +58,7 @@ const STORAGE_KEYS = {
   cameraYaw: "billboard.preview3dCameraYaw",
   cameraPitch: "billboard.preview3dCameraPitch",
   cameraPerspective: "billboard.preview3dCameraPerspective",
+  cameraZoom: "billboard.preview3dCameraZoom",
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
@@ -130,7 +131,8 @@ let hasWarnedMissingThree = false;
 const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
-  perspective: 1
+  perspective: 1,
+  zoom: 1
 };
 const preview3dRenderSettings = {
   fit: 0.84,
@@ -777,6 +779,7 @@ function projectBillboardVertex(x, y, z) {
 function clampPreview3dCamera() {
   preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+  preview3dCamera.zoom = Math.min(4.5, Math.max(0.35, preview3dCamera.zoom));
   preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
   preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
   preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
@@ -810,6 +813,7 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraYaw, String(preview3dCamera.yaw));
   writeStorage(STORAGE_KEYS.cameraPitch, String(preview3dCamera.pitch));
   writeStorage(STORAGE_KEYS.cameraPerspective, String(preview3dCamera.perspective));
+  writeStorage(STORAGE_KEYS.cameraZoom, String(preview3dCamera.zoom));
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
@@ -819,6 +823,7 @@ function restorePreview3dSettings() {
   preview3dCamera.yaw = readStoredNumber(STORAGE_KEYS.cameraYaw, preview3dCamera.yaw);
   preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, preview3dCamera.pitch);
   preview3dCamera.perspective = readStoredNumber(STORAGE_KEYS.cameraPerspective, preview3dCamera.perspective);
+  preview3dCamera.zoom = readStoredNumber(STORAGE_KEYS.cameraZoom, preview3dCamera.zoom);
   preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, preview3dRenderSettings.fit);
   preview3dRenderSettings.dragSensitivity = readStoredNumber(
     STORAGE_KEYS.cameraDragSensitivity,
@@ -932,6 +937,26 @@ function setup3dCanvasInteraction() {
   billboard3dCanvas.addEventListener("pointerleave", () => {
     clear3dDragState();
   });
+  billboard3dCanvas.addEventListener(
+    "wheel",
+    (event) => {
+      if (previewViewMode !== "3d") {
+        return;
+      }
+      const delta = Number(event.deltaY) || 0;
+      if (!delta) {
+        return;
+      }
+      // Positive delta zooms out, negative delta zooms in.
+      const factor = Math.exp(delta * 0.0012);
+      preview3dCamera.zoom *= factor;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      update3dPreviewAnimation();
+      event.preventDefault();
+    },
+    { passive: false }
+  );
 }
 
 function draw3dFrame() {
@@ -1139,7 +1164,7 @@ function renderThreeFrame() {
   const perspectiveFactor = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
   camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
 
-  const radius = 4200 / perspectiveFactor;
+  const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
   const yaw = preview3dCamera.yaw;
   const pitch = preview3dCamera.pitch;
   const cosPitch = Math.cos(pitch);
@@ -3355,6 +3380,7 @@ async function init() {
       preview3dCamera.yaw = -0.78;
       preview3dCamera.pitch = 0.96;
       preview3dCamera.perspective = 1;
+      preview3dCamera.zoom = 1;
       preview3dRenderSettings.fit = 0.84;
       preview3dRenderSettings.dragSensitivity = 1;
       preview3dRenderSettings.textureQuality = 1.75;
