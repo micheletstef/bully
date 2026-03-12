@@ -103,10 +103,113 @@ body {
   font-size: 12px;
 }
 
+.billboard-annotations {
+  pointer-events: none;
+}
+
+.anno-top-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: -16px;
+  border-top: 1px dashed rgba(17, 17, 17, 0.45);
+}
+
+.anno-top-line::before,
+.anno-top-line::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  width: 1px;
+  height: 12px;
+  background: rgba(17, 17, 17, 0.45);
+}
+
+.anno-top-line::before {
+  left: 0;
+}
+
+.anno-top-line::after {
+  right: 0;
+}
+
+.anno-top-label {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+}
+
+.anno-right-line {
+  position: absolute;
+  right: -18px;
+  top: 0;
+  height: 100%;
+  border-right: 1px dashed rgba(17, 17, 17, 0.45);
+}
+
+.anno-right-line::before,
+.anno-right-line::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  width: 10px;
+  height: 1px;
+  background: rgba(17, 17, 17, 0.45);
+}
+
+.anno-right-line::before {
+  top: 0;
+}
+
+.anno-right-line::after {
+  bottom: 0;
+}
+
+.anno-right-label {
+  position: absolute;
+  right: -36px;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: center;
+  font-size: 11px;
+}
+
+.anno-marker {
+  position: absolute;
+  top: -16px;
+  height: calc(100% + 16px);
+  border-left: 1px solid rgba(17, 17, 17, 0.45);
+}
+
+.anno-marker-1820 {
+  left: 30.8475%;
+}
+
+.anno-marker-2840 {
+  left: 48.1356%;
+}
+
+.anno-label {
+  position: absolute;
+  top: -34px;
+  transform: translateX(-50%);
+  font-size: 11px;
+}
+
+.anno-label-1820 {
+  left: 30.8475%;
+}
+
+.anno-label-2840 {
+  left: 48.1356%;
+}
+
 .billboard-info {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: 6px;
   transform: translateX(-50%);
   width: min(76vw, 1180px);
   display: block;
@@ -114,17 +217,19 @@ body {
 
 .spec-table {
   width: 100%;
-  border-collapse: collapse;
-  background: #fff;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: transparent;
   color: #1f1f1f;
   font-family: "Courier New", Courier, monospace;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.05;
 }
 
 .spec-table th,
 .spec-table td {
-  border: 1px solid #8d8d8d;
-  padding: 6px 8px;
+  border: 0;
+  padding: 0;
   vertical-align: top;
 }
 

@@ -40,105 +40,12 @@
       .x-2840 {
         left: 48.1356%;
       }
-
-      .label {
-        position: absolute;
-        top: 18px;
-        transform: translateX(-50%);
-        font-size: clamp(12px, 1.1vw, 22px);
-        letter-spacing: 0.02em;
-        background: rgba(255, 255, 255, 0.65);
-        padding: 4px 8px;
-      }
-
-      .label-1820 {
-        left: 30.8475%;
-      }
-
-      .label-2840 {
-        left: 48.1356%;
-      }
-
-      .dim-top {
-        position: absolute;
-        top: 70px;
-        left: 2.5%;
-        width: 95%;
-        border-top: 2px dashed rgba(17, 17, 17, 0.45);
-      }
-
-      .dim-top::before,
-      .dim-top::after {
-        content: "";
-        position: absolute;
-        top: -8px;
-        width: 2px;
-        height: 16px;
-        background: rgba(17, 17, 17, 0.45);
-      }
-
-      .dim-top::before {
-        left: 0;
-      }
-
-      .dim-top::after {
-        right: 0;
-      }
-
-      .dim-top-label {
-        position: absolute;
-        top: 76px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: clamp(12px, 1.2vw, 24px);
-      }
-
-      .dim-right {
-        position: absolute;
-        top: 7%;
-        right: 26px;
-        height: 86%;
-        border-right: 2px dashed rgba(17, 17, 17, 0.45);
-      }
-
-      .dim-right::before,
-      .dim-right::after {
-        content: "";
-        position: absolute;
-        left: -8px;
-        height: 2px;
-        width: 16px;
-        background: rgba(17, 17, 17, 0.45);
-      }
-
-      .dim-right::before {
-        top: 0;
-      }
-
-      .dim-right::after {
-        bottom: 0;
-      }
-
-      .dim-right-label {
-        position: absolute;
-        right: 32px;
-        top: 50%;
-        transform: translateY(-50%) rotate(90deg);
-        transform-origin: right center;
-        font-size: clamp(12px, 1.2vw, 24px);
-      }
     </style>
   </head>
   <body>
     <div class="canvas">
       <div class="guide-vertical x-1820"></div>
       <div class="guide-vertical x-2840"></div>
-      <div class="label label-1820">1820px from left</div>
-      <div class="label label-2840">2840px from left</div>
-      <div class="dim-top"></div>
-      <div class="dim-top-label">5900px width</div>
-      <div class="dim-right"></div>
-      <div class="dim-right-label">3480px height</div>
     </div>
   </body>
 </html>
