@@ -86,7 +86,7 @@ function renderDirectory(directions) {
   section.className = "directory-section";
 
   const title = document.createElement("h2");
-  title.textContent = "pages";
+  title.textContent = "directions";
   section.appendChild(title);
 
   directions.forEach((name) => {
