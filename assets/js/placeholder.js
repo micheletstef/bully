@@ -31,23 +31,28 @@ async function getDirectoryNames(path) {
   return parseDirectoryListing(html);
 }
 
-async function discoverDirections() {
-  const sections = await getDirectoryNames("directions/");
-  const visibleSections = sections.filter((name) => name !== "_template");
-  const map = {};
+function directionPath(name) {
+  return `directions/${encodeURIComponent(name)}/index.html`;
+}
 
-  for (const section of visibleSections) {
-    const items = await getDirectoryNames(`directions/${section}/`);
-    if (!items.length) {
-      continue;
+async function canLoadDirection(name) {
+  const response = await fetch(directionPath(name), { cache: "no-store" });
+  return response.ok;
+}
+
+async function discoverDirections() {
+  const names = await getDirectoryNames("directions/");
+  const visible = names.filter((name) => !name.startsWith("."));
+  const directions = [];
+
+  for (const name of visible) {
+    const exists = await canLoadDirection(name);
+    if (exists) {
+      directions.push(name);
     }
-    map[section] = items.map((item) => ({
-      label: item,
-      path: `directions/${section}/${item}/index.html`
-    }));
   }
 
-  return map;
+  return directions;
 }
 
 async function loadDirectionsFromManifest() {
@@ -57,19 +62,15 @@ async function loadDirectionsFromManifest() {
   }
   const json = await response.json();
 
-  const map = {};
-  Object.entries(json).forEach(([section, items]) => {
-    if (!Array.isArray(items) || items.length === 0) {
-      return;
-    }
+  if (Array.isArray(json)) {
+    return json;
+  }
 
-    map[section] = items.map((item) => ({
-      label: item,
-      path: `directions/${section}/${item}/index.html`
-    }));
-  });
+  if (json && typeof json === "object") {
+    return Object.values(json).flat().filter((item) => typeof item === "string");
+  }
 
-  return map;
+  return [];
 }
 
 function loadDirection(path) {
@@ -81,37 +82,35 @@ function loadDirection(path) {
 function renderDirectory(directions) {
   directoryPanel.innerHTML = "";
 
-  Object.entries(directions).forEach(([sectionName, items]) => {
-    const section = document.createElement("section");
-    section.className = "directory-section";
+  const section = document.createElement("section");
+  section.className = "directory-section";
 
-    const title = document.createElement("h2");
-    title.textContent = sectionName;
-    section.appendChild(title);
+  const title = document.createElement("h2");
+  title.textContent = "pages";
+  section.appendChild(title);
 
-    items.forEach((item) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "direction-item";
-      button.textContent = item.label;
-      button.addEventListener("click", () => loadDirection(item.path));
-      section.appendChild(button);
-    });
-
-    directoryPanel.appendChild(section);
+  directions.forEach((name) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "direction-item";
+    button.textContent = name;
+    button.addEventListener("click", () => loadDirection(directionPath(name)));
+    section.appendChild(button);
   });
+
+  directoryPanel.appendChild(section);
 }
 
 async function init() {
   try {
-    let directions;
+    let directions = [];
     try {
       directions = await discoverDirections();
     } catch (error) {
       directions = await loadDirectionsFromManifest();
     }
 
-    if (!Object.keys(directions).length) {
+    if (!directions.length) {
       throw new Error("No directions found");
     }
 
