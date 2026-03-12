@@ -3,6 +3,10 @@ const billboardPreview = document.getElementById("billboardPreview");
 const emptyState = document.getElementById("emptyState");
 const speedControl = document.getElementById("speedControl");
 const speedValue = document.getElementById("speedValue");
+const STORAGE_KEYS = {
+  speed: "billboard.loopSpeedSeconds",
+  direction: "billboard.selectedDirection"
+};
 
 function normalizeHref(href) {
   if (!href) {
@@ -94,6 +98,55 @@ function currentSpeedSeconds() {
   return Number(speedControl.value);
 }
 
+function saveSpeed(seconds) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.speed, String(seconds));
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
+function restoreSpeed() {
+  if (!speedControl) {
+    return;
+  }
+
+  try {
+    const rawValue = localStorage.getItem(STORAGE_KEYS.speed);
+    if (!rawValue) {
+      return;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+
+    const min = Number(speedControl.min || 0);
+    const max = Number(speedControl.max || 999);
+    const clamped = Math.min(max, Math.max(min, parsed));
+    speedControl.value = String(clamped);
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
+function saveSelectedDirection(name) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.direction, name);
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
+function restoreSelectedDirection() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.direction);
+  } catch (error) {
+    return null;
+  }
+}
+
 function syncSpeedReadout() {
   if (!speedValue) {
     return;
@@ -124,6 +177,10 @@ function renderDirectory(directions) {
   title.textContent = "directions";
   section.appendChild(title);
 
+  const savedDirection = restoreSelectedDirection();
+  let initialButton = null;
+  let initialName = null;
+
   directions.forEach((name) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -132,14 +189,27 @@ function renderDirectory(directions) {
     button.addEventListener("click", () => {
       loadDirection(directionPath(name));
       setActiveDirection(button);
+      saveSelectedDirection(name);
     });
     section.appendChild(button);
+
+    if (savedDirection === name) {
+      initialButton = button;
+      initialName = name;
+    }
   });
 
   directoryPanel.appendChild(section);
+
+  if (initialButton && initialName) {
+    loadDirection(directionPath(initialName));
+    setActiveDirection(initialButton);
+  }
 }
 
 async function init() {
+  restoreSpeed();
+
   try {
     let directions = [];
     try {
@@ -162,6 +232,7 @@ async function init() {
   if (speedControl) {
     speedControl.addEventListener("input", () => {
       syncSpeedReadout();
+      saveSpeed(currentSpeedSeconds());
       sendSpeedToPreview();
     });
   }
