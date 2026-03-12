@@ -168,8 +168,7 @@
         },
         rowCount: 1,
         rowOffset: 0,
-        rowGap: 0,
-        reverseOddRows: false
+        rowGap: 0
       };
       let playbackTimer = null;
       let primaryTrack = null;
@@ -307,8 +306,7 @@
           track.style.setProperty("--loop-row-delay", `${delay}s`);
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-distance", `${safeDistance}px`);
-          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
-          track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
+          track.style.setProperty("--loop-row-direction", "normal");
         });
 
         return {
@@ -500,8 +498,6 @@
         if (Number.isFinite(rowGap) && rowGap >= 0) {
           state.rowGap = rowGap;
         }
-
-        state.reverseOddRows = !!payload.reverseOddRows;
 
         renderLoop();
       }

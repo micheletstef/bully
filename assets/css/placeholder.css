@@ -98,6 +98,10 @@ body {
   overflow: hidden;
 }
 
+.app-shell.preview-3d-mode .billboard-frame {
+  background: transparent;
+}
+
 #billboardPreview {
   width: 100%;
   height: 100%;

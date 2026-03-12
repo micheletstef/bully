@@ -17,7 +17,6 @@ const partitionOrientationRightControl = document.getElementById("partitionOrien
 const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
-const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
 const saveVersionButton = document.getElementById("saveVersionButton");
 const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
@@ -46,7 +45,6 @@ const STORAGE_KEYS = {
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
   rowGap: "billboard.loopRowGap",
-  reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks"
@@ -702,6 +700,32 @@ function buildTopViewSpine() {
   return { points, totalLength };
 }
 
+function projectBillboardVertex(x, y, z) {
+  const yaw = -0.78;
+  const pitch = 0.96;
+  const cosYaw = Math.cos(yaw);
+  const sinYaw = Math.sin(yaw);
+  const cosPitch = Math.cos(pitch);
+  const sinPitch = Math.sin(pitch);
+
+  const x1 = x * cosYaw - y * sinYaw;
+  const y1 = x * sinYaw + y * cosYaw;
+  const z1 = z;
+
+  const y2 = y1 * cosPitch - z1 * sinPitch;
+  const z2 = y1 * sinPitch + z1 * cosPitch;
+
+  const cameraDepth = 6400;
+  const focal = 4600;
+  const denom = Math.max(320, cameraDepth + y2);
+  const perspective = focal / denom;
+
+  return {
+    x: x1 * perspective,
+    y: -z2 * perspective
+  };
+}
+
 function draw3dFrame() {
   const ctx = get3dCanvasContext();
   if (!ctx || !preview3dSurface) {
@@ -713,34 +737,38 @@ function draw3dFrame() {
   }
   ctx.clearRect(0, 0, width, height);
   const spine = buildTopViewSpine();
-  const topDesign = spine.points;
-  const extrusionDesign = 3480;
-  const bounds = {
-    minX: Infinity,
-    maxX: -Infinity,
-    minY: Infinity,
-    maxY: -Infinity
-  };
-  topDesign.forEach((point) => {
+  const extrusionHeight = 3480;
+  const topProjectedRaw = spine.points.map((point) => ({
+    ...projectBillboardVertex(point.x, point.y, 0),
+    s: point.s
+  }));
+  const bottomProjectedRaw = spine.points.map((point) =>
+    projectBillboardVertex(point.x, point.y, -extrusionHeight)
+  );
+
+  const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  [...topProjectedRaw, ...bottomProjectedRaw].forEach((point) => {
     bounds.minX = Math.min(bounds.minX, point.x);
     bounds.maxX = Math.max(bounds.maxX, point.x);
     bounds.minY = Math.min(bounds.minY, point.y);
-    bounds.maxY = Math.max(bounds.maxY, point.y + extrusionDesign);
+    bounds.maxY = Math.max(bounds.maxY, point.y);
   });
-  const designWidth = Math.max(1, bounds.maxX - bounds.minX);
-  const designHeight = Math.max(1, bounds.maxY - bounds.minY);
-  const marginScale = 0.86;
-  const scale = Math.min((width * marginScale) / designWidth, (height * marginScale) / designHeight);
-  const offsetX = (width - designWidth * scale) / 2 - bounds.minX * scale;
-  const offsetY = (height - designHeight * scale) / 2 - bounds.minY * scale;
-  const topPoints = topDesign.map((point) => ({
-    x: point.x * scale + offsetX,
-    y: point.y * scale + offsetY,
+
+  const projectedWidth = Math.max(1, bounds.maxX - bounds.minX);
+  const projectedHeight = Math.max(1, bounds.maxY - bounds.minY);
+  const fit = 0.84;
+  const fitScale = Math.min((width * fit) / projectedWidth, (height * fit) / projectedHeight);
+  const offsetX = (width - projectedWidth * fitScale) / 2 - bounds.minX * fitScale;
+  const offsetY = (height - projectedHeight * fitScale) / 2 - bounds.minY * fitScale;
+
+  const topPoints = topProjectedRaw.map((point) => ({
+    x: point.x * fitScale + offsetX,
+    y: point.y * fitScale + offsetY,
     s: point.s
   }));
-  const bottomPoints = topDesign.map((point) => ({
-    x: point.x * scale + offsetX,
-    y: (point.y + extrusionDesign) * scale + offsetY
+  const bottomPoints = bottomProjectedRaw.map((point) => ({
+    x: point.x * fitScale + offsetX,
+    y: point.y * fitScale + offsetY
   }));
   const shapeBg = currentBackgroundColor();
   const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
@@ -996,13 +1024,6 @@ function currentRowGap() {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
-function currentReverseOddRows() {
-  if (!reverseOddRowsControl) {
-    return false;
-  }
-  return !!reverseOddRowsControl.checked;
-}
-
 function normalizePreviewViewMode(value) {
   return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
 }
@@ -1055,7 +1076,6 @@ function getCurrentLoopConfig() {
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
-    reverseOddRows: currentReverseOddRows(),
     directionMode: currentDirectionIsPartitioned() ? "partitioned" : "linear"
   };
 
@@ -1330,8 +1350,7 @@ function buildSnapshotHtml(config) {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", delay + "s");
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
-          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
-          track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
+          track.style.setProperty("--loop-row-direction", "normal");
         });
         primaryTrack = rows[0] || null;
 
@@ -1667,8 +1686,7 @@ function buildPartitionedSnapshotHtml(config) {
           track.style.setProperty("--loop-row-delay", delay + "s");
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-distance", safeDistance + "px");
-          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
-          track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
+          track.style.setProperty("--loop-row-direction", "normal");
         });
       }
 
@@ -1778,7 +1796,6 @@ function coerceSnapshotLoopConfig(candidate) {
     rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
     rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
     rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
-    reverseOddRows: !!candidate.reverseOddRows,
     directionMode:
       candidate.directionMode === "partitioned" || artworksByPartition ? "partitioned" : "linear"
   };
@@ -1960,10 +1977,6 @@ function saveRowGap(value) {
   writeStorage(STORAGE_KEYS.rowGap, String(value));
 }
 
-function saveReverseOddRows(value) {
-  writeStorage(STORAGE_KEYS.reverseOddRows, value ? "1" : "0");
-}
-
 function restoreSpeed() {
   if (!speedControl) {
     return;
@@ -2100,10 +2113,6 @@ function restoreLoopLayoutSettings() {
     }
   }
 
-  if (reverseOddRowsControl) {
-    const raw = readStorage(STORAGE_KEYS.reverseOddRows);
-    reverseOddRowsControl.checked = raw === "1" || raw === "true";
-  }
 }
 
 function saveSelectedDirection(name) {
@@ -2191,8 +2200,7 @@ function sendLoopConfigToPreview() {
     artworkOrientation: currentArtworkOrientation(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
-    rowGap: currentRowGap(),
-    reverseOddRows: currentReverseOddRows()
+    rowGap: currentRowGap()
   };
   if (currentDirectionIsPartitioned()) {
     payload.artworksByPartition = {
@@ -2993,14 +3001,6 @@ async function init() {
     rowGapControl.addEventListener("input", () => {
       saveRowGap(currentRowGap());
       loopRowGap = currentRowGap();
-      render3dPreview();
-      sendLoopConfigToPreview();
-    });
-  }
-
-  if (reverseOddRowsControl) {
-    reverseOddRowsControl.addEventListener("change", () => {
-      saveReverseOddRows(currentReverseOddRows());
       render3dPreview();
       sendLoopConfigToPreview();
     });
