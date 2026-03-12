@@ -44,6 +44,7 @@ let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
+const MIN_PREVIEW_TRACK_HEIGHT = 8;
 let loopRowGap = 0;
 
 function normalizeHref(href) {
@@ -612,9 +613,16 @@ function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
+  const previewHeightTotal = Math.max(1, loopVisualization.clientHeight - 8);
+  const previewPadTB = Number.parseFloat(
+    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb")
+  );
+  const effectiveTrackHeight = Math.max(
+    1,
+    previewHeightTotal - (Number.isFinite(previewPadTB) ? previewPadTB * 2 : 0)
+  );
   const sourceHeight = Math.max(1, loopStageHeight);
-  const scaledGapRaw = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
+  const scaledGapRaw = (Math.max(0, loopAssetGap) * effectiveTrackHeight) / sourceHeight;
   const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
   syncVisualizationGeometry();
@@ -629,7 +637,8 @@ function syncVisualizationPaddingScaled() {
   const scale = previewHeight / sourceHeight;
   const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
   const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
-  const scaledPadTB = Math.round(scaledPadTBRaw * 100) / 100;
+  const maxPadTB = Math.max(0, (previewHeight - MIN_PREVIEW_TRACK_HEIGHT) / 2);
+  const scaledPadTB = Math.round(Math.min(maxPadTB, scaledPadTBRaw) * 100) / 100;
   const scaledPadLR = Math.round(scaledPadLRRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
