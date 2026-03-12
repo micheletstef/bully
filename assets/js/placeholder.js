@@ -2063,9 +2063,7 @@ async function initPartitionSortable(partitionKey, trackEl) {
     const Sortable = mod.default || mod.Sortable || mod;
     partitionSortables[key] = Sortable.create(trackEl, {
       animation: 140,
-      forceFallback: true,
-      fallbackOnBody: true,
-      fallbackTolerance: 4,
+      // Prefer native DnD; forced fallback can break reorder in some browsers.
       draggable: ".partition-preview-item",
       invertSwap: true,
       swapThreshold: 0.65,
@@ -2273,9 +2271,7 @@ async function initLoopSortable() {
     const Sortable = mod.default || mod.Sortable || mod;
     loopPreviewSortable = Sortable.create(loopPreviewTrack, {
       animation: 150,
-      forceFallback: true,
-      fallbackOnBody: true,
-      fallbackTolerance: 4,
+      // Prefer native DnD; forced fallback can break reorder in some browsers.
       draggable: ".loop-preview-item",
       invertSwap: true,
       swapThreshold: 0.65,
