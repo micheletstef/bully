@@ -3,12 +3,19 @@ const billboardPreview = document.getElementById("billboardPreview");
 const emptyState = document.getElementById("emptyState");
 const speedControl = document.getElementById("speedControl");
 const speedValue = document.getElementById("speedValue");
+const padTBControl = document.getElementById("padTBControl");
+const padLRControl = document.getElementById("padLRControl");
+const bgColorControl = document.getElementById("bgColorControl");
 const artworkList = document.getElementById("artworkList");
 const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
+const loopActiveWindow = document.getElementById("loopActiveWindow");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
+  padTB: "billboard.loopPadTopBottom",
+  padLR: "billboard.loopPadLeftRight",
+  bgColor: "billboard.loopBackgroundColor",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
 };
@@ -18,6 +25,8 @@ const DEFAULT_ARTWORKS = [
 let loopArtworks = [...DEFAULT_ARTWORKS];
 let draggingArtworkIndex = null;
 let pdfJsModulePromise = null;
+let loopPlaybackProgress = 0;
+let loopPlaybackViewportRatio = 0.25;
 
 function normalizeHref(href) {
   if (!href) {
@@ -106,6 +115,53 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function serializeSvgToDataUrl(svgElement) {
+  const xml = new XMLSerializer().serializeToString(svgElement);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
+}
+
+function trimSvgElement(svgElement) {
+  const sandbox = document.createElement("div");
+  sandbox.style.position = "fixed";
+  sandbox.style.left = "-99999px";
+  sandbox.style.top = "-99999px";
+  sandbox.style.visibility = "hidden";
+  sandbox.style.pointerEvents = "none";
+
+  const clone = svgElement.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.style.overflow = "visible";
+  sandbox.appendChild(clone);
+  document.body.appendChild(sandbox);
+
+  try {
+    const bbox = clone.getBBox();
+    if (!Number.isFinite(bbox.width) || !Number.isFinite(bbox.height) || bbox.width <= 0 || bbox.height <= 0) {
+      return clone;
+    }
+
+    clone.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+    clone.setAttribute("width", String(bbox.width));
+    clone.setAttribute("height", String(bbox.height));
+    return clone;
+  } finally {
+    document.body.removeChild(sandbox);
+  }
+}
+
+async function trimSvgFileToDataUrl(file) {
+  const text = await file.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "image/svg+xml");
+  const svgElement = doc.querySelector("svg");
+  if (!svgElement) {
+    throw new Error("Invalid SVG");
+  }
+
+  const trimmed = trimSvgElement(svgElement);
+  return serializeSvgToDataUrl(trimmed);
+}
+
 async function getPdfJsModule() {
   if (!pdfJsModulePromise) {
     pdfJsModulePromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs");
@@ -135,6 +191,9 @@ async function convertPdfToDataUrl(file) {
 
 async function processArtworkFile(file) {
   const extension = fileExtension(file.name);
+  if (extension === "svg") {
+    return trimSvgFileToDataUrl(file);
+  }
   if (extension === "pdf") {
     return convertPdfToDataUrl(file);
   }
@@ -219,6 +278,27 @@ function currentSpeedSeconds() {
   return Number(speedControl.value);
 }
 
+function currentPadTopBottom() {
+  if (!padTBControl) {
+    return 0;
+  }
+  return Number(padTBControl.value) || 0;
+}
+
+function currentPadLeftRight() {
+  if (!padLRControl) {
+    return 0;
+  }
+  return Number(padLRControl.value) || 0;
+}
+
+function currentBackgroundColor() {
+  if (!bgColorControl) {
+    return "#fff8a5";
+  }
+  return bgColorControl.value || "#fff8a5";
+}
+
 function readStorage(key) {
   try {
     return localStorage.getItem(key);
@@ -237,6 +317,18 @@ function writeStorage(key, value) {
 
 function saveSpeed(seconds) {
   writeStorage(STORAGE_KEYS.speed, String(seconds));
+}
+
+function savePadTopBottom(value) {
+  writeStorage(STORAGE_KEYS.padTB, String(value));
+}
+
+function savePadLeftRight(value) {
+  writeStorage(STORAGE_KEYS.padLR, String(value));
+}
+
+function saveBackgroundColor(value) {
+  writeStorage(STORAGE_KEYS.bgColor, value);
 }
 
 function restoreSpeed() {
@@ -258,6 +350,39 @@ function restoreSpeed() {
   const max = Number(speedControl.max || 999);
   const clamped = Math.min(max, Math.max(min, parsed));
   speedControl.value = String(clamped);
+}
+
+function restoreLoopLayoutSettings() {
+  if (padTBControl) {
+    const raw = readStorage(STORAGE_KEYS.padTB);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(padTBControl.min || 0);
+        const max = Number(padTBControl.max || 9999);
+        padTBControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
+
+  if (padLRControl) {
+    const raw = readStorage(STORAGE_KEYS.padLR);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(padLRControl.min || 0);
+        const max = Number(padLRControl.max || 9999);
+        padLRControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
+
+  if (bgColorControl) {
+    const raw = readStorage(STORAGE_KEYS.bgColor);
+    if (raw && /^#[0-9a-f]{6}$/i.test(raw)) {
+      bgColorControl.value = raw;
+    }
+  }
 }
 
 function saveSelectedDirection(name) {
@@ -307,7 +432,10 @@ function sendLoopConfigToPreview() {
   const payload = {
     type: "setLoopConfig",
     seconds,
-    artworks: loopArtworks.map((item) => item.src)
+    artworks: loopArtworks.map((item) => item.src),
+    padTopBottom: currentPadTopBottom(),
+    padLeftRight: currentPadLeftRight(),
+    backgroundColor: currentBackgroundColor()
   };
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -355,6 +483,8 @@ function renderLoopPreview() {
 
     loopPreviewTrack.appendChild(tile);
   });
+
+  updateActiveWindow();
 }
 
 function artworkLastFive(path) {
@@ -379,6 +509,27 @@ function moveArtwork(fromIndex, toIndex) {
   renderArtworkList();
   renderLoopPreview();
   sendLoopConfigToPreview();
+}
+
+function updateActiveWindow() {
+  if (!loopActiveWindow || !loopPreviewTrack) {
+    return;
+  }
+
+  const sequenceWidth = loopPreviewTrack.scrollWidth;
+  if (!Number.isFinite(sequenceWidth) || sequenceWidth <= 0) {
+    loopActiveWindow.style.display = "none";
+    return;
+  }
+
+  const ratio = Math.min(1, Math.max(0.01, loopPlaybackViewportRatio || 0.25));
+  const activeWidth = Math.max(16, sequenceWidth * ratio);
+  const maxX = Math.max(0, sequenceWidth - activeWidth);
+  const x = maxX * Math.min(1, Math.max(0, loopPlaybackProgress || 0));
+
+  loopActiveWindow.style.display = "block";
+  loopActiveWindow.style.width = `${activeWidth}px`;
+  loopActiveWindow.style.transform = `translateX(${x}px)`;
 }
 
 function removeArtwork(index) {
@@ -480,6 +631,7 @@ function renderDirectory(directions) {
 
 async function init() {
   restoreSpeed();
+  restoreLoopLayoutSettings();
   loopArtworks = restoreArtworks();
 
   try {
@@ -511,6 +663,27 @@ async function init() {
     });
   }
 
+  if (padTBControl) {
+    padTBControl.addEventListener("input", () => {
+      savePadTopBottom(currentPadTopBottom());
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (padLRControl) {
+    padLRControl.addEventListener("input", () => {
+      savePadLeftRight(currentPadLeftRight());
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (bgColorControl) {
+    bgColorControl.addEventListener("input", () => {
+      saveBackgroundColor(currentBackgroundColor());
+      sendLoopConfigToPreview();
+    });
+  }
+
   if (artworkUpload) {
     artworkUpload.addEventListener("change", addArtworkFromInput);
   }
@@ -535,7 +708,30 @@ async function init() {
     });
   }
 
+  window.addEventListener("message", (event) => {
+    if (event.source !== billboardPreview.contentWindow) {
+      return;
+    }
+    const payload = event.data;
+    if (!payload || payload.type !== "loopPlayback") {
+      return;
+    }
+
+    const progress = Number(payload.progress);
+    const viewportRatio = Number(payload.viewportRatio);
+
+    if (Number.isFinite(progress)) {
+      loopPlaybackProgress = progress;
+    }
+    if (Number.isFinite(viewportRatio)) {
+      loopPlaybackViewportRatio = viewportRatio;
+    }
+
+    updateActiveWindow();
+  });
+
   billboardPreview.addEventListener("load", () => {
+    loopActiveWindow.style.display = "none";
     sendLoopConfigToPreview();
   });
 }

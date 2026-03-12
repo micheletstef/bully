@@ -8,6 +8,9 @@
       :root {
         --loop-duration: 16s;
         --loop-distance: 1024px;
+        --loop-pad-tb: 0px;
+        --loop-pad-lr: 0px;
+        --loop-bg: #fff8a5;
       }
 
       html,
@@ -18,7 +21,7 @@
 
       body,
       .canvas {
-        background: #fff8a5;
+        background: var(--loop-bg);
       }
 
       .canvas {
@@ -30,9 +33,17 @@
         color: #1f1f1f;
       }
 
+      .loop-stage {
+        position: absolute;
+        top: var(--loop-pad-tb);
+        bottom: var(--loop-pad-tb);
+        left: var(--loop-pad-lr);
+        right: var(--loop-pad-lr);
+        overflow: hidden;
+      }
+
       .loop-fill {
         position: relative;
-        inset: 0;
         display: flex;
         width: max-content;
         height: 100%;
@@ -58,14 +69,22 @@
   </head>
   <body>
     <div class="canvas">
-      <div id="loopFill" class="loop-fill"></div>
+      <div id="loopStage" class="loop-stage">
+        <div id="loopFill" class="loop-fill"></div>
+      </div>
     </div>
     <script>
       const loopFill = document.getElementById("loopFill");
+      const loopStage = document.getElementById("loopStage");
       const state = {
         seconds: 16,
-        artworks: ["../../assets/linear-loop-strip.png"]
+        artworks: ["../../assets/linear-loop-strip.png"],
+        padTopBottom: 0,
+        padLeftRight: 0,
+        backgroundColor: "#fff8a5",
+        loopDistance: 1024
       };
+      let playbackRaf = null;
 
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
@@ -117,9 +136,41 @@
           0
         );
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
+        state.loopDistance = safeDistance;
 
         document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
+        document.documentElement.style.setProperty("--loop-pad-tb", `${state.padTopBottom}px`);
+        document.documentElement.style.setProperty("--loop-pad-lr", `${state.padLeftRight}px`);
+        document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
+      }
+
+      function emitPlayback() {
+        const durationMs = Math.max(1, state.seconds * 1000);
+        const progress = (performance.now() % durationMs) / durationMs;
+        const viewportWidth = loopStage ? loopStage.clientWidth : 0;
+        const viewportRatio =
+          state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / state.loopDistance)) : 0.25;
+
+        window.parent.postMessage(
+          {
+            type: "loopPlayback",
+            progress,
+            viewportRatio
+          },
+          "*"
+        );
+      }
+
+      function startPlaybackEmitter() {
+        const tick = () => {
+          emitPlayback();
+          playbackRaf = requestAnimationFrame(tick);
+        };
+        if (playbackRaf) {
+          cancelAnimationFrame(playbackRaf);
+        }
+        tick();
       }
 
       function applyConfig(payload) {
@@ -135,6 +186,20 @@
           if (cleaned.length) {
             state.artworks = cleaned;
           }
+        }
+
+        const padTopBottom = Number(payload.padTopBottom);
+        if (Number.isFinite(padTopBottom) && padTopBottom >= 0) {
+          state.padTopBottom = padTopBottom;
+        }
+
+        const padLeftRight = Number(payload.padLeftRight);
+        if (Number.isFinite(padLeftRight) && padLeftRight >= 0) {
+          state.padLeftRight = padLeftRight;
+        }
+
+        if (typeof payload.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(payload.backgroundColor)) {
+          state.backgroundColor = payload.backgroundColor;
         }
 
         renderLoop();
@@ -157,6 +222,7 @@
       });
 
       renderLoop();
+      startPlaybackEmitter();
     </script>
   </body>
 </html>
