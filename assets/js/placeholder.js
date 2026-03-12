@@ -827,10 +827,10 @@ function buildSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: translateY(0);
+          transform: translateY(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: translateY(var(--loop-distance));
+          transform: translateY(0);
         }
       }
 
@@ -1166,10 +1166,10 @@ function buildPartitionedSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: translateY(0);
+          transform: translateY(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: translateY(var(--loop-distance));
+          transform: translateY(0);
         }
       }
 
