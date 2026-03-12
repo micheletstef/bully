@@ -588,23 +588,19 @@ body {
   margin-bottom: 2px;
 }
 
-.partition-editors input[type="file"] {
-  width: 100%;
-  font-family: "Courier New", Courier, monospace;
+.partition-title {
   font-size: 11px;
+  font-weight: 400;
+  text-transform: lowercase;
 }
 
-.partition-editors input[type="file"]::file-selector-button {
-  border: 1px solid #b3b3b3;
-  background: #fff;
-  font-family: "Courier New", Courier, monospace;
+.partition-drop-hint {
   font-size: 11px;
-  margin-right: 8px;
-  padding: 1px 6px;
-  cursor: pointer;
+  color: #666;
 }
 
 .partition-preview-track {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -620,6 +616,18 @@ body {
   outline: 2px dashed #d30000;
   outline-offset: 2px;
   background: #e6e6e6;
+}
+
+.partition-active-window {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  left: 0;
+  width: 20px;
+  border: 1px solid #d30000;
+  pointer-events: none;
+  z-index: 4;
+  display: none;
 }
 
 .partition-preview-item {

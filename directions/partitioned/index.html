@@ -146,6 +146,11 @@
       let playbackTimer = null;
       let primaryTrack = null;
       let primaryDistance = 1;
+      let partitionMetrics = {
+        left: { loopDistance: 1, viewportRatio: 0.25 },
+        curve: { loopDistance: 1, viewportRatio: 0.25 },
+        right: { loopDistance: 1, viewportRatio: 0.25 }
+      };
 
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
@@ -296,6 +301,15 @@
             : [DEFAULT_SOURCE];
           const normalizedSources = sourceList.map(normalizeArtworkSource);
           const result = await renderPartition(container, normalizedSources);
+          const partitionViewportWidth = container.clientWidth || 0;
+          partitionMetrics[key] = {
+            loopDistance: result.loopDistance,
+            viewportRatio:
+              result.loopDistance > 0
+                ? Math.min(1, Math.max(0.01, partitionViewportWidth / result.loopDistance))
+                : 0.25
+          };
+
           if (!primaryTrack && result.primaryTrack) {
             primaryTrack = result.primaryTrack;
             primaryDistance = result.loopDistance;
@@ -333,7 +347,8 @@
             durationSeconds: durationMs / 1000,
             stageHeight,
             assetGap: state.assetGap,
-            loopDistance: primaryDistance
+            loopDistance: primaryDistance,
+            partitions: partitionMetrics
           },
           "*"
         );

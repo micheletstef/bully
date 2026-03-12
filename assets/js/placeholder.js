@@ -17,9 +17,6 @@ const settingsPanel = document.querySelector(".settings-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
 const partitionEditors = document.getElementById("partitionEditors");
-const partitionUploadLeft = document.getElementById("partitionUploadLeft");
-const partitionUploadCurve = document.getElementById("partitionUploadCurve");
-const partitionUploadRight = document.getElementById("partitionUploadRight");
 const partitionTrackLeft = document.getElementById("partitionTrackLeft");
 const partitionTrackCurve = document.getElementById("partitionTrackCurve");
 const partitionTrackRight = document.getElementById("partitionTrackRight");
@@ -72,6 +69,16 @@ let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
 let loopDistanceSource = 1;
+let partitionViewportRatios = {
+  left: 0.25,
+  curve: 0.25,
+  right: 0.25
+};
+let partitionLoopDistances = {
+  left: 1,
+  curve: 1,
+  right: 1
+};
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 let loopRowGap = 0;
 let knownDirections = [];
@@ -1904,13 +1911,72 @@ function renderPartitionEditor(partitionKey) {
     tile.appendChild(removeButton);
     trackEl.appendChild(tile);
   });
+
+  const activeWindow = document.createElement("div");
+  activeWindow.className = "partition-active-window";
+  activeWindow.dataset.partitionWindow = "primary";
+  trackEl.appendChild(activeWindow);
+  const activeWindowSecondary = document.createElement("div");
+  activeWindowSecondary.className = "partition-active-window";
+  activeWindowSecondary.dataset.partitionWindow = "secondary";
+  trackEl.appendChild(activeWindowSecondary);
+
   initPartitionSortable(key, trackEl);
+  updatePartitionActiveWindows();
 }
 
 function renderPartitionEditors() {
   renderPartitionEditor("left");
   renderPartitionEditor("curve");
   renderPartitionEditor("right");
+}
+
+function updatePartitionActiveWindows() {
+  if (!currentDirectionIsPartitioned()) {
+    return;
+  }
+  const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
+
+  PARTITION_KEYS.forEach((partitionKey) => {
+    const trackEl = partitionTrackElement(partitionKey);
+    if (!trackEl) {
+      return;
+    }
+    const primaryWindow = trackEl.querySelector('[data-partition-window="primary"]');
+    const secondaryWindow = trackEl.querySelector('[data-partition-window="secondary"]');
+    if (!primaryWindow || !secondaryWindow) {
+      return;
+    }
+
+    const distance = Math.max(
+      1,
+      Number(partitionLoopDistances[partitionKey]) || trackEl.scrollWidth || 1
+    );
+    const ratioRaw = Number(partitionViewportRatios[partitionKey]);
+    const viewportRatio = Number.isFinite(ratioRaw)
+      ? Math.max(0.01, Math.min(1, ratioRaw))
+      : Math.max(0.01, Math.min(1, loopPlaybackViewportRatio || 0.25));
+    const x = distance * normalizedProgress;
+    const activeWidth = Math.max(8, Math.min(distance, distance * viewportRatio));
+    const mainWidth = Math.min(activeWidth, Math.max(0, distance - x));
+    const overflowWidth = Math.max(0, activeWidth - mainWidth);
+
+    if (mainWidth > 0) {
+      primaryWindow.style.display = "block";
+      primaryWindow.style.width = `${mainWidth}px`;
+      primaryWindow.style.transform = `translateX(${x}px)`;
+    } else {
+      primaryWindow.style.display = "none";
+    }
+
+    if (overflowWidth > 0) {
+      secondaryWindow.style.display = "block";
+      secondaryWindow.style.width = `${overflowWidth}px`;
+      secondaryWindow.style.transform = "translateX(0px)";
+    } else {
+      secondaryWindow.style.display = "none";
+    }
+  });
 }
 
 function bindPartitionTrackDrop(trackEl, partitionKey) {
@@ -2335,33 +2401,6 @@ async function init() {
     });
   }
 
-  if (partitionUploadLeft) {
-    partitionUploadLeft.addEventListener("change", async () => {
-      if (partitionUploadLeft.files && partitionUploadLeft.files.length) {
-        await addArtworkFiles(partitionUploadLeft.files, "left");
-        partitionUploadLeft.value = "";
-      }
-    });
-  }
-
-  if (partitionUploadCurve) {
-    partitionUploadCurve.addEventListener("change", async () => {
-      if (partitionUploadCurve.files && partitionUploadCurve.files.length) {
-        await addArtworkFiles(partitionUploadCurve.files, "curve");
-        partitionUploadCurve.value = "";
-      }
-    });
-  }
-
-  if (partitionUploadRight) {
-    partitionUploadRight.addEventListener("change", async () => {
-      if (partitionUploadRight.files && partitionUploadRight.files.length) {
-        await addArtworkFiles(partitionUploadRight.files, "right");
-        partitionUploadRight.value = "";
-      }
-    });
-  }
-
   bindPartitionTrackDrop(partitionTrackLeft, "left");
   bindPartitionTrackDrop(partitionTrackCurve, "curve");
   bindPartitionTrackDrop(partitionTrackRight, "right");
@@ -2435,12 +2474,34 @@ async function init() {
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
     }
+    if (payload.partitions && typeof payload.partitions === "object") {
+      PARTITION_KEYS.forEach((key) => {
+        const part = payload.partitions[key];
+        if (!part || typeof part !== "object") {
+          return;
+        }
+        const ratio = Number(part.viewportRatio);
+        if (Number.isFinite(ratio) && ratio > 0) {
+          partitionViewportRatios[key] = ratio;
+        }
+        const distance = Number(part.loopDistance);
+        if (Number.isFinite(distance) && distance > 0) {
+          partitionLoopDistances[key] = distance;
+        }
+      });
+    } else {
+      PARTITION_KEYS.forEach((key) => {
+        partitionViewportRatios[key] = loopPlaybackViewportRatio;
+        partitionLoopDistances[key] = loopDistanceSource;
+      });
+    }
     loopPadTopBottom = currentPadTopBottom();
     loopPadLeftRight = currentPadLeftRight();
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
     syncSpeedReadout();
     updateActiveWindow();
+    updatePartitionActiveWindows();
   });
 
   window.addEventListener("resize", () => {
@@ -2448,6 +2509,7 @@ async function init() {
     syncVisualizationGapScaled();
     syncVisualizationGeometry();
     updateActiveWindow();
+    updatePartitionActiveWindows();
   });
 
   billboardPreview.addEventListener("load", () => {
@@ -2458,6 +2520,11 @@ async function init() {
     if (loopElapsedTime) {
       loopElapsedTime.style.display = "none";
     }
+    PARTITION_KEYS.forEach((key) => {
+      partitionViewportRatios[key] = 0.25;
+      partitionLoopDistances[key] = 1;
+    });
+    updatePartitionActiveWindows();
     sendLoopConfigToPreview();
   });
 
