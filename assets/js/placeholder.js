@@ -6,6 +6,7 @@ const speedValue = document.getElementById("speedValue");
 const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
+const assetGapControl = document.getElementById("assetGapControl");
 const artworkList = document.getElementById("artworkList");
 const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
@@ -18,6 +19,7 @@ const STORAGE_KEYS = {
   padTB: "billboard.loopPadTopBottom",
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
+  assetGap: "billboard.loopAssetGap",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
 };
@@ -165,8 +167,9 @@ function trimSvgElement(svgElement) {
     }
 
     clone.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
-    clone.setAttribute("width", String(bbox.width));
-    clone.setAttribute("height", String(bbox.height));
+    clone.removeAttribute("width");
+    clone.removeAttribute("height");
+    clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
     return clone;
   } finally {
     document.body.removeChild(sandbox);
@@ -330,6 +333,13 @@ function currentBackgroundColor() {
   return bgColorControl.value || "#fff8a5";
 }
 
+function currentAssetGap() {
+  if (!assetGapControl) {
+    return 0;
+  }
+  return Number(assetGapControl.value) || 0;
+}
+
 function readStorage(key) {
   try {
     return localStorage.getItem(key);
@@ -360,6 +370,10 @@ function savePadLeftRight(value) {
 
 function saveBackgroundColor(value) {
   writeStorage(STORAGE_KEYS.bgColor, value);
+}
+
+function saveAssetGap(value) {
+  writeStorage(STORAGE_KEYS.assetGap, String(value));
 }
 
 function restoreSpeed() {
@@ -414,6 +428,18 @@ function restoreLoopLayoutSettings() {
       bgColorControl.value = raw;
     }
   }
+
+  if (assetGapControl) {
+    const raw = readStorage(STORAGE_KEYS.assetGap);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(assetGapControl.min || 0);
+        const max = Number(assetGapControl.max || 9999);
+        assetGapControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
 }
 
 function saveSelectedDirection(name) {
@@ -466,10 +492,18 @@ function sendLoopConfigToPreview() {
     artworks: loopArtworks.map((item) => item.src),
     padTopBottom: currentPadTopBottom(),
     padLeftRight: currentPadLeftRight(),
-    backgroundColor: currentBackgroundColor()
+    backgroundColor: currentBackgroundColor(),
+    assetGap: currentAssetGap()
   };
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
+}
+
+function syncVisualizationBackground() {
+  if (!loopVisualization) {
+    return;
+  }
+  loopVisualization.style.background = currentBackgroundColor();
 }
 
 function renderLoopPreview() {
@@ -772,6 +806,14 @@ async function init() {
   if (bgColorControl) {
     bgColorControl.addEventListener("input", () => {
       saveBackgroundColor(currentBackgroundColor());
+      syncVisualizationBackground();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (assetGapControl) {
+    assetGapControl.addEventListener("input", () => {
+      saveAssetGap(currentAssetGap());
       sendLoopConfigToPreview();
     });
   }
@@ -844,6 +886,8 @@ async function init() {
     }
     sendLoopConfigToPreview();
   });
+
+  syncVisualizationBackground();
 }
 
 init();

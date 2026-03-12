@@ -280,6 +280,8 @@ body {
 .loop-preview-item img {
   height: 100%;
   width: auto;
+  max-width: none;
+  object-fit: contain;
   display: block;
 }
 
