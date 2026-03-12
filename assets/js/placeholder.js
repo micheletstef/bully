@@ -936,28 +936,16 @@ function draw3dFrame() {
   ctx.clearRect(0, 0, width, height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  const spine = buildTopViewSpine();
-  const extrusionHeight = BILLBOARD_DESIGN_HEIGHT;
-  const topProjectedRaw = spine.points.map((point) => {
-    const projected = projectBillboardVertex(point.x, point.y, 0);
-    return {
-      x: projected.x,
-      y: projected.y,
-      depth: projected.depth,
-      s: point.s
-    };
-  });
-  const bottomProjectedRaw = spine.points.map((point) => {
-    const projected = projectBillboardVertex(point.x, point.y, -extrusionHeight);
-    return {
-      x: projected.x,
-      y: projected.y,
-      depth: projected.depth
-    };
-  });
+  const halfWidth = BILLBOARD_DESIGN_WIDTH / 2;
+  const planeY = 0;
+  const topLeftRaw = projectBillboardVertex(-halfWidth, planeY, 0);
+  const topRightRaw = projectBillboardVertex(halfWidth, planeY, 0);
+  const bottomRightRaw = projectBillboardVertex(halfWidth, planeY, -BILLBOARD_DESIGN_HEIGHT);
+  const bottomLeftRaw = projectBillboardVertex(-halfWidth, planeY, -BILLBOARD_DESIGN_HEIGHT);
 
+  const rawPoints = [topLeftRaw, topRightRaw, bottomRightRaw, bottomLeftRaw];
   const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
-  [...topProjectedRaw, ...bottomProjectedRaw].forEach((point) => {
+  rawPoints.forEach((point) => {
     bounds.minX = Math.min(bounds.minX, point.x);
     bounds.maxX = Math.max(bounds.maxX, point.x);
     bounds.minY = Math.min(bounds.minY, point.y);
@@ -971,96 +959,39 @@ function draw3dFrame() {
   const offsetX = (width - projectedWidth * fitScale) / 2 - bounds.minX * fitScale;
   const offsetY = (height - projectedHeight * fitScale) / 2 - bounds.minY * fitScale;
 
-  const topPoints = topProjectedRaw.map((point) => ({
-    x: point.x * fitScale + offsetX,
-    y: point.y * fitScale + offsetY,
-    depth: point.depth,
-    s: point.s
-  }));
-  const bottomPoints = bottomProjectedRaw.map((point) => ({
-    x: point.x * fitScale + offsetX,
-    y: point.y * fitScale + offsetY,
-    depth: point.depth
-  }));
+  const p0 = { x: topLeftRaw.x * fitScale + offsetX, y: topLeftRaw.y * fitScale + offsetY };
+  const p1 = { x: topRightRaw.x * fitScale + offsetX, y: topRightRaw.y * fitScale + offsetY };
+  const p2 = { x: bottomRightRaw.x * fitScale + offsetX, y: bottomRightRaw.y * fitScale + offsetY };
+  const p3 = { x: bottomLeftRaw.x * fitScale + offsetX, y: bottomLeftRaw.y * fitScale + offsetY };
+
   const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
   const baseOffset = progress * preview3dSurface.sequenceWidth;
-
   const strip = preview3dSurface.canvas;
   const stripHeight = preview3dSurface.stripHeight;
   const sequenceWidth = preview3dSurface.sequenceWidth;
-  const totalLength = Math.max(1, spine.totalLength);
+  const sx = ((baseOffset % sequenceWidth) + sequenceWidth) % sequenceWidth;
+  const sw = sequenceWidth;
+  const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+  const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
 
-  const segments = [];
-  for (let i = 0; i < topPoints.length - 1; i += 1) {
-    const p0 = topPoints[i];
-    const p1 = topPoints[i + 1];
-    const p2 = bottomPoints[i + 1];
-    const p3 = bottomPoints[i];
-    const segmentDesignStart = topPoints[i].s;
-    const segmentDesignEnd = topPoints[i + 1].s;
-    const segmentRatioStart = segmentDesignStart / totalLength;
-    const segmentRatioEnd = segmentDesignEnd / totalLength;
-    const mirroredRatioStart = 1 - segmentRatioEnd;
-    const sx = ((baseOffset + mirroredRatioStart * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
-    const sw = Math.max(1, (segmentRatioEnd - segmentRatioStart) * sequenceWidth);
-    const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
-    const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
-    const avgDepth = (p0.depth + p1.depth + p2.depth + p3.depth) / 4;
-
-    segments.push({ p0, p1, p2, p3, sx, sw, dw, dh, avgDepth });
-  }
-
-  // Draw far-to-near to reduce visual self-overlap at steep camera angles.
-  segments.sort((a, b) => a.avgDepth - b.avgDepth);
-  let renderedSegments = 0;
-  const drawSegment = ({ p0, p1, p2, p3, sx, sw, dw, dh }) => {
-    if (!Number.isFinite(dw) || !Number.isFinite(dh) || dw <= 0.0001 || dh <= 0.0001) {
-      return false;
-    }
-    const area =
-      Math.abs(
-        (p0.x * p1.y - p1.x * p0.y)
-          + (p1.x * p2.y - p2.x * p1.y)
-          + (p2.x * p3.y - p3.x * p2.y)
-          + (p3.x * p0.y - p0.x * p3.y)
-      ) * 0.5;
-    if (!Number.isFinite(area) || area < 0.0001) {
-      return false;
-    }
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    ctx.lineTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.lineTo(p3.x, p3.y);
-    ctx.closePath();
-    ctx.clip();
-    ctx.setTransform(
-      (p1.x - p0.x) / dw,
-      (p1.y - p0.y) / dw,
-      (p3.x - p0.x) / dh,
-      (p3.y - p0.y) / dh,
-      p0.x,
-      p0.y
-    );
-    ctx.drawImage(strip, sx, 0, sw, stripHeight, 0, 0, dw, dh);
-    ctx.restore();
-    return true;
-  };
-
-  segments.forEach((segment) => {
-    if (drawSegment(segment)) {
-      renderedSegments += 1;
-    }
-  });
-
-  // Fallback path: if camera settings make sorting/culling degenerate, still render in source order.
-  if (renderedSegments === 0) {
-    for (let i = 0; i < segments.length; i += 1) {
-      drawSegment(segments[i]);
-    }
-  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(p0.x, p0.y);
+  ctx.lineTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.setTransform(
+    (p1.x - p0.x) / dw,
+    (p1.y - p0.y) / dw,
+    (p3.x - p0.x) / dh,
+    (p3.y - p0.y) / dh,
+    p0.x,
+    p0.y
+  );
+  ctx.drawImage(strip, sx, 0, sw, stripHeight, 0, 0, dw, dh);
+  ctx.restore();
 }
 
 function update3dPreviewAnimation() {
