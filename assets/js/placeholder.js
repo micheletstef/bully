@@ -6,6 +6,7 @@ const speedValue = document.getElementById("speedValue");
 const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
+const previewViewModeControl = document.getElementById("previewViewModeControl");
 const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
 const linearOrientationRow = document.getElementById("linearOrientationRow");
@@ -22,6 +23,10 @@ const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
+const billboardPreview3d = document.getElementById("billboardPreview3d");
+const billboard3dTrackLeft = document.getElementById("billboard3dTrackLeft");
+const billboard3dTrackCurve = document.getElementById("billboard3dTrackCurve");
+const billboard3dTrackRight = document.getElementById("billboard3dTrackRight");
 const partitionEditors = document.getElementById("partitionEditors");
 const partitionTrackLeft = document.getElementById("partitionTrackLeft");
 const partitionTrackCurve = document.getElementById("partitionTrackCurve");
@@ -36,6 +41,7 @@ const STORAGE_KEYS = {
   padTB: "billboard.loopPadTopBottom",
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
+  previewViewMode: "billboard.previewViewMode",
   assetGap: "billboard.loopAssetGap",
   artworkOrientation: "billboard.loopArtworkOrientation",
   partitionArtworkOrientations: "billboard.partitionArtworkOrientations",
@@ -93,6 +99,12 @@ let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
+let previewViewMode = "flat";
+let preview3dMetrics = {
+  left: { distance: 1 },
+  curve: { distance: 1 },
+  right: { distance: 1 }
+};
 
 function getAppBasePath() {
   const path = window.location.pathname || "/";
@@ -503,6 +515,170 @@ function syncDirectionModeUI() {
   } else {
     renderLoopPreview();
   }
+  render3dPreview();
+}
+
+function waitForPreviewImage(img) {
+  return new Promise((resolve) => {
+    if (!img || img.complete) {
+      resolve();
+      return;
+    }
+    img.addEventListener("load", resolve, { once: true });
+    img.addEventListener("error", resolve, { once: true });
+  });
+}
+
+function normalize3dArtworkSource(path) {
+  const source = String(path || "").trim();
+  if (!source) {
+    return "";
+  }
+  if (/^(https?:|data:|blob:)/.test(source)) {
+    return source;
+  }
+  return source;
+}
+
+function orientationFor3dFace(partitionKey) {
+  if (currentDirectionIsPartitioned()) {
+    const orientations = currentPartitionArtworkOrientations();
+    return orientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+  }
+  return currentArtworkOrientation();
+}
+
+function sourcesFor3dFace(partitionKey) {
+  if (currentDirectionIsPartitioned()) {
+    const list = partitionArtworks[partitionKey] || [];
+    return list.length ? list.map((item) => normalize3dArtworkSource(item.src)) : [];
+  }
+  return loopArtworks.map((item) => normalize3dArtworkSource(item.src));
+}
+
+async function render3dFace(trackEl, partitionKey) {
+  if (!trackEl) {
+    return;
+  }
+  trackEl.innerHTML = "";
+  const sources = sourcesFor3dFace(partitionKey);
+  if (!sources.length) {
+    preview3dMetrics[partitionKey] = { distance: 1 };
+    return;
+  }
+
+  const stageHeight = Math.max(1, Number(loopStageHeight) || 3480);
+  const trackHeight = Math.max(1, trackEl.clientHeight || 1);
+  const scale = trackHeight / stageHeight;
+  const spacerWidth = Math.max(0, Math.round((Number(currentPadLeftRight()) || 0) * scale * 100) / 100);
+  const gap = Math.max(0, Math.round((Number(currentAssetGap()) || 0) * scale * 100) / 100);
+  const vertical = orientationFor3dFace(partitionKey) === "vertical";
+  trackEl.style.gap = `${gap}px`;
+
+  let firstStart = null;
+  let secondStart = null;
+  const images = [];
+  const appendSequence = (collectStart) => {
+    let startNode = null;
+    if (spacerWidth > 0) {
+      const spacerStart = document.createElement("div");
+      spacerStart.className = "corner-face-spacer";
+      spacerStart.style.width = `${spacerWidth}px`;
+      trackEl.appendChild(spacerStart);
+      startNode = spacerStart;
+    }
+    sources.forEach((source) => {
+      const tile = document.createElement("div");
+      tile.className = "corner-face-item";
+      const image = document.createElement("img");
+      image.src = source;
+      image.alt = "";
+      if (vertical) {
+        image.style.transform = "rotate(-90deg)";
+        image.style.transformOrigin = "center center";
+      }
+      tile.appendChild(image);
+      trackEl.appendChild(tile);
+      images.push(image);
+      if (!startNode) {
+        startNode = tile;
+      }
+    });
+    if (spacerWidth > 0) {
+      const spacerEnd = document.createElement("div");
+      spacerEnd.className = "corner-face-spacer";
+      spacerEnd.style.width = `${spacerWidth}px`;
+      trackEl.appendChild(spacerEnd);
+    }
+    if (collectStart) {
+      firstStart = startNode;
+    } else {
+      secondStart = startNode;
+    }
+  };
+
+  appendSequence(true);
+  appendSequence(false);
+  await Promise.all(images.map((image) => waitForPreviewImage(image)));
+
+  let distance = 1;
+  if (firstStart && secondStart) {
+    const firstRect = firstStart.getBoundingClientRect();
+    const secondRect = secondStart.getBoundingClientRect();
+    distance = Math.max(1, secondRect.left - firstRect.left);
+  }
+  preview3dMetrics[partitionKey] = { distance };
+}
+
+function update3dPreviewAnimation() {
+  const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
+  const trackMap = {
+    left: billboard3dTrackLeft,
+    curve: billboard3dTrackCurve,
+    right: billboard3dTrackRight
+  };
+  PARTITION_KEYS.forEach((key) => {
+    const track = trackMap[key];
+    const metrics = preview3dMetrics[key] || { distance: 1 };
+    if (!track) {
+      return;
+    }
+    const distance = Math.max(1, Number(metrics.distance) || 1);
+    const offset = -1 * progress * distance;
+    track.style.transform = `translateX(${offset}px)`;
+  });
+}
+
+async function render3dPreview() {
+  if (!billboardPreview3d) {
+    return;
+  }
+  const faceBackground = currentBackgroundColor();
+  billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
+    face.style.background = faceBackground;
+  });
+  await Promise.all([
+    render3dFace(billboard3dTrackLeft, "left"),
+    render3dFace(billboard3dTrackCurve, "curve"),
+    render3dFace(billboard3dTrackRight, "right")
+  ]);
+  update3dPreviewAnimation();
+}
+
+function applyPreviewViewMode(mode) {
+  previewViewMode = normalizePreviewViewMode(mode);
+  if (previewViewModeControl && previewViewModeControl.value !== previewViewMode) {
+    previewViewModeControl.value = previewViewMode;
+  }
+  if (appShell) {
+    appShell.classList.toggle("preview-3d-mode", previewViewMode === "3d");
+  }
+  if (billboardPreview3d) {
+    billboardPreview3d.setAttribute("aria-hidden", previewViewMode === "3d" ? "false" : "true");
+  }
+  if (previewViewMode === "3d") {
+    render3dPreview();
+  }
 }
 
 function loadDirection(path, directionName = null) {
@@ -513,6 +689,7 @@ function loadDirection(path, directionName = null) {
   emptyState.style.display = "none";
   setSettingsPanelVisibility(true);
   syncDirectionModeUI();
+  applyPreviewViewMode(previewViewMode);
 }
 
 function loadOutputSnapshot(snapshot) {
@@ -540,6 +717,7 @@ function loadOutputSnapshot(snapshot) {
         : "linear loop";
   syncDirectionModeUI();
   setSettingsPanelVisibility(false);
+  applyPreviewViewMode(previewViewMode);
 }
 
 function setActiveDirection(button) {
@@ -660,6 +838,10 @@ function currentReverseOddRows() {
     return false;
   }
   return !!reverseOddRowsControl.checked;
+}
+
+function normalizePreviewViewMode(value) {
+  return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
 }
 
 function readStorage(key) {
@@ -1582,6 +1764,10 @@ function saveBackgroundColor(value) {
   writeStorage(STORAGE_KEYS.bgColor, value);
 }
 
+function savePreviewViewMode(value) {
+  writeStorage(STORAGE_KEYS.previewViewMode, normalizePreviewViewMode(value));
+}
+
 function saveAssetGap(value) {
   writeStorage(STORAGE_KEYS.assetGap, String(value));
 }
@@ -1665,6 +1851,13 @@ function restoreLoopLayoutSettings() {
     const raw = readStorage(STORAGE_KEYS.bgColor);
     if (raw && /^#[0-9a-f]{6}$/i.test(raw)) {
       bgColorControl.value = raw;
+    }
+  }
+
+  if (previewViewModeControl) {
+    const raw = readStorage(STORAGE_KEYS.previewViewMode);
+    if (raw !== null) {
+      previewViewModeControl.value = normalizePreviewViewMode(raw);
     }
   }
 
@@ -1857,6 +2050,11 @@ function syncVisualizationBackground() {
     return;
   }
   loopVisualization.style.background = currentBackgroundColor();
+  if (billboardPreview3d) {
+    billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
+      face.style.background = currentBackgroundColor();
+    });
+  }
 }
 
 function getPartitionPreviewScale() {
@@ -2005,6 +2203,7 @@ function renderLoopPreview() {
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
   updateActiveWindow();
+  render3dPreview();
 }
 
 function partitionTrackElement(partitionKey) {
@@ -2049,6 +2248,7 @@ function removePartitionArtwork(partitionKey, index) {
   items.splice(index, 1);
   savePartitionArtworks(partitionArtworks);
   renderPartitionEditor(key);
+  render3dPreview();
   sendLoopConfigToPreview();
 }
 
@@ -2157,6 +2357,7 @@ function renderPartitionEditors() {
   renderPartitionEditor("left");
   renderPartitionEditor("curve");
   renderPartitionEditor("right");
+  render3dPreview();
 }
 
 function updatePartitionActiveWindows() {
@@ -2374,6 +2575,7 @@ function updateActiveWindow() {
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
   }
+  update3dPreviewAnimation();
 }
 
 function removeArtwork(index) {
@@ -2498,6 +2700,9 @@ function renderDirectory(directions) {
 async function init() {
   restoreSpeed();
   restoreLoopLayoutSettings();
+  previewViewMode = normalizePreviewViewMode(
+    previewViewModeControl ? previewViewModeControl.value : readStorage(STORAGE_KEYS.previewViewMode)
+  );
   loopArtworks = restoreArtworks();
   partitionArtworks = restorePartitionArtworks();
 
@@ -2525,6 +2730,7 @@ async function init() {
   renderLoopPreview();
   renderPartitionEditors();
   syncDirectionModeUI();
+  applyPreviewViewMode(previewViewMode);
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
@@ -2542,6 +2748,7 @@ async function init() {
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
       syncPartitionEditorVisuals();
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2553,6 +2760,7 @@ async function init() {
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
       syncPartitionEditorVisuals();
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2562,7 +2770,16 @@ async function init() {
       saveBackgroundColor(currentBackgroundColor());
       syncVisualizationBackground();
       syncPartitionEditorVisuals();
+      render3dPreview();
       sendLoopConfigToPreview();
+    });
+  }
+
+  if (previewViewModeControl) {
+    previewViewModeControl.addEventListener("change", () => {
+      previewViewMode = normalizePreviewViewMode(previewViewModeControl.value);
+      savePreviewViewMode(previewViewMode);
+      applyPreviewViewMode(previewViewMode);
     });
   }
 
@@ -2572,6 +2789,7 @@ async function init() {
       loopAssetGap = currentAssetGap();
       syncVisualizationGapScaled();
       syncPartitionEditorVisuals();
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2579,6 +2797,7 @@ async function init() {
   if (artworkOrientationControl) {
     artworkOrientationControl.addEventListener("change", () => {
       saveArtworkOrientation(currentArtworkOrientation());
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2588,6 +2807,7 @@ async function init() {
     .forEach((control) => {
       control.addEventListener("change", () => {
         savePartitionArtworkOrientations(currentPartitionArtworkOrientations());
+        render3dPreview();
         sendLoopConfigToPreview();
       });
     });
@@ -2595,6 +2815,7 @@ async function init() {
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
       saveRowCount(currentRowCount());
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2602,6 +2823,7 @@ async function init() {
   if (rowOffsetControl) {
     rowOffsetControl.addEventListener("input", () => {
       saveRowOffset(currentRowOffset());
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2610,6 +2832,7 @@ async function init() {
     rowGapControl.addEventListener("input", () => {
       saveRowGap(currentRowGap());
       loopRowGap = currentRowGap();
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2617,6 +2840,7 @@ async function init() {
   if (reverseOddRowsControl) {
     reverseOddRowsControl.addEventListener("change", () => {
       saveReverseOddRows(currentReverseOddRows());
+      render3dPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -2686,11 +2910,14 @@ async function init() {
     if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
       loopDurationSeconds = durationSeconds;
     }
-    if (Number.isFinite(stageHeight) && stageHeight > 0) {
+    let shouldRerender3d = false;
+    if (Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
       loopStageHeight = stageHeight;
+      shouldRerender3d = true;
     }
-    if (Number.isFinite(assetGap) && assetGap >= 0) {
+    if (Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
       loopAssetGap = assetGap;
+      shouldRerender3d = true;
     }
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
@@ -2724,6 +2951,9 @@ async function init() {
     syncSpeedReadout();
     updateActiveWindow();
     updatePartitionActiveWindows();
+    if (shouldRerender3d && previewViewMode === "3d") {
+      render3dPreview();
+    }
   });
 
   window.addEventListener("resize", () => {
@@ -2733,6 +2963,9 @@ async function init() {
     syncVisualizationGeometry();
     updateActiveWindow();
     updatePartitionActiveWindows();
+    if (previewViewMode === "3d") {
+      render3dPreview();
+    }
   });
 
   billboardPreview.addEventListener("load", () => {
@@ -2749,6 +2982,9 @@ async function init() {
     });
     updatePartitionActiveWindows();
     sendLoopConfigToPreview();
+    if (previewViewMode === "3d") {
+      render3dPreview();
+    }
   });
 
   syncVisualizationBackground();

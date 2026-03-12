@@ -2,6 +2,12 @@
   box-sizing: border-box;
 }
 
+:root {
+  --billboard-left-ratio: 0.308475;
+  --billboard-curve-ratio: 0.172881;
+  --billboard-right-ratio: 0.518644;
+}
+
 html,
 body {
   height: 100%;
@@ -97,6 +103,91 @@ body {
   height: 100%;
   border: 0;
   display: none;
+}
+
+.billboard-preview-3d {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: linear-gradient(180deg, #ececec 0%, #d9d9d9 58%, #c2c2c2 100%);
+  overflow: hidden;
+}
+
+.street-floor {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: -18%;
+  height: 48%;
+  background: linear-gradient(180deg, rgba(126, 126, 126, 0.58), rgba(80, 80, 80, 0.8));
+  transform: perspective(900px) rotateX(72deg);
+  transform-origin: top center;
+}
+
+.corner-scene {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 9%;
+  bottom: 15%;
+  perspective: 1500px;
+  transform-style: preserve-3d;
+}
+
+.corner-face {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff8a5;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.corner-face-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  height: 100%;
+  gap: var(--preview-3d-gap, 0px);
+  will-change: transform;
+}
+
+.corner-face-item,
+.corner-face-spacer {
+  flex: 0 0 auto;
+  height: 100%;
+}
+
+.corner-face-item img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+}
+
+.corner-face-left {
+  left: 0;
+  width: calc(var(--billboard-left-ratio) * 100%);
+  transform-origin: right center;
+  transform: translateX(7%) rotateY(38deg);
+}
+
+.corner-face-curve {
+  left: calc(var(--billboard-left-ratio) * 100%);
+  width: calc(var(--billboard-curve-ratio) * 100%);
+  border-radius: 0 14px 14px 0;
+  transform-origin: center center;
+  transform: translateX(5%) rotateY(9deg);
+}
+
+.corner-face-right {
+  left: calc((var(--billboard-left-ratio) + var(--billboard-curve-ratio)) * 100%);
+  width: calc(var(--billboard-right-ratio) * 100%);
+  transform-origin: left center;
+  transform: translateX(2%) rotateY(-28deg);
 }
 
 .empty-state {
@@ -347,6 +438,18 @@ body {
 
 .app-shell.partitioned-mode .partition-editors {
   display: grid;
+}
+
+.app-shell.preview-3d-mode #billboardPreview {
+  display: none !important;
+}
+
+.app-shell.preview-3d-mode .billboard-preview-3d {
+  display: block;
+}
+
+.app-shell.preview-3d-mode .billboard-annotations {
+  opacity: 0.35;
 }
 
 .billboard-info {
