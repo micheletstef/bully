@@ -105,13 +105,18 @@ function normalizeOutputItem(item) {
 }
 
 async function handleApi(req, res, urlObj) {
-  if (urlObj.pathname === "/api/outputs" && req.method === "GET") {
+  const pathName = urlObj.pathname || "/";
+  const apiPath = pathName.startsWith("/bully/api/")
+    ? pathName.replace("/bully/api/", "/api/")
+    : pathName;
+
+  if (apiPath === "/api/outputs" && req.method === "GET") {
     const outputs = await readOutputs();
     sendJson(res, 200, outputs);
     return true;
   }
 
-  if (urlObj.pathname === "/api/outputs" && req.method === "POST") {
+  if (apiPath === "/api/outputs" && req.method === "POST") {
     try {
       const rawBody = await collectRequestBody(req);
       const parsed = JSON.parse(rawBody || "{}");
@@ -131,8 +136,8 @@ async function handleApi(req, res, urlObj) {
     }
   }
 
-  if (urlObj.pathname.startsWith("/api/outputs/") && req.method === "DELETE") {
-    const id = decodeURIComponent(urlObj.pathname.slice("/api/outputs/".length));
+  if (apiPath.startsWith("/api/outputs/") && req.method === "DELETE") {
+    const id = decodeURIComponent(apiPath.slice("/api/outputs/".length));
     if (!id) {
       sendJson(res, 400, { error: "Missing output id." });
       return true;

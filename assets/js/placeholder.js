@@ -54,6 +54,22 @@ let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
 
+function getAppBasePath() {
+  const path = window.location.pathname || "/";
+  if (path.includes("/outputs/")) {
+    return `${path.split("/outputs/")[0]}/`;
+  }
+  if (path.endsWith("/index.html")) {
+    return path.slice(0, -"index.html".length);
+  }
+  return path.endsWith("/") ? path : `${path}/`;
+}
+
+function apiPath(relativePath) {
+  const clean = String(relativePath || "").replace(/^\/+/, "");
+  return `${getAppBasePath()}${clean}`;
+}
+
 function normalizeHref(href) {
   if (!href) {
     return "";
@@ -749,7 +765,7 @@ function buildSnapshotHtml(config) {
 
 async function fetchOutputsFromServer() {
   try {
-    const response = await fetch("/api/outputs", { cache: "no-store" });
+    const response = await fetch(apiPath("api/outputs"), { cache: "no-store" });
     if (!response.ok) {
       return [];
     }
@@ -761,7 +777,7 @@ async function fetchOutputsFromServer() {
 }
 
 async function createOutputOnServer(snapshot) {
-  const response = await fetch("/api/outputs", {
+  const response = await fetch(apiPath("api/outputs"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -774,7 +790,7 @@ async function createOutputOnServer(snapshot) {
 }
 
 async function deleteOutputOnServer(id) {
-  const response = await fetch(`/api/outputs/${encodeURIComponent(id)}`, {
+  const response = await fetch(apiPath(`api/outputs/${encodeURIComponent(id)}`), {
     method: "DELETE"
   });
   if (!response.ok) {
@@ -1455,9 +1471,9 @@ async function init() {
   try {
     let directions = [];
     try {
-      directions = await discoverDirections();
-    } catch (error) {
       directions = await loadDirectionsFromManifest();
+    } catch (error) {
+      directions = await discoverDirections();
     }
 
     if (!directions.length) {
