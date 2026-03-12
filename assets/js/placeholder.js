@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
 };
 const DEFAULT_ARTWORKS = ["assets/linear-loop-strip.png"];
 let loopArtworks = [...DEFAULT_ARTWORKS];
+let draggingArtworkIndex = null;
 
 function normalizeHref(href) {
   if (!href) {
@@ -205,12 +206,72 @@ function renderLoopPreview() {
   }
 
   loopPreviewTrack.innerHTML = "";
-  loopArtworks.forEach((src) => {
+  loopArtworks.forEach((src, index) => {
+    const tile = document.createElement("div");
+    tile.className = "loop-preview-item";
+    tile.draggable = true;
+    tile.dataset.index = String(index);
+
     const image = document.createElement("img");
     image.src = src;
     image.alt = "";
-    loopPreviewTrack.appendChild(image);
+    tile.appendChild(image);
+
+    tile.addEventListener("dragstart", () => {
+      draggingArtworkIndex = index;
+      tile.classList.add("dragging");
+    });
+
+    tile.addEventListener("dragend", () => {
+      draggingArtworkIndex = null;
+      tile.classList.remove("dragging");
+    });
+
+    tile.addEventListener("dragover", (event) => {
+      event.preventDefault();
+    });
+
+    tile.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const targetIndex = Number(tile.dataset.index);
+      if (!Number.isInteger(targetIndex)) {
+        return;
+      }
+      moveArtwork(draggingArtworkIndex, targetIndex);
+    });
+
+    loopPreviewTrack.appendChild(tile);
   });
+}
+
+function artworkFileName(path) {
+  const clean = String(path).split("?")[0].split("#")[0];
+  const parts = clean.split("/");
+  return parts[parts.length - 1] || clean;
+}
+
+function artworkLastFive(path) {
+  const name = artworkFileName(path);
+  return name.slice(-5);
+}
+
+function moveArtwork(fromIndex, toIndex) {
+  if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
+    return;
+  }
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= loopArtworks.length || toIndex >= loopArtworks.length) {
+    return;
+  }
+  if (fromIndex === toIndex) {
+    return;
+  }
+
+  const [moved] = loopArtworks.splice(fromIndex, 1);
+  loopArtworks.splice(toIndex, 0, moved);
+  saveArtworks(loopArtworks);
+  renderArtworkList();
+  renderLoopPreview();
+  sendLoopConfigToPreview();
 }
 
 function removeArtwork(index) {
@@ -235,10 +296,21 @@ function renderArtworkList() {
     const row = document.createElement("div");
     row.className = "artwork-item";
 
+    const thumb = document.createElement("img");
+    thumb.className = "artwork-thumb";
+    thumb.src = src;
+    thumb.alt = "";
+    row.appendChild(thumb);
+
     const name = document.createElement("span");
-    name.className = "artwork-name";
-    name.textContent = src;
+    name.className = "artwork-index";
+    name.textContent = `${index + 1}. ${artworkFileName(src)}`;
     row.appendChild(name);
+
+    const suffix = document.createElement("span");
+    suffix.className = "artwork-suffix";
+    suffix.textContent = artworkLastFive(src);
+    row.appendChild(suffix);
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";

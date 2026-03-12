@@ -82,46 +82,49 @@
               </tbody>
             </table>
 
-            <table class="spec-table settings-table">
-              <tbody>
-                <tr>
-                  <th>loop speed</th>
-                  <td>
-                    <input
-                      id="speedControl"
-                      type="range"
-                      min="4"
-                      max="40"
-                      step="1"
-                      value="16"
-                    />
-                  </td>
-                </tr>
-                <tr>
-                  <th>1 loop takes</th>
-                  <td><span id="speedValue">16s</span></td>
-                </tr>
-                <tr>
-                  <th>artworks in loop</th>
-                  <td>
-                    <div id="artworkList" class="artwork-list"></div>
-                  </td>
-                </tr>
-                <tr>
-                  <th>add artwork</th>
-                  <td>
-                    <div class="add-artwork-row">
-                      <input
-                        id="artworkInput"
-                        type="text"
-                        placeholder="assets/another-artwork.png"
-                      />
-                      <button id="addArtworkButton" type="button">add</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="settings-panel">
+              <h3 class="settings-title">linear loop settings</h3>
+
+              <section class="settings-group">
+                <div class="settings-row">
+                  <span class="settings-label">speed</span>
+                  <input
+                    id="speedControl"
+                    type="range"
+                    min="4"
+                    max="40"
+                    step="1"
+                    value="16"
+                  />
+                </div>
+                <div class="settings-row">
+                  <span class="settings-label">1 loop takes</span>
+                  <span id="speedValue">16s</span>
+                </div>
+              </section>
+
+              <section class="settings-group">
+                <div class="settings-row settings-row-top">
+                  <span class="settings-label">artworks in loop</span>
+                  <span class="settings-hint">drag in visual editor to reorder</span>
+                </div>
+                <div id="artworkList" class="artwork-list"></div>
+              </section>
+
+              <section class="settings-group">
+                <div class="settings-row">
+                  <span class="settings-label">add artwork</span>
+                </div>
+                <div class="add-artwork-row">
+                  <input
+                    id="artworkInput"
+                    type="text"
+                    placeholder="assets/another-artwork.png"
+                  />
+                  <button id="addArtworkButton" type="button">add</button>
+                </div>
+              </section>
+            </div>
           </div>
         </section>
       </main>

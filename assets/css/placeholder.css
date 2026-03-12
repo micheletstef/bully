@@ -224,25 +224,40 @@ body {
 
 .loop-visualization {
   position: absolute;
-  left: 318px;
-  right: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(76vw, 1180px);
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
-  width: auto;
-  height: 38px;
-  overflow: hidden;
+  height: 46px;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: #f1f1f1;
 }
 
 .loop-preview-track {
   display: flex;
-  width: max-content;
+  width: fit-content;
   height: 100%;
+  gap: 2px;
+  padding: 2px;
 }
 
-.loop-preview-track img {
+.loop-preview-item {
+  height: calc(100% - 4px);
+  min-width: 42px;
+  border: 1px solid #c8c8c8;
+  background: #fff;
+  cursor: grab;
+}
+
+.loop-preview-item.dragging {
+  opacity: 0.45;
+}
+
+.loop-preview-item img {
   height: 100%;
   width: auto;
-  flex: 0 0 auto;
+  display: block;
 }
 
 .billboard-info {
@@ -287,7 +302,42 @@ body {
   text-transform: lowercase;
 }
 
-.settings-table input[type="range"] {
+.settings-panel {
+  font-size: 11px;
+}
+
+.settings-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.settings-group {
+  margin-bottom: 10px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.settings-row-top {
+  grid-template-columns: 1fr;
+}
+
+.settings-label {
+  text-transform: lowercase;
+}
+
+.settings-hint {
+  color: #626262;
+}
+
+#speedControl {
   width: 100%;
   margin: 0;
 }
@@ -295,20 +345,26 @@ body {
 .artwork-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .artwork-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
-.artwork-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.artwork-thumb {
+  width: 34px;
+  height: 18px;
+  object-fit: cover;
+  border: 1px solid #bfbfbf;
+  background: #fff;
+}
+
+.artwork-index {
+  color: #666;
 }
 
 .artwork-remove {
@@ -319,6 +375,11 @@ body {
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
+}
+
+.artwork-suffix {
+  color: #3e3e3e;
+  white-space: nowrap;
 }
 
 .add-artwork-row {
@@ -354,7 +415,6 @@ body {
   }
 
   .loop-visualization {
-    left: 318px;
-    right: 10px;
+    width: min(76vw, 1180px);
   }
 }
