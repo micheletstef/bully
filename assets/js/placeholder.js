@@ -7,6 +7,9 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const assetGapControl = document.getElementById("assetGapControl");
+const rowCountControl = document.getElementById("rowCountControl");
+const rowOffsetControl = document.getElementById("rowOffsetControl");
+const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
 const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
@@ -19,6 +22,9 @@ const STORAGE_KEYS = {
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
   assetGap: "billboard.loopAssetGap",
+  rowCount: "billboard.loopRowCount",
+  rowOffset: "billboard.loopRowOffset",
+  reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
 };
@@ -37,6 +43,7 @@ let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
+const PREVIEW_RENDER_HEIGHT = 46;
 
 function normalizeHref(href) {
   if (!href) {
@@ -342,6 +349,29 @@ function currentAssetGap() {
   return Number(assetGapControl.value) || 0;
 }
 
+function currentRowCount() {
+  if (!rowCountControl) {
+    return 1;
+  }
+  const parsed = Number(rowCountControl.value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : 1;
+}
+
+function currentRowOffset() {
+  if (!rowOffsetControl) {
+    return 0;
+  }
+  const parsed = Number(rowOffsetControl.value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function currentReverseOddRows() {
+  if (!reverseOddRowsControl) {
+    return false;
+  }
+  return !!reverseOddRowsControl.checked;
+}
+
 function readStorage(key) {
   try {
     return localStorage.getItem(key);
@@ -376,6 +406,18 @@ function saveBackgroundColor(value) {
 
 function saveAssetGap(value) {
   writeStorage(STORAGE_KEYS.assetGap, String(value));
+}
+
+function saveRowCount(value) {
+  writeStorage(STORAGE_KEYS.rowCount, String(value));
+}
+
+function saveRowOffset(value) {
+  writeStorage(STORAGE_KEYS.rowOffset, String(value));
+}
+
+function saveReverseOddRows(value) {
+  writeStorage(STORAGE_KEYS.reverseOddRows, value ? "1" : "0");
 }
 
 function restoreSpeed() {
@@ -442,6 +484,35 @@ function restoreLoopLayoutSettings() {
       }
     }
   }
+
+  if (rowCountControl) {
+    const raw = readStorage(STORAGE_KEYS.rowCount);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(rowCountControl.min || 1);
+        const max = Number(rowCountControl.max || 12);
+        rowCountControl.value = String(Math.min(max, Math.max(min, Math.round(parsed))));
+      }
+    }
+  }
+
+  if (rowOffsetControl) {
+    const raw = readStorage(STORAGE_KEYS.rowOffset);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(rowOffsetControl.min || 0);
+        const max = Number(rowOffsetControl.max || 6000);
+        rowOffsetControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
+
+  if (reverseOddRowsControl) {
+    const raw = readStorage(STORAGE_KEYS.reverseOddRows);
+    reverseOddRowsControl.checked = raw === "1" || raw === "true";
+  }
 }
 
 function saveSelectedDirection(name) {
@@ -495,7 +566,10 @@ function sendLoopConfigToPreview() {
     padTopBottom: currentPadTopBottom(),
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
-    assetGap: currentAssetGap()
+    assetGap: currentAssetGap(),
+    rowCount: currentRowCount(),
+    rowOffset: currentRowOffset(),
+    reverseOddRows: currentReverseOddRows()
   };
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -512,22 +586,25 @@ function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = Math.max(1, loopPreviewTrack.clientHeight || 1);
+  const previewHeight = PREVIEW_RENDER_HEIGHT;
   const sourceHeight = Math.max(1, loopStageHeight);
-  const scaledGap = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
+  const scaledGapRaw = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
+  const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
-  requestAnimationFrame(syncVisualizationGeometry);
+  syncVisualizationGeometry();
 }
 
 function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = Math.max(1, loopPreviewTrack.clientHeight || 1);
+  const previewHeight = PREVIEW_RENDER_HEIGHT;
   const sourceHeight = Math.max(1, loopStageHeight);
   const scale = previewHeight / sourceHeight;
-  const scaledPadTB = Math.max(0, loopPadTopBottom) * scale;
-  const scaledPadLR = Math.max(0, loopPadLeftRight) * scale;
+  const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
+  const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
+  const scaledPadTB = Math.round(scaledPadTBRaw * 100) / 100;
+  const scaledPadLR = Math.round(scaledPadLRRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
 }
@@ -838,6 +915,27 @@ async function init() {
       saveAssetGap(currentAssetGap());
       loopAssetGap = currentAssetGap();
       syncVisualizationGapScaled();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (rowCountControl) {
+    rowCountControl.addEventListener("input", () => {
+      saveRowCount(currentRowCount());
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (rowOffsetControl) {
+    rowOffsetControl.addEventListener("input", () => {
+      saveRowOffset(currentRowOffset());
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (reverseOddRowsControl) {
+    reverseOddRowsControl.addEventListener("change", () => {
+      saveReverseOddRows(currentReverseOddRows());
       sendLoopConfigToPreview();
     });
   }
