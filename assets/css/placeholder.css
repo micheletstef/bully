@@ -12,16 +12,19 @@ body {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 300px 1fr;
+  position: relative;
   height: 100vh;
   background: #fff;
 }
 
 .sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 300px;
   overflow: auto;
   padding: 18px 14px 24px;
   background: #fff;
+  z-index: 10;
 }
 
 .directory-section {
@@ -62,21 +65,24 @@ body {
 }
 
 .workspace {
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .billboard-wrap {
-  width: 100%;
-  display: grid;
-  place-items: center;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(76vw, 1180px);
 }
 
 .billboard-frame {
-  width: min(76vw, 1180px);
+  width: 100%;
   aspect-ratio: 5900 / 3480;
-  background: #fff;
+  background: #d7d7d7;
   position: relative;
   overflow: hidden;
 }
@@ -95,4 +101,40 @@ body {
   place-items: center;
   color: #5a5a5a;
   font-size: 12px;
+}
+
+.billboard-info {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(76vw, 1180px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.info-card {
+  background: #000;
+  color: #fff;
+  padding: 18px;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.25;
+}
+
+.info-card h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.info-card p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+@media (max-width: 1000px) {
+  .billboard-info {
+    grid-template-columns: 1fr;
+    width: min(92vw, 1180px);
+  }
 }
