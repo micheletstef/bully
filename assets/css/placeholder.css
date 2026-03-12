@@ -229,7 +229,7 @@ body {
   width: max-content;
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
   height: auto;
-  padding: 4px 4px 18px;
+  padding: calc(4px + var(--preview-pad-tb, 0px)) calc(4px + var(--preview-pad-lr, 0px));
   overflow-x: visible;
   overflow-y: visible;
   background: #f1f1f1;
@@ -251,7 +251,7 @@ body {
 .loop-preview-item {
   height: 100%;
   min-width: 0;
-  border: 0;
+  border: 1px solid rgba(0, 0, 0, 0.22);
   background: transparent;
   cursor: grab;
   transition: transform 150ms ease, opacity 150ms ease;

@@ -7,7 +7,6 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const assetGapControl = document.getElementById("assetGapControl");
-const artworkList = document.getElementById("artworkList");
 const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
@@ -36,6 +35,8 @@ let loopElapsedSeconds = 0;
 let loopDurationSeconds = 16;
 let loopStageHeight = 1;
 let loopAssetGap = 0;
+let loopPadTopBottom = 0;
+let loopPadLeftRight = 0;
 
 function normalizeHref(href) {
   if (!href) {
@@ -252,7 +253,6 @@ async function addArtworkFiles(files) {
   }
 
   saveArtworks(loopArtworks);
-  renderArtworkList();
   renderLoopPreview();
   sendLoopConfigToPreview();
 }
@@ -519,6 +519,19 @@ function syncVisualizationGapScaled() {
   requestAnimationFrame(syncVisualizationGeometry);
 }
 
+function syncVisualizationPaddingScaled() {
+  if (!loopVisualization || !loopPreviewTrack) {
+    return;
+  }
+  const previewHeight = Math.max(1, loopPreviewTrack.clientHeight || 1);
+  const sourceHeight = Math.max(1, loopStageHeight);
+  const scale = previewHeight / sourceHeight;
+  const scaledPadTB = Math.max(0, loopPadTopBottom) * scale;
+  const scaledPadLR = Math.max(0, loopPadLeftRight) * scale;
+  loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
+  loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
+}
+
 function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
@@ -527,7 +540,10 @@ function syncVisualizationGeometry() {
   if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
     return;
   }
-  const horizontalPadding = 8;
+  const previewPadLR = Number.parseFloat(
+    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-lr")
+  );
+  const horizontalPadding = 8 + (Number.isFinite(previewPadLR) ? previewPadLR * 2 : 0);
   loopVisualization.style.width = `${totalWidth + horizontalPadding}px`;
 }
 
@@ -552,6 +568,7 @@ function renderLoopPreview() {
   });
 
   initLoopSortable();
+  syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
   updateActiveWindow();
@@ -570,7 +587,6 @@ function reorderArtworksByIds(idOrder) {
   }
   loopArtworks = reordered;
   saveArtworks(loopArtworks);
-  renderArtworkList();
   sendLoopConfigToPreview();
 }
 
@@ -682,7 +698,8 @@ function updateActiveWindow() {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s / ${loopDurationSeconds.toFixed(1)}s`;
     const absoluteLeft = loopVisualization.offsetLeft + drawX + activeWidth / 2;
-    const absoluteTop = loopVisualization.offsetTop + loopVisualization.offsetHeight + 2;
+    const frameTop = loopVisualization.offsetTop + loopActiveWindow.offsetTop;
+    const absoluteTop = frameTop + loopActiveWindow.offsetHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
@@ -695,47 +712,8 @@ function removeArtwork(index) {
   }
   loopArtworks.splice(index, 1);
   saveArtworks(loopArtworks);
-  renderArtworkList();
   renderLoopPreview();
   sendLoopConfigToPreview();
-}
-
-function renderArtworkList() {
-  if (!artworkList) {
-    return;
-  }
-
-  artworkList.innerHTML = "";
-
-  loopArtworks.forEach((item, index) => {
-    const row = document.createElement("div");
-    row.className = "artwork-item";
-
-    const thumb = document.createElement("img");
-    thumb.className = "artwork-thumb";
-    thumb.src = item.src;
-    thumb.alt = "";
-    row.appendChild(thumb);
-
-    const name = document.createElement("span");
-    name.className = "artwork-index";
-    name.textContent = `${index + 1}. ${item.name}`;
-    row.appendChild(name);
-
-    const suffix = document.createElement("span");
-    suffix.className = "artwork-suffix";
-    suffix.textContent = artworkLastFive(item.name);
-    row.appendChild(suffix);
-
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "artwork-remove";
-    removeButton.textContent = "[x]";
-    removeButton.addEventListener("click", () => removeArtwork(index));
-    row.appendChild(removeButton);
-
-    artworkList.appendChild(row);
-  });
 }
 
 function addArtworkFromInput() {
@@ -809,7 +787,6 @@ async function init() {
   }
 
   syncSpeedReadout();
-  renderArtworkList();
   renderLoopPreview();
 
   if (speedControl) {
@@ -823,6 +800,9 @@ async function init() {
   if (padTBControl) {
     padTBControl.addEventListener("input", () => {
       savePadTopBottom(currentPadTopBottom());
+      loopPadTopBottom = currentPadTopBottom();
+      syncVisualizationPaddingScaled();
+      syncVisualizationGeometry();
       sendLoopConfigToPreview();
     });
   }
@@ -830,6 +810,9 @@ async function init() {
   if (padLRControl) {
     padLRControl.addEventListener("input", () => {
       savePadLeftRight(currentPadLeftRight());
+      loopPadLeftRight = currentPadLeftRight();
+      syncVisualizationPaddingScaled();
+      syncVisualizationGeometry();
       sendLoopConfigToPreview();
     });
   }
@@ -914,6 +897,9 @@ async function init() {
     if (Number.isFinite(assetGap) && assetGap >= 0) {
       loopAssetGap = assetGap;
     }
+    loopPadTopBottom = currentPadTopBottom();
+    loopPadLeftRight = currentPadLeftRight();
+    syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
     updateActiveWindow();
   });
@@ -931,6 +917,9 @@ async function init() {
 
   syncVisualizationBackground();
   loopAssetGap = currentAssetGap();
+  loopPadTopBottom = currentPadTopBottom();
+  loopPadLeftRight = currentPadLeftRight();
+  syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
 }
 
