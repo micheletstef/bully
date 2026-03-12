@@ -1908,7 +1908,7 @@ function reorderPartitionArtworksByIds(partitionKey, idOrder) {
   sendLoopConfigToPreview();
 }
 
-function removePartitionArtwork(partitionKey, artworkId) {
+function removePartitionArtwork(partitionKey, index) {
   const key = normalizePartitionKey(partitionKey);
   if (!key) {
     return;
@@ -1917,11 +1917,7 @@ function removePartitionArtwork(partitionKey, artworkId) {
   if (!Array.isArray(items)) {
     return;
   }
-  const removeIndex = items.findIndex((item) => item.id === artworkId);
-  if (removeIndex < 0) {
-    return;
-  }
-  items.splice(removeIndex, 1);
+  items.splice(index, 1);
   savePartitionArtworks(partitionArtworks);
   renderPartitionEditor(key);
   sendLoopConfigToPreview();
@@ -1937,26 +1933,20 @@ async function initPartitionSortable(partitionKey, trackEl) {
     const mod = await getSortableModule();
     const Sortable = mod.default || mod.Sortable || mod;
     partitionSortables[key] = Sortable.create(trackEl, {
-      animation: 150,
+      animation: 140,
       forceFallback: true,
       fallbackOnBody: true,
       fallbackTolerance: 4,
       draggable: ".partition-preview-item",
-      invertSwap: true,
-      swapThreshold: 0.65,
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
-      onChange: () => {
-        updatePartitionActiveWindows();
-      },
       onEnd: () => {
         const idOrder = [...trackEl.querySelectorAll(".partition-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
         reorderPartitionArtworksByIds(key, idOrder);
-        syncPartitionEditorVisuals();
-        updatePartitionActiveWindows();
+        renderPartitionEditor(key);
       }
     });
   } catch (error) {
@@ -1989,7 +1979,7 @@ function renderPartitionEditor(partitionKey) {
   spacerStart.className = "partition-preview-spacer partition-preview-segment";
   trackEl.appendChild(spacerStart);
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "partition-preview-item partition-preview-segment";
     tile.dataset.artworkId = item.id;
@@ -2007,7 +1997,7 @@ function renderPartitionEditor(partitionKey) {
     removeButton.title = "Remove asset";
     removeButton.setAttribute("aria-label", "Remove asset");
     removeButton.addEventListener("click", () => {
-      removePartitionArtwork(key, item.id);
+      removePartitionArtwork(key, index);
     });
     tile.appendChild(removeButton);
     trackEl.appendChild(tile);
