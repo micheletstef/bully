@@ -13,7 +13,6 @@ const cameraPerspectiveControl = document.getElementById("cameraPerspectiveContr
 const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
-const cameraGlareControl = document.getElementById("cameraGlareControl");
 const resetViewControlsButton = document.getElementById("resetViewControlsButton");
 const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
@@ -60,7 +59,6 @@ const STORAGE_KEYS = {
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
-  cameraGlare: "billboard.preview3dGlareEnabled",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks"
@@ -136,14 +134,12 @@ const preview3dThreeState = {
     curve: null,
     right: null
   },
-  glareMesh: null,
   texture: null,
   partitionTextures: {
     left: null,
     curve: null,
     right: null
   },
-  glareTexture: null,
   textureSource: "",
   textureRequestToken: 0,
   textureScrollBaseX: 0,
@@ -167,8 +163,7 @@ const preview3dCamera = {
 const preview3dRenderSettings = {
   fit: 0.84,
   dragSensitivity: 1,
-  textureQuality: 1.75,
-  glareEnabled: true
+  textureQuality: 1.75
 };
 let preview3dDragState = null;
 
@@ -894,38 +889,6 @@ function createCurvedBillboardGeometry(THREE, startDistance = 0, endDistance = B
   return geometry;
 }
 
-function createGlareTexture(THREE) {
-  const size = 512;
-  const glareCanvas = document.createElement("canvas");
-  glareCanvas.width = size;
-  glareCanvas.height = size;
-  const ctx = glareCanvas.getContext("2d");
-  if (!ctx) {
-    return null;
-  }
-
-  ctx.clearRect(0, 0, size, size);
-  const broadGlow = ctx.createRadialGradient(size * 0.52, size * 0.17, size * 10e-3, size * 0.52, size * 0.17, size * 0.58);
-  broadGlow.addColorStop(0, "rgba(255, 255, 255, 0.28)");
-  broadGlow.addColorStop(0.4, "rgba(255, 255, 255, 0.12)");
-  broadGlow.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = broadGlow;
-  ctx.fillRect(0, 0, size, size);
-
-  const streak = ctx.createLinearGradient(0, 0, size, size * 0.85);
-  streak.addColorStop(0, "rgba(255, 255, 255, 0.12)");
-  streak.addColorStop(0.35, "rgba(255, 255, 255, 0.05)");
-  streak.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = streak;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(glareCanvas);
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.needsUpdate = true;
-  return texture;
-}
-
 function projectBillboardVertex(x, y, z) {
   const cosYaw = Math.cos(preview3dCamera.yaw);
   const sinYaw = Math.sin(preview3dCamera.yaw);
@@ -979,9 +942,6 @@ function syncViewControlsUI() {
   if (cameraTextureQualityControl) {
     cameraTextureQualityControl.value = String(preview3dRenderSettings.textureQuality);
   }
-  if (cameraGlareControl) {
-    cameraGlareControl.value = preview3dRenderSettings.glareEnabled ? "on" : "off";
-  }
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
   }
@@ -995,7 +955,6 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
-  writeStorage(STORAGE_KEYS.cameraGlare, preview3dRenderSettings.glareEnabled ? "on" : "off");
 }
 
 function restorePreview3dSettings() {
@@ -1012,8 +971,6 @@ function restorePreview3dSettings() {
     STORAGE_KEYS.cameraTextureQuality,
     preview3dRenderSettings.textureQuality
   );
-  preview3dRenderSettings.glareEnabled =
-    normalizeGlarePreference(readStorage(STORAGE_KEYS.cameraGlare)) !== "off";
   clampPreview3dCamera();
 }
 
@@ -1225,8 +1182,7 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.mesh &&
     preview3dThreeState.partitionMeshes.left &&
     preview3dThreeState.partitionMeshes.curve &&
-    preview3dThreeState.partitionMeshes.right &&
-    preview3dThreeState.glareMesh
+    preview3dThreeState.partitionMeshes.right
   ) {
     return true;
   }
@@ -1269,29 +1225,11 @@ function ensureThreePreviewSetup() {
     partitionMeshes[partitionKey] = partitionMesh;
     scene.add(partitionMesh);
   });
-  const glareTexture = createGlareTexture(THREE);
-  const glareMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    map: glareTexture || null,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.06,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false
-  });
-  const glareMesh = new THREE.Mesh(createCurvedBillboardGeometry(THREE), glareMaterial);
-  glareMesh.renderOrder = 10;
-  glareMesh.visible = preview3dRenderSettings.glareEnabled;
-  scene.add(glareMesh);
-
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
   preview3dThreeState.partitionMeshes = partitionMeshes;
-  preview3dThreeState.glareMesh = glareMesh;
-  preview3dThreeState.glareTexture = glareTexture;
   return true;
 }
 
@@ -1389,56 +1327,6 @@ async function syncThreeLoopTexture() {
     }
   };
 
-  if (currentDirectionIsPartitioned()) {
-    const surfaces = await Promise.all(
-      PARTITION_KEYS.map((partitionKey) => build3dPartitionSurfaceStrip(targetHeight, partitionKey))
-    );
-    if (token !== preview3dThreeState.textureRequestToken) {
-      return;
-    }
-    if (!surfaces.some((surface) => !!surface)) {
-      return;
-    }
-
-    if (preview3dThreeState.texture) {
-      preview3dThreeState.texture.dispose();
-      preview3dThreeState.texture = null;
-    }
-    preview3dThreeState.mesh.material.map = null;
-    preview3dThreeState.mesh.material.needsUpdate = true;
-    preview3dThreeState.mesh.visible = false;
-
-    PARTITION_KEYS.forEach((partitionKey, idx) => {
-      const mesh = preview3dThreeState.partitionMeshes[partitionKey];
-      if (!mesh) {
-        return;
-      }
-      disposePartitionTexture(partitionKey);
-      const surface = surfaces[idx];
-      if (!surface) {
-        mesh.material.map = null;
-        mesh.material.needsUpdate = true;
-        mesh.visible = false;
-        return;
-      }
-      const texture = createTextureFromCanvas(surface.canvas);
-      preview3dThreeState.partitionTextures[partitionKey] = texture;
-      mesh.material.map = texture;
-      mesh.material.needsUpdate = true;
-      mesh.visible = true;
-    });
-
-    preview3dThreeState.textureMode = "partitioned";
-    preview3dThreeState.textureSource = `partitioned:${PARTITION_KEYS.map((key) => {
-      const sources = current3dPartitionSources(key).join(",");
-      const orientation = current3dPartitionOrientation(key);
-      return `${key}[${orientation}]=${sources}`;
-    }).join("|")}`;
-    preview3dThreeState.textureScrollBaseX = 0;
-    preview3dThreeState.textureOffsetY = 0;
-    return;
-  }
-
   PARTITION_KEYS.forEach((partitionKey) => {
     const mesh = preview3dThreeState.partitionMeshes[partitionKey];
     if (mesh) {
@@ -1470,7 +1358,7 @@ function renderThreeFrame() {
   if (!ensureThreePreviewSetup()) {
     return;
   }
-  const { renderer, scene, camera, mesh, texture, glareMesh } = preview3dThreeState;
+  const { renderer, scene, camera, mesh, texture } = preview3dThreeState;
   if (!renderer || !scene || !camera || !mesh || !billboard3dCanvas) {
     return;
   }
@@ -1507,25 +1395,11 @@ function renderThreeFrame() {
     progress = ((extrapolatedElapsed % duration) + duration) / duration;
     progress = ((progress % 1) + 1) % 1;
   }
-  if (preview3dThreeState.textureMode === "partitioned") {
-    PARTITION_KEYS.forEach((partitionKey) => {
-      const partitionTexture = preview3dThreeState.partitionTextures[partitionKey];
-      if (!partitionTexture) {
-        return;
-      }
-      partitionTexture.repeat.x = 0.5;
-      partitionTexture.repeat.y = 1;
-      partitionTexture.offset.x = progress * 0.5;
-      partitionTexture.offset.y = 0;
-    });
-  } else if (texture) {
+  if (texture) {
     texture.repeat.x = 0.5;
     texture.repeat.y = 1;
     texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
     texture.offset.y = preview3dThreeState.textureOffsetY;
-  }
-  if (glareMesh) {
-    glareMesh.visible = preview3dRenderSettings.glareEnabled;
   }
   renderer.render(scene, camera);
 }
@@ -1747,10 +1621,6 @@ function currentRowGap() {
 
 function normalizePreviewViewMode(value) {
   return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
-}
-
-function normalizeGlarePreference(value) {
-  return String(value || "").toLowerCase() === "off" ? "off" : "on";
 }
 
 function readStorage(key) {
@@ -3753,15 +3623,6 @@ async function init() {
     });
   }
 
-  if (cameraGlareControl) {
-    cameraGlareControl.addEventListener("change", () => {
-      preview3dRenderSettings.glareEnabled = normalizeGlarePreference(cameraGlareControl.value) !== "off";
-      persistPreview3dSettings();
-      syncViewControlsUI();
-      update3dPreviewAnimation();
-    });
-  }
-
   if (resetViewControlsButton) {
     resetViewControlsButton.addEventListener("click", () => {
       preview3dCamera.yaw = -0.78;
@@ -3771,7 +3632,6 @@ async function init() {
       preview3dRenderSettings.fit = 0.84;
       preview3dRenderSettings.dragSensitivity = 1;
       preview3dRenderSettings.textureQuality = 1.75;
-      preview3dRenderSettings.glareEnabled = true;
       clampPreview3dCamera();
       persistPreview3dSettings();
       syncViewControlsUI();
