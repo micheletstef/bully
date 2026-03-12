@@ -57,10 +57,15 @@ body {
   color: #1f1f1f;
 }
 
+.direction-item.active::before {
+  content: "[•] ";
+}
+
 .direction-item:hover,
 .direction-item:focus {
   color: #1f1f1f;
   background: transparent;
+  text-decoration: underline;
   outline: none;
 }
 

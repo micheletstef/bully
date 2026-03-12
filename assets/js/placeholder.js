@@ -81,6 +81,12 @@ function loadDirection(path) {
   emptyState.style.display = "none";
 }
 
+function setActiveDirection(button) {
+  const allButtons = directoryPanel.querySelectorAll(".direction-item");
+  allButtons.forEach((item) => item.classList.remove("active"));
+  button.classList.add("active");
+}
+
 function currentSpeedSeconds() {
   if (!speedControl) {
     return 16;
@@ -123,7 +129,10 @@ function renderDirectory(directions) {
     button.type = "button";
     button.className = "direction-item";
     button.textContent = name;
-    button.addEventListener("click", () => loadDirection(directionPath(name)));
+    button.addEventListener("click", () => {
+      loadDirection(directionPath(name));
+      setActiveDirection(button);
+    });
     section.appendChild(button);
   });
 
