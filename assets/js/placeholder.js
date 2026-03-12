@@ -51,6 +51,7 @@ let loopPadLeftRight = 0;
 let loopDistanceSource = 1;
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 let loopRowGap = 0;
+let knownDirections = [];
 
 function normalizeHref(href) {
   if (!href) {
@@ -373,7 +374,18 @@ async function loadDirectionsFromManifest() {
 }
 
 function loadDirection(path) {
+  billboardPreview.removeAttribute("srcdoc");
   billboardPreview.src = path;
+  billboardPreview.style.display = "block";
+  emptyState.style.display = "none";
+}
+
+function loadOutputSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot.html !== "string" || !snapshot.html.trim()) {
+    return;
+  }
+  billboardPreview.removeAttribute("src");
+  billboardPreview.srcdoc = snapshot.html;
   billboardPreview.style.display = "block";
   emptyState.style.display = "none";
 }
@@ -777,6 +789,9 @@ function saveCurrentVersionSnapshot() {
   existing.unshift(snapshot);
   saveOutputs(existing);
   setSaveVersionStatus(`Saved ${timestampName}.`);
+  if (knownDirections.length) {
+    renderDirectory(knownDirections);
+  }
 }
 
 function saveSpeed(seconds) {
@@ -1274,12 +1289,12 @@ function removeArtwork(index) {
 function renderDirectory(directions) {
   directoryPanel.innerHTML = "";
 
-  const section = document.createElement("section");
-  section.className = "directory-section";
+  const directionsSection = document.createElement("section");
+  directionsSection.className = "directory-section";
 
-  const title = document.createElement("h2");
-  title.textContent = "directions";
-  section.appendChild(title);
+  const directionsTitle = document.createElement("h2");
+  directionsTitle.textContent = "directions";
+  directionsSection.appendChild(directionsTitle);
 
   const savedDirection = restoreSelectedDirection();
   let initialButton = null;
@@ -1296,7 +1311,7 @@ function renderDirectory(directions) {
       setActiveDirection(button);
       saveSelectedDirection(name);
     });
-    section.appendChild(button);
+    directionsSection.appendChild(button);
 
     if (savedDirection === name) {
       initialButton = button;
@@ -1304,7 +1319,35 @@ function renderDirectory(directions) {
     }
   });
 
-  directoryPanel.appendChild(section);
+  directoryPanel.appendChild(directionsSection);
+
+  const outputsSection = document.createElement("section");
+  outputsSection.className = "directory-section";
+  const outputsTitle = document.createElement("h2");
+  outputsTitle.textContent = "outputs";
+  outputsSection.appendChild(outputsTitle);
+
+  const outputs = readOutputs();
+  if (!outputs.length) {
+    const empty = document.createElement("div");
+    empty.className = "settings-hint";
+    empty.textContent = "(none yet)";
+    outputsSection.appendChild(empty);
+  } else {
+    outputs.forEach((snapshot) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "direction-item";
+      button.textContent = snapshot.name || snapshot.createdAt || "saved output";
+      button.addEventListener("click", () => {
+        loadOutputSnapshot(snapshot);
+        setActiveDirection(button);
+      });
+      outputsSection.appendChild(button);
+    });
+  }
+
+  directoryPanel.appendChild(outputsSection);
 
   if (initialButton && initialName) {
     loadDirection(directionPath(initialName));
@@ -1329,6 +1372,7 @@ async function init() {
       throw new Error("No directions found");
     }
 
+    knownDirections = [...directions];
     renderDirectory(directions);
   } catch (error) {
     emptyState.textContent = "No directions found. Check directions/manifest.json.";
