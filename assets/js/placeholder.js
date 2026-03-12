@@ -115,16 +115,20 @@ let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
 const preview3dImageCache = new Map();
+let preview3dPrevBaseOffset = null;
 const preview3dThreeState = {
   renderer: null,
   scene: null,
   camera: null,
   mesh: null,
+  blurMesh: null,
   texture: null,
+  blurTexture: null,
   textureSource: "",
   textureRequestToken: 0,
   textureScrollBaseX: 0,
-  textureOffsetY: 0
+  textureOffsetY: 0,
+  currentScrollX: null
 };
 let hasWarnedMissingThree = false;
 const preview3dCamera = {
@@ -1042,7 +1046,13 @@ function ensureThreePreviewSetup() {
     return false;
   }
   hasWarnedMissingThree = false;
-  if (preview3dThreeState.renderer && preview3dThreeState.scene && preview3dThreeState.camera && preview3dThreeState.mesh) {
+  if (
+    preview3dThreeState.renderer &&
+    preview3dThreeState.scene &&
+    preview3dThreeState.camera &&
+    preview3dThreeState.mesh &&
+    preview3dThreeState.blurMesh
+  ) {
     return true;
   }
 
@@ -1063,17 +1073,28 @@ function ensureThreePreviewSetup() {
   });
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
+  const blurMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false
+  });
+  const blurMesh = new THREE.Mesh(geometry, blurMaterial);
+  blurMesh.position.z = 0.8;
+  scene.add(blurMesh);
 
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
+  preview3dThreeState.blurMesh = blurMesh;
   return true;
 }
 
 function loadThreeTextureFromSource(src) {
   const THREE = getThreeLib();
-  if (!THREE || !preview3dThreeState.mesh || !src) {
+  if (!THREE || !preview3dThreeState.mesh || !preview3dThreeState.blurMesh || !src) {
     return;
   }
   const token = ++preview3dThreeState.textureRequestToken;
@@ -1098,11 +1119,20 @@ function loadThreeTextureFromSource(src) {
         preview3dThreeState.texture.dispose();
       }
       preview3dThreeState.texture = texture;
+      if (preview3dThreeState.blurTexture) {
+        preview3dThreeState.blurTexture.dispose();
+      }
+      const blurTexture = texture.clone();
+      blurTexture.needsUpdate = true;
+      preview3dThreeState.blurTexture = blurTexture;
       preview3dThreeState.textureSource = src;
       preview3dThreeState.textureScrollBaseX = 0;
       preview3dThreeState.textureOffsetY = 0;
+      preview3dThreeState.currentScrollX = null;
       preview3dThreeState.mesh.material.map = texture;
       preview3dThreeState.mesh.material.needsUpdate = true;
+      preview3dThreeState.blurMesh.material.map = blurTexture;
+      preview3dThreeState.blurMesh.material.needsUpdate = true;
       update3dPreviewAnimation();
     },
     undefined,
@@ -1123,7 +1153,7 @@ function syncThreeTextureSource() {
 
 async function syncThreeLoopTexture() {
   const THREE = getThreeLib();
-  if (!THREE || !preview3dThreeState.mesh) {
+  if (!THREE || !preview3dThreeState.mesh || !preview3dThreeState.blurMesh) {
     return;
   }
   const token = ++preview3dThreeState.textureRequestToken;
@@ -1139,6 +1169,11 @@ async function syncThreeLoopTexture() {
   const texture = new THREE.CanvasTexture(surface.canvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  if (preview3dThreeState.renderer && preview3dThreeState.renderer.capabilities) {
+    texture.anisotropy = Math.min(8, preview3dThreeState.renderer.capabilities.getMaxAnisotropy());
+  }
   const sequenceWidth = Math.max(1, surface.sequenceWidth);
   const sequenceHeight = Math.max(1, surface.stripHeight);
   const planeAspect = BILLBOARD_DESIGN_WIDTH / BILLBOARD_DESIGN_HEIGHT;
@@ -1166,20 +1201,29 @@ async function syncThreeLoopTexture() {
   if (preview3dThreeState.texture) {
     preview3dThreeState.texture.dispose();
   }
+  if (preview3dThreeState.blurTexture) {
+    preview3dThreeState.blurTexture.dispose();
+  }
+  const blurTexture = texture.clone();
+  blurTexture.needsUpdate = true;
   preview3dThreeState.texture = texture;
+  preview3dThreeState.blurTexture = blurTexture;
   preview3dThreeState.textureSource = `loop:${current3dSources().join("|")}:${current3dOrientation()}`;
   preview3dThreeState.textureScrollBaseX = baseX;
   preview3dThreeState.textureOffsetY = offsetY;
+  preview3dThreeState.currentScrollX = null;
   preview3dThreeState.mesh.material.map = texture;
   preview3dThreeState.mesh.material.needsUpdate = true;
+  preview3dThreeState.blurMesh.material.map = blurTexture;
+  preview3dThreeState.blurMesh.material.needsUpdate = true;
 }
 
 function renderThreeFrame() {
   if (!ensureThreePreviewSetup()) {
     return;
   }
-  const { renderer, scene, camera, mesh, texture } = preview3dThreeState;
-  if (!renderer || !scene || !camera || !mesh || !billboard3dCanvas) {
+  const { renderer, scene, camera, mesh, blurMesh, texture, blurTexture } = preview3dThreeState;
+  if (!renderer || !scene || !camera || !mesh || !blurMesh || !billboard3dCanvas) {
     return;
   }
 
@@ -1203,8 +1247,26 @@ function renderThreeFrame() {
   camera.updateProjectionMatrix();
   if (texture) {
     const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
+    const targetX = preview3dThreeState.textureScrollBaseX + progress * 0.5;
+    if (preview3dThreeState.currentScrollX === null || !Number.isFinite(preview3dThreeState.currentScrollX)) {
+      preview3dThreeState.currentScrollX = targetX;
+    }
+    const delta = targetX - preview3dThreeState.currentScrollX;
+    preview3dThreeState.currentScrollX += delta * 0.5;
+    texture.offset.x = preview3dThreeState.currentScrollX;
     texture.offset.y = preview3dThreeState.textureOffsetY;
+    if (blurTexture) {
+      const blurStrength = Math.min(0.02, Math.max(0.0008, Math.abs(delta) * 0.9));
+      const blurDirection = delta >= 0 ? 1 : -1;
+      blurTexture.offset.x = preview3dThreeState.currentScrollX - blurDirection * blurStrength;
+      blurTexture.offset.y = preview3dThreeState.textureOffsetY;
+      blurMesh.visible = true;
+      blurMesh.material.opacity = Math.min(0.22, 0.08 + Math.abs(delta) * 9);
+    } else {
+      blurMesh.visible = false;
+    }
+  } else {
+    blurMesh.visible = false;
   }
   renderer.render(scene, camera);
 }
