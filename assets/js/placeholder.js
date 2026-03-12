@@ -106,6 +106,9 @@ let partitionLoopDistances = {
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 const BILLBOARD_DESIGN_WIDTH = 5900;
 const BILLBOARD_DESIGN_HEIGHT = 3480;
+const BILLBOARD_LEFT_WIDTH = 1820;
+const BILLBOARD_CURVE_WIDTH = 1020;
+const BILLBOARD_RIGHT_WIDTH = 3060;
 let loopRowGap = 0;
 let knownDirections = [];
 let sharedOutputs = [];
@@ -121,16 +124,20 @@ const preview3dThreeState = {
   scene: null,
   camera: null,
   mesh: null,
-  blurMesh: null,
   texture: null,
-  blurTexture: null,
   textureSource: "",
   textureRequestToken: 0,
   textureScrollBaseX: 0,
-  textureOffsetY: 0,
-  currentScrollX: null
+  textureOffsetY: 0
 };
 let hasWarnedMissingThree = false;
+let preview3dAnimationFrameId = null;
+let preview3dPlaybackSyncState = {
+  hasSample: false,
+  elapsedSeconds: 0,
+  durationSeconds: 1,
+  syncedAtMs: 0
+};
 const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
@@ -715,9 +722,9 @@ async function build3dSurfaceStrip(targetHeight) {
 }
 
 function buildTopViewSpine() {
-  const leftLength = 1820;
-  const curveLength = 1020;
-  const rightLength = 3060;
+  const leftLength = BILLBOARD_LEFT_WIDTH;
+  const curveLength = BILLBOARD_CURVE_WIDTH;
+  const rightLength = BILLBOARD_RIGHT_WIDTH;
   const totalLength = leftLength + curveLength + rightLength;
   const radius = curveLength / (Math.PI / 2);
   const points = [];
@@ -758,6 +765,72 @@ function buildTopViewSpine() {
   }
 
   return { points, totalLength };
+}
+
+function computeBillboardCurveSample(distanceAlongWidth) {
+  const leftLength = BILLBOARD_LEFT_WIDTH;
+  const curveLength = BILLBOARD_CURVE_WIDTH;
+  const rightLength = BILLBOARD_RIGHT_WIDTH;
+  const totalLength = leftLength + curveLength + rightLength;
+  const s = Math.max(0, Math.min(totalLength, Number(distanceAlongWidth) || 0));
+  const radius = curveLength / (Math.PI / 2);
+
+  if (s <= leftLength) {
+    return { x: s, z: 0 };
+  }
+
+  if (s <= leftLength + curveLength) {
+    const t = (s - leftLength) / curveLength;
+    const theta = (Math.PI / 2) * (1 - t);
+    return {
+      x: leftLength + radius * Math.cos(theta),
+      z: -radius + radius * Math.sin(theta)
+    };
+  }
+
+  const rightDistance = s - leftLength - curveLength;
+  return {
+    x: leftLength + radius,
+    z: -radius - Math.min(rightLength, rightDistance)
+  };
+}
+
+function createCurvedBillboardGeometry(THREE) {
+  const widthSegments = 200;
+  const geometry = new THREE.PlaneGeometry(BILLBOARD_DESIGN_WIDTH, BILLBOARD_DESIGN_HEIGHT, widthSegments, 1);
+  const positions = geometry.attributes.position;
+  const mapped = [];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  for (let i = 0; i < positions.count; i += 1) {
+    const originalX = positions.getX(i);
+    const normalized = (originalX + BILLBOARD_DESIGN_WIDTH * 0.5) / BILLBOARD_DESIGN_WIDTH;
+    const distanceAlongWidth = normalized * BILLBOARD_DESIGN_WIDTH;
+    const sample = computeBillboardCurveSample(distanceAlongWidth);
+    mapped.push(sample);
+    minX = Math.min(minX, sample.x);
+    maxX = Math.max(maxX, sample.x);
+    minZ = Math.min(minZ, sample.z);
+    maxZ = Math.max(maxZ, sample.z);
+  }
+
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+
+  for (let i = 0; i < positions.count; i += 1) {
+    const sample = mapped[i];
+    positions.setX(i, sample.x - centerX);
+    positions.setZ(i, sample.z - centerZ);
+  }
+
+  positions.needsUpdate = true;
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function projectBillboardVertex(x, y, z) {
@@ -1050,8 +1123,7 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.renderer &&
     preview3dThreeState.scene &&
     preview3dThreeState.camera &&
-    preview3dThreeState.mesh &&
-    preview3dThreeState.blurMesh
+    preview3dThreeState.mesh
   ) {
     return true;
   }
@@ -1066,35 +1138,24 @@ function ensureThreePreviewSetup() {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
-  const geometry = new THREE.PlaneGeometry(BILLBOARD_DESIGN_WIDTH, BILLBOARD_DESIGN_HEIGHT, 1, 1);
+  const geometry = createCurvedBillboardGeometry(THREE);
   const material = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     side: THREE.DoubleSide
   });
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
-  const blurMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.12,
-    depthWrite: false
-  });
-  const blurMesh = new THREE.Mesh(geometry, blurMaterial);
-  blurMesh.position.z = 0.8;
-  scene.add(blurMesh);
 
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
-  preview3dThreeState.blurMesh = blurMesh;
   return true;
 }
 
 function loadThreeTextureFromSource(src) {
   const THREE = getThreeLib();
-  if (!THREE || !preview3dThreeState.mesh || !preview3dThreeState.blurMesh || !src) {
+  if (!THREE || !preview3dThreeState.mesh || !src) {
     return;
   }
   const token = ++preview3dThreeState.textureRequestToken;
@@ -1119,20 +1180,11 @@ function loadThreeTextureFromSource(src) {
         preview3dThreeState.texture.dispose();
       }
       preview3dThreeState.texture = texture;
-      if (preview3dThreeState.blurTexture) {
-        preview3dThreeState.blurTexture.dispose();
-      }
-      const blurTexture = texture.clone();
-      blurTexture.needsUpdate = true;
-      preview3dThreeState.blurTexture = blurTexture;
       preview3dThreeState.textureSource = src;
       preview3dThreeState.textureScrollBaseX = 0;
       preview3dThreeState.textureOffsetY = 0;
-      preview3dThreeState.currentScrollX = null;
       preview3dThreeState.mesh.material.map = texture;
       preview3dThreeState.mesh.material.needsUpdate = true;
-      preview3dThreeState.blurMesh.material.map = blurTexture;
-      preview3dThreeState.blurMesh.material.needsUpdate = true;
       update3dPreviewAnimation();
     },
     undefined,
@@ -1153,7 +1205,7 @@ function syncThreeTextureSource() {
 
 async function syncThreeLoopTexture() {
   const THREE = getThreeLib();
-  if (!THREE || !preview3dThreeState.mesh || !preview3dThreeState.blurMesh) {
+  if (!THREE || !preview3dThreeState.mesh) {
     return;
   }
   const token = ++preview3dThreeState.textureRequestToken;
@@ -1201,29 +1253,20 @@ async function syncThreeLoopTexture() {
   if (preview3dThreeState.texture) {
     preview3dThreeState.texture.dispose();
   }
-  if (preview3dThreeState.blurTexture) {
-    preview3dThreeState.blurTexture.dispose();
-  }
-  const blurTexture = texture.clone();
-  blurTexture.needsUpdate = true;
   preview3dThreeState.texture = texture;
-  preview3dThreeState.blurTexture = blurTexture;
   preview3dThreeState.textureSource = `loop:${current3dSources().join("|")}:${current3dOrientation()}`;
   preview3dThreeState.textureScrollBaseX = baseX;
   preview3dThreeState.textureOffsetY = offsetY;
-  preview3dThreeState.currentScrollX = null;
   preview3dThreeState.mesh.material.map = texture;
   preview3dThreeState.mesh.material.needsUpdate = true;
-  preview3dThreeState.blurMesh.material.map = blurTexture;
-  preview3dThreeState.blurMesh.material.needsUpdate = true;
 }
 
 function renderThreeFrame() {
   if (!ensureThreePreviewSetup()) {
     return;
   }
-  const { renderer, scene, camera, mesh, blurMesh, texture, blurTexture } = preview3dThreeState;
-  if (!renderer || !scene || !camera || !mesh || !blurMesh || !billboard3dCanvas) {
+  const { renderer, scene, camera, mesh, texture } = preview3dThreeState;
+  if (!renderer || !scene || !camera || !mesh || !billboard3dCanvas) {
     return;
   }
 
@@ -1246,29 +1289,47 @@ function renderThreeFrame() {
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
   if (texture) {
-    const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-    const targetX = preview3dThreeState.textureScrollBaseX + progress * 0.5;
-    if (preview3dThreeState.currentScrollX === null || !Number.isFinite(preview3dThreeState.currentScrollX)) {
-      preview3dThreeState.currentScrollX = targetX;
+    let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
+    if (
+      preview3dPlaybackSyncState.hasSample &&
+      Number.isFinite(preview3dPlaybackSyncState.durationSeconds) &&
+      preview3dPlaybackSyncState.durationSeconds > 0
+    ) {
+      const nowMs = performance.now();
+      const extrapolatedElapsed =
+        preview3dPlaybackSyncState.elapsedSeconds +
+        Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+      const duration = preview3dPlaybackSyncState.durationSeconds;
+      progress = ((extrapolatedElapsed % duration) + duration) / duration;
+      progress = ((progress % 1) + 1) % 1;
     }
-    const delta = targetX - preview3dThreeState.currentScrollX;
-    preview3dThreeState.currentScrollX += delta * 0.5;
-    texture.offset.x = preview3dThreeState.currentScrollX;
+    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
     texture.offset.y = preview3dThreeState.textureOffsetY;
-    if (blurTexture) {
-      const blurStrength = Math.min(0.02, Math.max(0.0008, Math.abs(delta) * 0.9));
-      const blurDirection = delta >= 0 ? 1 : -1;
-      blurTexture.offset.x = preview3dThreeState.currentScrollX - blurDirection * blurStrength;
-      blurTexture.offset.y = preview3dThreeState.textureOffsetY;
-      blurMesh.visible = true;
-      blurMesh.material.opacity = Math.min(0.22, 0.08 + Math.abs(delta) * 9);
-    } else {
-      blurMesh.visible = false;
-    }
-  } else {
-    blurMesh.visible = false;
   }
   renderer.render(scene, camera);
+}
+
+function stop3dAnimationLoop() {
+  if (preview3dAnimationFrameId !== null) {
+    cancelAnimationFrame(preview3dAnimationFrameId);
+    preview3dAnimationFrameId = null;
+  }
+}
+
+function tick3dAnimationLoop() {
+  if (previewViewMode !== "3d") {
+    preview3dAnimationFrameId = null;
+    return;
+  }
+  renderThreeFrame();
+  preview3dAnimationFrameId = requestAnimationFrame(tick3dAnimationLoop);
+}
+
+function start3dAnimationLoop() {
+  if (preview3dAnimationFrameId !== null || previewViewMode !== "3d") {
+    return;
+  }
+  preview3dAnimationFrameId = requestAnimationFrame(tick3dAnimationLoop);
 }
 
 function update3dPreviewAnimation() {
@@ -1304,6 +1365,9 @@ function applyPreviewViewMode(mode) {
   }
   if (previewViewMode === "3d") {
     render3dPreview();
+    start3dAnimationLoop();
+  } else {
+    stop3dAnimationLoop();
   }
   syncViewControlsUI();
 }
@@ -3595,9 +3659,13 @@ async function init() {
     }
     if (Number.isFinite(elapsedSeconds)) {
       loopElapsedSeconds = elapsedSeconds;
+      preview3dPlaybackSyncState.elapsedSeconds = elapsedSeconds;
+      preview3dPlaybackSyncState.syncedAtMs = performance.now();
+      preview3dPlaybackSyncState.hasSample = true;
     }
     if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
       loopDurationSeconds = durationSeconds;
+      preview3dPlaybackSyncState.durationSeconds = durationSeconds;
     }
     let shouldRerender3d = false;
     if (Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
@@ -3679,6 +3747,7 @@ async function init() {
   window.addEventListener("three-ready", () => {
     if (previewViewMode === "3d") {
       render3dPreview();
+      start3dAnimationLoop();
     }
   });
 
