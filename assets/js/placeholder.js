@@ -7,6 +7,7 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const assetGapControl = document.getElementById("assetGapControl");
+const artworkRotationControl = document.getElementById("artworkRotationControl");
 const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
@@ -31,6 +32,7 @@ const STORAGE_KEYS = {
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
   assetGap: "billboard.loopAssetGap",
+  artworkRotation: "billboard.loopArtworkRotation",
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
   rowGap: "billboard.loopRowGap",
@@ -485,6 +487,7 @@ function syncDirectionModeUI() {
       loopElapsedTime.style.display = "none";
     }
     renderPartitionEditors();
+    syncPartitionEditorVisuals();
   } else {
     renderLoopPreview();
   }
@@ -582,6 +585,17 @@ function currentAssetGap() {
   return Number(assetGapControl.value) || 0;
 }
 
+function currentArtworkRotation() {
+  if (!artworkRotationControl) {
+    return 0;
+  }
+  const parsed = Number(artworkRotationControl.value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(-180, Math.min(180, parsed));
+}
+
 function currentRowCount() {
   if (!rowCountControl) {
     return 1;
@@ -657,6 +671,7 @@ function getCurrentLoopConfig() {
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
     assetGap: currentAssetGap(),
+    artworkRotation: currentArtworkRotation(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
@@ -703,6 +718,7 @@ function buildSnapshotHtml(config) {
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
+        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -772,6 +788,8 @@ function buildSnapshotHtml(config) {
         height: 100%;
         width: auto;
         flex: 0 0 auto;
+        transform: rotate(var(--loop-artwork-rotation));
+        transform-origin: center;
       }
 
       .loop-spacer {
@@ -922,6 +940,10 @@ function buildSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", gapWidth + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+        document.documentElement.style.setProperty(
+          "--loop-artwork-rotation",
+          (Number(state.artworkRotation) || 0) + "deg"
+        );
         emitPlayback();
       }
 
@@ -990,6 +1012,7 @@ function buildPartitionedSnapshotHtml(config) {
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
+        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -1066,6 +1089,8 @@ function buildPartitionedSnapshotHtml(config) {
         height: 100%;
         width: auto;
         flex: 0 0 auto;
+        transform: rotate(var(--loop-artwork-rotation));
+        transform-origin: center;
       }
 
       .loop-spacer {
@@ -1216,6 +1241,10 @@ function buildPartitionedSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-bg", safeBackground);
         document.documentElement.style.setProperty("--loop-gap", Math.max(0, Number(state.assetGap) || 0) + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+        document.documentElement.style.setProperty(
+          "--loop-artwork-rotation",
+          (Number(state.artworkRotation) || 0) + "deg"
+        );
 
         const partitions = state.artworksByPartition && typeof state.artworksByPartition === "object"
           ? state.artworksByPartition
@@ -1278,6 +1307,7 @@ function coerceSnapshotLoopConfig(candidate) {
   const padTopBottomRaw = Number(candidate.padTopBottom);
   const padLeftRightRaw = Number(candidate.padLeftRight);
   const assetGapRaw = Number(candidate.assetGap);
+  const artworkRotationRaw = Number(candidate.artworkRotation);
   const rowCountRaw = Number(candidate.rowCount);
   const rowOffsetRaw = Number(candidate.rowOffset);
   const rowGapRaw = Number(candidate.rowGap);
@@ -1294,6 +1324,9 @@ function coerceSnapshotLoopConfig(candidate) {
     padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
     backgroundColor,
     assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : 0,
+    artworkRotation: Number.isFinite(artworkRotationRaw)
+      ? Math.max(-180, Math.min(180, artworkRotationRaw))
+      : 0,
     rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
     rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
     rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
@@ -1450,6 +1483,10 @@ function saveAssetGap(value) {
   writeStorage(STORAGE_KEYS.assetGap, String(value));
 }
 
+function saveArtworkRotation(value) {
+  writeStorage(STORAGE_KEYS.artworkRotation, String(value));
+}
+
 function saveRowCount(value) {
   writeStorage(STORAGE_KEYS.rowCount, String(value));
 }
@@ -1527,6 +1564,18 @@ function restoreLoopLayoutSettings() {
         const min = Number(assetGapControl.min || 0);
         const max = Number(assetGapControl.max || 9999);
         assetGapControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
+
+  if (artworkRotationControl) {
+    const raw = readStorage(STORAGE_KEYS.artworkRotation);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(artworkRotationControl.min || -180);
+        const max = Number(artworkRotationControl.max || 180);
+        artworkRotationControl.value = String(Math.min(max, Math.max(min, parsed)));
       }
     }
   }
@@ -1655,6 +1704,7 @@ function sendLoopConfigToPreview() {
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
     assetGap: currentAssetGap(),
+    artworkRotation: currentArtworkRotation(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
@@ -1678,6 +1728,43 @@ function syncVisualizationBackground() {
     return;
   }
   loopVisualization.style.background = currentBackgroundColor();
+}
+
+function getPartitionPreviewScale() {
+  const targetHeight = 54;
+  const stageHeight = Math.max(1, loopStageHeight);
+  const totalSourceHeight = stageHeight + Math.max(0, loopPadTopBottom) * 2;
+  if (!Number.isFinite(totalSourceHeight) || totalSourceHeight <= 0) {
+    return 1;
+  }
+  return targetHeight / totalSourceHeight;
+}
+
+function syncPartitionEditorVisuals() {
+  if (!partitionEditors) {
+    return;
+  }
+  const scale = getPartitionPreviewScale();
+  const stageHeight = Math.max(1, loopStageHeight);
+  const scaledArtHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
+  const scaledPadTB = Math.max(0, Math.round(Math.max(0, loopPadTopBottom) * scale * 100) / 100);
+  const scaledPadLR = Math.max(0, Math.round(Math.max(0, loopPadLeftRight) * scale * 100) / 100);
+  const scaledGap = Math.max(0, Math.round(Math.max(0, loopAssetGap) * scale * 100) / 100);
+  partitionEditors.style.setProperty("--partition-preview-art-height", `${scaledArtHeight}px`);
+  partitionEditors.style.setProperty("--partition-preview-pad-tb", `${scaledPadTB}px`);
+  partitionEditors.style.setProperty("--partition-preview-pad-lr", `${scaledPadLR}px`);
+  partitionEditors.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
+  partitionEditors.style.setProperty("--partition-preview-bg", currentBackgroundColor());
+
+  [partitionTrackLeft, partitionTrackCurve, partitionTrackRight].forEach((trackEl) => {
+    if (!trackEl) {
+      return;
+    }
+    const spacerWidth = scaledPadLR;
+    trackEl.querySelectorAll(".partition-preview-spacer").forEach((spacer) => {
+      spacer.style.width = `${spacerWidth}px`;
+    });
+  });
 }
 
 function getPreviewScale() {
@@ -1888,9 +1975,13 @@ function renderPartitionEditor(partitionKey) {
     return;
   }
 
+  const spacerStart = document.createElement("div");
+  spacerStart.className = "partition-preview-spacer partition-preview-segment";
+  trackEl.appendChild(spacerStart);
+
   items.forEach((item, index) => {
     const tile = document.createElement("div");
-    tile.className = "partition-preview-item";
+    tile.className = "partition-preview-item partition-preview-segment";
     tile.dataset.artworkId = item.id;
 
     const image = document.createElement("img");
@@ -1912,6 +2003,10 @@ function renderPartitionEditor(partitionKey) {
     trackEl.appendChild(tile);
   });
 
+  const spacerEnd = document.createElement("div");
+  spacerEnd.className = "partition-preview-spacer partition-preview-segment";
+  trackEl.appendChild(spacerEnd);
+
   const activeWindow = document.createElement("div");
   activeWindow.className = "partition-active-window";
   activeWindow.dataset.partitionWindow = "primary";
@@ -1922,6 +2017,7 @@ function renderPartitionEditor(partitionKey) {
   trackEl.appendChild(activeWindowSecondary);
 
   initPartitionSortable(key, trackEl);
+  syncPartitionEditorVisuals();
   updatePartitionActiveWindows();
 }
 
@@ -1948,8 +2044,8 @@ function updatePartitionActiveWindows() {
       return;
     }
 
-    const previewItems = [...trackEl.querySelectorAll(".partition-preview-item")];
-    if (!previewItems.length) {
+    const previewSegments = [...trackEl.querySelectorAll(".partition-preview-segment")];
+    if (!previewSegments.length) {
       primaryWindow.style.display = "none";
       secondaryWindow.style.display = "none";
       return;
@@ -1958,8 +2054,8 @@ function updatePartitionActiveWindows() {
     const styles = getComputedStyle(trackEl);
     const gapRaw = Number.parseFloat(styles.gap || styles.columnGap || "0");
     const gap = Number.isFinite(gapRaw) ? Math.max(0, gapRaw) : 0;
-    const itemWidth = previewItems.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0);
-    const sequenceWidth = Math.max(1, itemWidth + Math.max(0, previewItems.length - 1) * gap);
+    const itemWidth = previewSegments.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0);
+    const sequenceWidth = Math.max(1, itemWidth + Math.max(0, previewSegments.length - 1) * gap);
     const distance = sequenceWidth;
     const ratioRaw = Number(partitionViewportRatios[partitionKey]);
     const viewportRatio = Number.isFinite(ratioRaw)
@@ -2344,6 +2440,7 @@ async function init() {
       loopPadTopBottom = currentPadTopBottom();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
+      syncPartitionEditorVisuals();
       sendLoopConfigToPreview();
     });
   }
@@ -2354,6 +2451,7 @@ async function init() {
       loopPadLeftRight = currentPadLeftRight();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
+      syncPartitionEditorVisuals();
       sendLoopConfigToPreview();
     });
   }
@@ -2362,6 +2460,7 @@ async function init() {
     bgColorControl.addEventListener("input", () => {
       saveBackgroundColor(currentBackgroundColor());
       syncVisualizationBackground();
+      syncPartitionEditorVisuals();
       sendLoopConfigToPreview();
     });
   }
@@ -2371,6 +2470,14 @@ async function init() {
       saveAssetGap(currentAssetGap());
       loopAssetGap = currentAssetGap();
       syncVisualizationGapScaled();
+      syncPartitionEditorVisuals();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (artworkRotationControl) {
+    artworkRotationControl.addEventListener("input", () => {
+      saveArtworkRotation(currentArtworkRotation());
       sendLoopConfigToPreview();
     });
   }
@@ -2508,6 +2615,7 @@ async function init() {
     loopPadLeftRight = currentPadLeftRight();
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
+    syncPartitionEditorVisuals();
     syncSpeedReadout();
     updateActiveWindow();
     updatePartitionActiveWindows();
@@ -2516,6 +2624,7 @@ async function init() {
   window.addEventListener("resize", () => {
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
+    syncPartitionEditorVisuals();
     syncVisualizationGeometry();
     updateActiveWindow();
     updatePartitionActiveWindows();
@@ -2543,6 +2652,7 @@ async function init() {
   loopPadLeftRight = currentPadLeftRight();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
+  syncPartitionEditorVisuals();
   syncVisualizationGeometry();
 }
 

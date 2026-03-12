@@ -13,6 +13,7 @@
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
+        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -84,6 +85,8 @@
         height: 100%;
         width: auto;
         flex: 0 0 auto;
+        transform: rotate(var(--loop-artwork-rotation));
+        transform-origin: center;
       }
 
       .loop-spacer {
@@ -109,6 +112,7 @@
         backgroundColor: "#fff8a5",
         loopDistance: 1024,
         assetGap: 0,
+        artworkRotation: 0,
         rowCount: 1,
         rowOffset: 0,
         rowGap: 0,
@@ -248,6 +252,10 @@
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${gapWidth}px`);
         document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);
+        document.documentElement.style.setProperty(
+          "--loop-artwork-rotation",
+          `${Number(state.artworkRotation) || 0}deg`
+        );
         emitPlayback();
       }
 
@@ -325,6 +333,11 @@
         const assetGap = Number(payload.assetGap);
         if (Number.isFinite(assetGap) && assetGap >= 0) {
           state.assetGap = assetGap;
+        }
+
+        const artworkRotation = Number(payload.artworkRotation);
+        if (Number.isFinite(artworkRotation)) {
+          state.artworkRotation = Math.max(-180, Math.min(180, artworkRotation));
         }
 
         const rowCount = Number(payload.rowCount);

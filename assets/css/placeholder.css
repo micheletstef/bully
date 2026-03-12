@@ -603,13 +603,13 @@ body {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--partition-preview-gap, 0px);
   min-height: 54px;
   width: fit-content;
   border: 0;
-  padding: 4px;
+  padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);
   overflow: hidden;
-  background: #f1f1f1;
+  background: var(--partition-preview-bg, #f1f1f1);
 }
 
 .partition-preview-track.drag-over {
@@ -633,11 +633,16 @@ body {
 .partition-preview-item {
   position: relative;
   flex: 0 0 auto;
-  height: 46px;
+  height: var(--partition-preview-art-height, 46px);
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
   cursor: grab;
   background: transparent;
+}
+
+.partition-preview-spacer {
+  height: var(--partition-preview-art-height, 46px);
+  flex: 0 0 auto;
 }
 
 .partition-preview-item img {
