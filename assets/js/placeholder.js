@@ -11,7 +11,6 @@ const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
 const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
-const loopPreviewGrid = document.getElementById("loopPreviewGrid");
 let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
@@ -45,11 +44,7 @@ let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
-let loopRowCount = 1;
-let loopRowOffset = 0;
 let loopRowGap = 0;
-let loopReverseOddRows = false;
-let loopPlaybackDistance = 1;
 
 function normalizeHref(href) {
   if (!href) {
@@ -625,17 +620,6 @@ function syncVisualizationGapScaled() {
   syncVisualizationGeometry();
 }
 
-function syncVisualizationRowGapScaled() {
-  if (!loopVisualization) {
-    return;
-  }
-  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
-  const sourceHeight = Math.max(1, loopStageHeight);
-  const scaledRaw = (Math.max(0, loopRowGap) * previewHeight) / sourceHeight;
-  const scaled = Math.round(scaledRaw * 100) / 100;
-  loopVisualization.style.setProperty("--preview-row-gap", `${scaled}px`);
-}
-
 function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
@@ -652,10 +636,10 @@ function syncVisualizationPaddingScaled() {
 }
 
 function syncVisualizationGeometry() {
-  if (!loopVisualization || !loopPreviewGrid || !loopPreviewTrack) {
+  if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const totalWidth = loopPreviewGrid.scrollWidth;
+  const totalWidth = loopPreviewTrack.scrollWidth;
   if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
     return;
   }
@@ -664,43 +648,24 @@ function syncVisualizationGeometry() {
 }
 
 function renderLoopPreview() {
-  if (!loopPreviewTrack || !loopPreviewGrid) {
+  if (!loopPreviewTrack) {
     return;
   }
 
-  const rowCount = Math.max(1, loopRowCount || 1);
-  loopPreviewGrid.innerHTML = "";
+  loopPreviewTrack.innerHTML = "";
+  loopArtworks.forEach((item, index) => {
+    const tile = document.createElement("div");
+    tile.className = "loop-preview-item";
+    tile.dataset.index = String(index);
+    tile.dataset.artworkId = item.id;
 
-  function buildRowTrack(targetTrack, rowIndex) {
-    targetTrack.innerHTML = "";
-    loopArtworks.forEach((item, itemIndex) => {
-      const tile = document.createElement("div");
-      tile.className = "loop-preview-item";
-      tile.dataset.index = String(itemIndex);
-      tile.dataset.artworkId = item.id;
+    const image = document.createElement("img");
+    image.src = item.src;
+    image.alt = "";
+    tile.appendChild(image);
+    loopPreviewTrack.appendChild(tile);
+  });
 
-      const image = document.createElement("img");
-      image.src = item.src;
-      image.alt = "";
-      tile.appendChild(image);
-      targetTrack.appendChild(tile);
-    });
-  }
-
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    const row = document.createElement("div");
-    row.className = "loop-preview-row";
-    const track = document.createElement("div");
-    track.className = "loop-preview-track";
-    if (rowIndex === 0) {
-      track.id = "loopPreviewTrack";
-    }
-    buildRowTrack(track, rowIndex);
-    row.appendChild(track);
-    loopPreviewGrid.appendChild(row);
-  }
-
-  loopPreviewTrack = document.getElementById("loopPreviewTrack");
   if (loopPreviewSortable && typeof loopPreviewSortable.destroy === "function") {
     loopPreviewSortable.destroy();
   }
@@ -708,7 +673,6 @@ function renderLoopPreview() {
 
   initLoopSortable();
   syncVisualizationPaddingScaled();
-  syncVisualizationRowGapScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
   updateActiveWindow();
@@ -929,10 +893,7 @@ async function init() {
   }
 
   syncSpeedReadout();
-  loopRowCount = currentRowCount();
-  loopRowOffset = currentRowOffset();
   loopRowGap = currentRowGap();
-  loopReverseOddRows = currentReverseOddRows();
   renderLoopPreview();
 
   if (speedControl) {
@@ -983,8 +944,6 @@ async function init() {
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
       saveRowCount(currentRowCount());
-      loopRowCount = currentRowCount();
-      renderLoopPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -992,8 +951,6 @@ async function init() {
   if (rowOffsetControl) {
     rowOffsetControl.addEventListener("input", () => {
       saveRowOffset(currentRowOffset());
-      loopRowOffset = currentRowOffset();
-      renderLoopPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -1002,8 +959,6 @@ async function init() {
     rowGapControl.addEventListener("input", () => {
       saveRowGap(currentRowGap());
       loopRowGap = currentRowGap();
-      syncVisualizationRowGapScaled();
-      syncVisualizationGeometry();
       sendLoopConfigToPreview();
     });
   }
@@ -1011,8 +966,6 @@ async function init() {
   if (reverseOddRowsControl) {
     reverseOddRowsControl.addEventListener("change", () => {
       saveReverseOddRows(currentReverseOddRows());
-      loopReverseOddRows = currentReverseOddRows();
-      renderLoopPreview();
       sendLoopConfigToPreview();
     });
   }

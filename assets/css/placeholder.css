@@ -241,29 +241,16 @@ body {
   outline-offset: 2px;
 }
 
-.loop-preview-grid {
+.loop-preview-track {
   position: absolute;
   top: calc(4px + var(--preview-pad-tb, 0px));
   bottom: calc(4px + var(--preview-pad-tb, 0px));
   left: 4px;
   display: flex;
-  flex-direction: column;
-  gap: var(--preview-row-gap, 0px);
-  z-index: 1;
-}
-
-.loop-preview-row {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.loop-preview-track {
-  display: flex;
   width: fit-content;
-  height: 100%;
+  height: auto;
   gap: var(--preview-gap, 0px);
+  z-index: 1;
 }
 
 .loop-preview-track::before,
