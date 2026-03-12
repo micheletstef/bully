@@ -1226,24 +1226,9 @@ async function syncThreeLoopTexture() {
   if (preview3dThreeState.renderer && preview3dThreeState.renderer.capabilities) {
     texture.anisotropy = Math.min(8, preview3dThreeState.renderer.capabilities.getMaxAnisotropy());
   }
-  const sequenceWidth = Math.max(1, surface.sequenceWidth);
-  const sequenceHeight = Math.max(1, surface.stripHeight);
-  const planeAspect = BILLBOARD_DESIGN_WIDTH / BILLBOARD_DESIGN_HEIGHT;
-  const sequenceAspect = sequenceWidth / sequenceHeight;
-
-  let spanX = 0.5;
-  let baseX = 0;
-  let spanY = 1;
-  let offsetY = 0;
-  if (sequenceAspect > planeAspect) {
-    const xScale = Math.max(0.01, Math.min(1, planeAspect / sequenceAspect));
-    spanX = 0.5 * xScale;
-    baseX = (0.5 - spanX) * 0.5;
-  } else if (sequenceAspect < planeAspect) {
-    spanY = Math.max(0.01, Math.min(1, sequenceAspect / planeAspect));
-    offsetY = (1 - spanY) * 0.5;
-  }
-  texture.repeat.set(spanX, spanY);
+  const baseX = 0;
+  const offsetY = 0;
+  texture.repeat.set(0.5, 1);
   texture.offset.set(baseX, offsetY);
   if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
     texture.colorSpace = THREE.SRGBColorSpace;
