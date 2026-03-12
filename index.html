@@ -3,11 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hello</title>
+    <title>Billboard Direction Portal</title>
     <link rel="stylesheet" href="assets/css/placeholder.css" />
   </head>
   <body>
-    hello
+    <div class="app-shell">
+      <aside class="sidebar">
+        <h1>Directions</h1>
+        <div id="directoryPanel" class="directory-panel"></div>
+      </aside>
+
+      <main class="workspace">
+        <div class="billboard-wrap">
+          <div class="billboard-frame">
+            <iframe id="billboardPreview" title="Billboard preview"></iframe>
+            <div id="emptyState" class="empty-state">
+              Select a game from the side panel
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
     <script src="assets/js/placeholder.js"></script>
   </body>
 </html>
