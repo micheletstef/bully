@@ -274,12 +274,13 @@ body {
 }
 
 .sortable-chosen {
-  opacity: 0.75;
+  opacity: 0;
 }
 
 .sortable-ghost {
-  opacity: 0.2;
+  opacity: 1;
   border-color: #d30000;
+  background: transparent;
 }
 
 .sortable-drag {
@@ -288,6 +289,11 @@ body {
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
   cursor: grabbing;
   z-index: 1000;
+  transition: none !important;
+}
+
+.sortable-ghost img {
+  opacity: 0;
 }
 
 .loop-preview-item img {

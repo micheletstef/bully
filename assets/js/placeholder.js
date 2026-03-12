@@ -155,6 +155,69 @@ function readFileAsDataUrl(file) {
   });
 }
 
+let supportsWebpDataUrl = null;
+
+function canEncodeWebp() {
+  if (supportsWebpDataUrl !== null) {
+    return supportsWebpDataUrl;
+  }
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    supportsWebpDataUrl = canvas.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch (error) {
+    supportsWebpDataUrl = false;
+  }
+  return supportsWebpDataUrl;
+}
+
+function loadImageFromObjectUrl(objectUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to decode image"));
+    image.src = objectUrl;
+  });
+}
+
+async function rasterFileToDataUrl(file) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl);
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const maxSide = 2400;
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return readFileAsDataUrl(file);
+    }
+
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+    if (canEncodeWebp()) {
+      return canvas.toDataURL("image/webp", 0.92);
+    }
+
+    const extension = fileExtension(file.name);
+    const outputMime = extension === "jpg" || extension === "jpeg" || extension === "jpt"
+      ? "image/jpeg"
+      : "image/png";
+    return outputMime === "image/jpeg"
+      ? canvas.toDataURL(outputMime, 0.92)
+      : canvas.toDataURL(outputMime);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function serializeSvgToDataUrl(svgElement) {
   const xml = new XMLSerializer().serializeToString(svgElement);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
@@ -245,7 +308,7 @@ async function processArtworkFile(file) {
   if (extension === "pdf") {
     return convertPdfToDataUrl(file);
   }
-  return readFileAsDataUrl(file);
+  return rasterFileToDataUrl(file);
 }
 
 async function addArtworkFiles(files) {
