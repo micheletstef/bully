@@ -11,6 +11,7 @@ const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
+const loopActiveWindowSecondary = document.getElementById("loopActiveWindowSecondary");
 const loopElapsedTime = document.getElementById("loopElapsedTime");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
@@ -580,6 +581,9 @@ function updateActiveWindow() {
   const sequenceWidth = loopPreviewTrack.scrollWidth;
   if (!Number.isFinite(sequenceWidth) || sequenceWidth <= 0) {
     loopActiveWindow.style.display = "none";
+    if (loopActiveWindowSecondary) {
+      loopActiveWindowSecondary.style.display = "none";
+    }
     if (loopElapsedTime) {
       loopElapsedTime.style.display = "none";
     }
@@ -588,14 +592,30 @@ function updateActiveWindow() {
 
   const ratio = Math.min(1, Math.max(0.01, loopPlaybackViewportRatio || 0.25));
   const activeWidth = Math.max(16, sequenceWidth * ratio);
-  const maxX = Math.max(0, sequenceWidth - activeWidth);
-  const x = maxX * Math.min(1, Math.max(0, loopPlaybackProgress || 0));
+  const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
+  const x = sequenceWidth * normalizedProgress;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
+  const mainWidth = Math.min(activeWidth, Math.max(0, sequenceWidth - x));
+  const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
 
-  loopActiveWindow.style.display = "block";
-  loopActiveWindow.style.width = `${activeWidth}px`;
-  loopActiveWindow.style.transform = `translateX(${drawX}px)`;
+  if (mainWidth > 0) {
+    loopActiveWindow.style.display = "block";
+    loopActiveWindow.style.width = `${mainWidth}px`;
+    loopActiveWindow.style.transform = `translateX(${drawX}px)`;
+  } else {
+    loopActiveWindow.style.display = "none";
+  }
+
+  if (loopActiveWindowSecondary) {
+    if (overflowWidth > 0) {
+      loopActiveWindowSecondary.style.display = "block";
+      loopActiveWindowSecondary.style.width = `${overflowWidth}px`;
+      loopActiveWindowSecondary.style.transform = `translateX(${baseX}px)`;
+    } else {
+      loopActiveWindowSecondary.style.display = "none";
+    }
+  }
 
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
@@ -811,12 +831,14 @@ async function init() {
     if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
       loopDurationSeconds = durationSeconds;
     }
-
     updateActiveWindow();
   });
 
   billboardPreview.addEventListener("load", () => {
     loopActiveWindow.style.display = "none";
+    if (loopActiveWindowSecondary) {
+      loopActiveWindowSecondary.style.display = "none";
+    }
     if (loopElapsedTime) {
       loopElapsedTime.style.display = "none";
     }

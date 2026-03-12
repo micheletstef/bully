@@ -229,9 +229,9 @@ body {
   width: min(76vw, 1180px);
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
   height: auto;
-  padding: 2px;
+  padding: 4px 4px 18px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   background: #f1f1f1;
 }
 
@@ -242,7 +242,7 @@ body {
 .loop-preview-track {
   display: flex;
   width: fit-content;
-  height: 26px;
+  height: 46px;
   gap: 2px;
   position: relative;
   z-index: 1;
@@ -285,8 +285,8 @@ body {
 
 .loop-active-window {
   position: absolute;
-  top: 1px;
-  bottom: 1px;
+  top: 3px;
+  height: 46px;
   left: 0;
   width: 20px;
   border: 1px solid #d30000;
@@ -297,7 +297,7 @@ body {
 
 .loop-elapsed-time {
   position: absolute;
-  top: calc(100% + 2px);
+  top: 52px;
   left: 0;
   transform: translateX(-50%);
   font-size: 10px;

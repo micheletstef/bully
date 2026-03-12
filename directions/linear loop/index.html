@@ -85,7 +85,6 @@
         loopDistance: 1024
       };
       let playbackRaf = null;
-      let animationStartMs = performance.now();
 
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
@@ -138,7 +137,6 @@
         );
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
-        animationStartMs = performance.now();
 
         document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
@@ -150,8 +148,22 @@
 
       function emitPlayback() {
         const durationMs = Math.max(1, state.seconds * 1000);
-        const elapsedMs = (performance.now() - animationStartMs) % durationMs;
-        const progress = elapsedMs / durationMs;
+        const transform = getComputedStyle(loopFill).transform;
+        let translateX = 0;
+        if (transform && transform !== "none") {
+          const matrixMatch = transform.match(/matrix\(([^)]+)\)/);
+          if (matrixMatch) {
+            const values = matrixMatch[1].split(",").map((value) => Number(value.trim()));
+            if (values.length >= 6 && Number.isFinite(values[4])) {
+              translateX = values[4];
+            }
+          }
+        }
+
+        const distance = Math.max(1, state.loopDistance);
+        const traveled = ((-translateX % distance) + distance) % distance;
+        const progress = traveled / distance;
+        const elapsedMs = progress * durationMs;
         const viewportWidth = loopStage ? loopStage.clientWidth : 0;
         const viewportRatio =
           state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / state.loopDistance)) : 0.25;
@@ -162,7 +174,8 @@
             progress,
             viewportRatio,
             elapsedSeconds: elapsedMs / 1000,
-            durationSeconds: durationMs / 1000
+            durationSeconds: durationMs / 1000,
+            loopDistance: distance
           },
           "*"
         );
