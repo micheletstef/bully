@@ -506,6 +506,13 @@ function syncVisualizationBackground() {
   loopVisualization.style.background = currentBackgroundColor();
 }
 
+function syncVisualizationGap() {
+  if (!loopVisualization) {
+    return;
+  }
+  loopVisualization.style.setProperty("--preview-gap", `${currentAssetGap()}px`);
+}
+
 function renderLoopPreview() {
   if (!loopPreviewTrack) {
     return;
@@ -814,6 +821,7 @@ async function init() {
   if (assetGapControl) {
     assetGapControl.addEventListener("input", () => {
       saveAssetGap(currentAssetGap());
+      syncVisualizationGap();
       sendLoopConfigToPreview();
     });
   }
@@ -888,6 +896,7 @@ async function init() {
   });
 
   syncVisualizationBackground();
+  syncVisualizationGap();
 }
 
 init();
