@@ -169,9 +169,10 @@ body {
 
 .anno-right-label {
   position: absolute;
-  right: -94px;
-  top: -30px;
-  transform: none;
+  right: -44px;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: center;
   white-space: nowrap;
   font-size: 11px;
 }
