@@ -811,9 +811,7 @@ function buildSnapshotHtml(config) {
       }
 
       .loop-row-track.vertical-scroll {
-        flex-direction: column;
-        width: 100%;
-        height: max-content;
+        transform-origin: top left;
       }
 
       @keyframes loop-x {
@@ -827,10 +825,10 @@ function buildSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: translateY(calc(-1 * var(--loop-distance)));
+          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: translateY(0);
+          transform: rotate(-90deg) translateX(0);
         }
       }
 
@@ -841,8 +839,7 @@ function buildSnapshotHtml(config) {
       }
 
       .loop-artwork.vertical {
-        transform: rotate(-90deg);
-        transform-origin: center;
+        transform: none;
       }
 
       .loop-spacer {
@@ -907,16 +904,11 @@ function buildSnapshotHtml(config) {
         function appendSequence(track, collectNodes) {
           const nodes = [];
           let startNode = null;
-          const verticalFlow = state.artworkOrientation === "vertical";
 
           if (sidePadding > 0) {
             const spacerStart = document.createElement("div");
             spacerStart.className = "loop-spacer";
-            if (verticalFlow) {
-              spacerStart.style.height = sidePadding + "px";
-            } else {
-              spacerStart.style.width = sidePadding + "px";
-            }
+            spacerStart.style.width = sidePadding + "px";
             track.appendChild(spacerStart);
             nodes.push(spacerStart);
             startNode = spacerStart;
@@ -924,8 +916,7 @@ function buildSnapshotHtml(config) {
 
           sources.forEach((src) => {
             const image = document.createElement("img");
-            image.className =
-              state.artworkOrientation === "vertical" ? "loop-artwork vertical" : "loop-artwork";
+            image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
             track.appendChild(image);
@@ -939,11 +930,7 @@ function buildSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerEnd = document.createElement("div");
             spacerEnd.className = "loop-spacer";
-            if (verticalFlow) {
-              spacerEnd.style.height = sidePadding + "px";
-            } else {
-              spacerEnd.style.width = sidePadding + "px";
-            }
+            spacerEnd.style.width = sidePadding + "px";
             track.appendChild(spacerEnd);
             nodes.push(spacerEnd);
           }
@@ -979,32 +966,16 @@ function buildSnapshotHtml(config) {
 
         const verticalFlow = state.artworkOrientation === "vertical";
 
-        if (verticalFlow) {
-          allImages.forEach((image) => {
-            const rect = image.getBoundingClientRect();
-            const extraSpacing = Math.max(0, rect.width - rect.height);
-            image.style.marginBottom = extraSpacing + "px";
-          });
-        } else {
-          allImages.forEach((image) => {
-            image.style.marginBottom = "0px";
-          });
-        }
         const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
           const secondRect = secondSequenceStartNode.getBoundingClientRect();
-          loopDistance = verticalFlow
-            ? secondRect.top - firstRect.top
-            : secondRect.left - firstRect.left;
+          loopDistance = secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce(
-            (sum, node) =>
-              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
-            0
-          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
+            + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
@@ -1173,9 +1144,7 @@ function buildPartitionedSnapshotHtml(config) {
       }
 
       .loop-row-track.vertical-scroll {
-        flex-direction: column;
-        width: 100%;
-        height: max-content;
+        transform-origin: top left;
       }
 
       @keyframes loop-x {
@@ -1189,10 +1158,10 @@ function buildPartitionedSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: translateY(calc(-1 * var(--loop-distance)));
+          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: translateY(0);
+          transform: rotate(-90deg) translateX(0);
         }
       }
 
@@ -1203,8 +1172,7 @@ function buildPartitionedSnapshotHtml(config) {
       }
 
       .loop-artwork.vertical {
-        transform: rotate(-90deg);
-        transform-origin: center;
+        transform: none;
       }
 
       .loop-spacer {
@@ -1279,11 +1247,7 @@ function buildPartitionedSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerStart = document.createElement("div");
             spacerStart.className = "loop-spacer";
-            if (verticalFlow) {
-              spacerStart.style.height = sidePadding + "px";
-            } else {
-              spacerStart.style.width = sidePadding + "px";
-            }
+            spacerStart.style.width = sidePadding + "px";
             track.appendChild(spacerStart);
             nodes.push(spacerStart);
             startNode = spacerStart;
@@ -1291,10 +1255,7 @@ function buildPartitionedSnapshotHtml(config) {
 
           sources.forEach((src) => {
             const image = document.createElement("img");
-            image.className =
-              orientationForPartition(partitionKey) === "vertical"
-                ? "loop-artwork vertical"
-                : "loop-artwork";
+            image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
             track.appendChild(image);
@@ -1308,11 +1269,7 @@ function buildPartitionedSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerEnd = document.createElement("div");
             spacerEnd.className = "loop-spacer";
-            if (verticalFlow) {
-              spacerEnd.style.height = sidePadding + "px";
-            } else {
-              spacerEnd.style.width = sidePadding + "px";
-            }
+            spacerEnd.style.width = sidePadding + "px";
             track.appendChild(spacerEnd);
             nodes.push(spacerEnd);
           }
@@ -1346,33 +1303,16 @@ function buildPartitionedSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        if (verticalFlow) {
-          allImages.forEach((image) => {
-            const rect = image.getBoundingClientRect();
-            const extraSpacing = Math.max(0, rect.width - rect.height);
-            image.style.marginBottom = extraSpacing + "px";
-          });
-        } else {
-          allImages.forEach((image) => {
-            image.style.marginBottom = "0px";
-          });
-        }
-
         const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
           const secondRect = secondSequenceStartNode.getBoundingClientRect();
-          loopDistance = verticalFlow
-            ? secondRect.top - firstRect.top
-            : secondRect.left - firstRect.left;
+          loopDistance = secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce(
-            (sum, node) =>
-              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
-            0
-          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
+            + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
