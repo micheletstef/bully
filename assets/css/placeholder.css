@@ -227,6 +227,13 @@ body {
   z-index: 8;
 }
 
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  column-gap: 28px;
+  align-items: start;
+}
+
 .spec-table {
   width: 100%;
   border-collapse: separate;
@@ -252,8 +259,18 @@ body {
   text-transform: lowercase;
 }
 
+.settings-table input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+
 @media (max-width: 1000px) {
   .billboard-info {
     width: min(76vw, 1180px);
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
   }
 }

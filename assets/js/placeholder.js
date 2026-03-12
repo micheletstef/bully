@@ -1,6 +1,8 @@
 const directoryPanel = document.getElementById("directoryPanel");
 const billboardPreview = document.getElementById("billboardPreview");
 const emptyState = document.getElementById("emptyState");
+const speedControl = document.getElementById("speedControl");
+const speedValue = document.getElementById("speedValue");
 
 function normalizeHref(href) {
   if (!href) {
@@ -79,6 +81,33 @@ function loadDirection(path) {
   emptyState.style.display = "none";
 }
 
+function currentSpeedSeconds() {
+  if (!speedControl) {
+    return 16;
+  }
+  return Number(speedControl.value);
+}
+
+function syncSpeedReadout() {
+  if (!speedValue) {
+    return;
+  }
+  speedValue.textContent = `${currentSpeedSeconds()}s`;
+}
+
+function sendSpeedToPreview() {
+  if (!billboardPreview.contentWindow) {
+    return;
+  }
+  billboardPreview.contentWindow.postMessage(
+    {
+      type: "setLoopDuration",
+      seconds: currentSpeedSeconds()
+    },
+    "*"
+  );
+}
+
 function renderDirectory(directions) {
   directoryPanel.innerHTML = "";
 
@@ -118,6 +147,19 @@ async function init() {
   } catch (error) {
     emptyState.textContent = "No directions found. Check directions/manifest.json.";
   }
+
+  syncSpeedReadout();
+
+  if (speedControl) {
+    speedControl.addEventListener("input", () => {
+      syncSpeedReadout();
+      sendSpeedToPreview();
+    });
+  }
+
+  billboardPreview.addEventListener("load", () => {
+    sendSpeedToPreview();
+  });
 }
 
 init();
