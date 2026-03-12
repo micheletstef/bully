@@ -655,6 +655,21 @@ function syncVisualizationPaddingScaled() {
   loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
+  syncPreviewSpacers();
+}
+
+function syncPreviewSpacers() {
+  if (!loopVisualization || !loopPreviewTrack) {
+    return;
+  }
+  const padLR = Number.parseFloat(
+    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-lr")
+  );
+  const width = Number.isFinite(padLR) ? Math.max(0, padLR) : 0;
+  const spacers = loopPreviewTrack.querySelectorAll(".loop-preview-spacer");
+  spacers.forEach((node) => {
+    node.style.width = `${width}px`;
+  });
 }
 
 function syncVisualizationGeometry() {
@@ -675,6 +690,10 @@ function renderLoopPreview() {
   }
 
   loopPreviewTrack.innerHTML = "";
+  const spacerStart = document.createElement("div");
+  spacerStart.className = "loop-preview-spacer";
+  loopPreviewTrack.appendChild(spacerStart);
+
   loopArtworks.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
@@ -687,6 +706,9 @@ function renderLoopPreview() {
     tile.appendChild(image);
     loopPreviewTrack.appendChild(tile);
   });
+  const spacerEnd = document.createElement("div");
+  spacerEnd.className = "loop-preview-spacer";
+  loopPreviewTrack.appendChild(spacerEnd);
 
   if (loopPreviewSortable && typeof loopPreviewSortable.destroy === "function") {
     loopPreviewSortable.destroy();
@@ -839,17 +861,16 @@ function updateActiveWindow() {
 
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
-    loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s / ${loopDurationSeconds.toFixed(1)}s`;
+    const rightEdge = x + activeWidth;
+    const remainingPx = rightEdge <= sequenceWidth ? sequenceWidth - rightEdge : 0;
+    const remainingSeconds = (remainingPx / Math.max(1, sequenceWidth)) * loopDurationSeconds;
+    loopElapsedTime.textContent = `${remainingSeconds.toFixed(1)}s`;
     let centerX = drawX + mainWidth / 2;
     if (mainWidth <= 0 && overflowWidth > 0) {
       centerX = baseX + overflowWidth / 2;
     }
-    const clampedCenterX = Math.min(
-      loopVisualization.clientWidth - 4,
-      Math.max(4, centerX)
-    );
     const editorRect = loopVisualization.getBoundingClientRect();
-    const absoluteLeft = editorRect.left + clampedCenterX;
+    const absoluteLeft = editorRect.left + centerX;
     const absoluteTop = editorRect.top + frameTopOffset + frameHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;

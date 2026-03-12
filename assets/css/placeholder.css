@@ -252,10 +252,9 @@ body {
   z-index: 1;
 }
 
-.loop-preview-track::before,
-.loop-preview-track::after {
-  content: "";
-  flex: 0 0 var(--preview-pad-lr, 0px);
+.loop-preview-spacer {
+  height: 100%;
+  flex: 0 0 auto;
 }
 
 .loop-preview-item {
