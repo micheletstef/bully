@@ -126,7 +126,9 @@ const preview3dThreeState = {
   texture: null,
   textureSource: "",
   textureRequestToken: 0,
-  textureScrollSpan: 1
+  textureScrollSpan: 1,
+  textureScrollBaseX: 0,
+  textureOffsetY: 0
 };
 let hasWarnedMissingThree = false;
 const preview3dCamera = {
@@ -1132,6 +1134,8 @@ function loadThreeTextureFromSource(src) {
       preview3dThreeState.texture = texture;
       preview3dThreeState.textureSource = src;
       preview3dThreeState.textureScrollSpan = 1;
+      preview3dThreeState.textureScrollBaseX = 0;
+      preview3dThreeState.textureOffsetY = 0;
       preview3dThreeState.mesh.material.map = texture;
       preview3dThreeState.mesh.material.needsUpdate = true;
       update3dPreviewAnimation();
@@ -1167,49 +1171,28 @@ async function syncThreeLoopTexture() {
     return;
   }
 
-  const sequenceWidth = Math.max(1, surface.sequenceWidth);
-  const sequenceHeight = Math.max(1, surface.stripHeight);
-  const billboardAspect = BILLBOARD_DESIGN_WIDTH / BILLBOARD_DESIGN_HEIGHT;
-  const sequenceAspect = sequenceWidth / sequenceHeight;
-  let framedSequenceWidth = sequenceWidth;
-  let framedSequenceHeight = sequenceHeight;
-  if (sequenceAspect > billboardAspect) {
-    framedSequenceHeight = Math.max(sequenceHeight, Math.round(sequenceWidth / billboardAspect));
-  } else if (sequenceAspect < billboardAspect) {
-    framedSequenceWidth = Math.max(sequenceWidth, Math.round(sequenceHeight * billboardAspect));
-  }
-
-  const framedCanvas = document.createElement("canvas");
-  framedCanvas.width = framedSequenceWidth * 2;
-  framedCanvas.height = framedSequenceHeight;
-  const framedCtx = framedCanvas.getContext("2d");
-  if (!framedCtx) {
-    return;
-  }
-  framedCtx.imageSmoothingEnabled = true;
-  framedCtx.imageSmoothingQuality = "high";
-  framedCtx.fillStyle = currentBackgroundColor();
-  framedCtx.fillRect(0, 0, framedCanvas.width, framedCanvas.height);
-  const padX = Math.round((framedSequenceWidth - sequenceWidth) / 2);
-  const padY = Math.round((framedSequenceHeight - sequenceHeight) / 2);
-  framedCtx.drawImage(surface.canvas, 0, 0, sequenceWidth, sequenceHeight, padX, padY, sequenceWidth, sequenceHeight);
-  framedCtx.drawImage(
-    surface.canvas,
-    sequenceWidth,
-    0,
-    sequenceWidth,
-    sequenceHeight,
-    framedSequenceWidth + padX,
-    padY,
-    sequenceWidth,
-    sequenceHeight
-  );
-
-  const texture = new THREE.CanvasTexture(framedCanvas);
+  const texture = new THREE.CanvasTexture(surface.canvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.repeat.set(0.5, 1);
-  texture.offset.set(0, 0);
+  const sequenceWidth = Math.max(1, surface.sequenceWidth);
+  const sequenceHeight = Math.max(1, surface.stripHeight);
+  const planeAspect = BILLBOARD_DESIGN_WIDTH / BILLBOARD_DESIGN_HEIGHT;
+  const sequenceAspect = sequenceWidth / sequenceHeight;
+
+  let spanX = 0.5;
+  let baseX = 0;
+  let spanY = 1;
+  let offsetY = 0;
+  if (sequenceAspect > planeAspect) {
+    const xScale = Math.max(0.01, Math.min(1, planeAspect / sequenceAspect));
+    spanX = 0.5 * xScale;
+    baseX = (0.5 - spanX) * 0.5;
+  } else if (sequenceAspect < planeAspect) {
+    spanY = Math.max(0.01, Math.min(1, sequenceAspect / planeAspect));
+    offsetY = (1 - spanY) * 0.5;
+  }
+  texture.repeat.set(spanX, spanY);
+  texture.offset.set(baseX, offsetY);
   if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
     texture.colorSpace = THREE.SRGBColorSpace;
   }
@@ -1220,7 +1203,9 @@ async function syncThreeLoopTexture() {
   }
   preview3dThreeState.texture = texture;
   preview3dThreeState.textureSource = `loop:${current3dSources().join("|")}:${current3dOrientation()}`;
-  preview3dThreeState.textureScrollSpan = 0.5;
+  preview3dThreeState.textureScrollSpan = spanX;
+  preview3dThreeState.textureScrollBaseX = baseX;
+  preview3dThreeState.textureOffsetY = offsetY;
   preview3dThreeState.mesh.material.map = texture;
   preview3dThreeState.mesh.material.needsUpdate = true;
 }
@@ -1254,7 +1239,8 @@ function renderThreeFrame() {
   camera.updateProjectionMatrix();
   if (texture) {
     const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-    texture.offset.x = progress * preview3dThreeState.textureScrollSpan;
+    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * preview3dThreeState.textureScrollSpan;
+    texture.offset.y = preview3dThreeState.textureOffsetY;
   }
   renderer.render(scene, camera);
 }
