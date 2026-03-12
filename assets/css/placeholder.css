@@ -135,7 +135,7 @@ body {
 
 .anno-top-label {
   position: absolute;
-  top: -7px;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 11px;
@@ -169,10 +169,10 @@ body {
 
 .anno-right-label {
   position: absolute;
-  right: -36px;
-  top: 50%;
-  transform: translateY(-50%) rotate(90deg);
-  transform-origin: center;
+  right: -94px;
+  top: -30px;
+  transform: none;
+  white-space: nowrap;
   font-size: 11px;
 }
 
@@ -200,6 +200,10 @@ body {
 
 .anno-label-1820 {
   left: 30.8475%;
+}
+
+.anno-label-curve {
+  left: 39.49155%;
 }
 
 .anno-label-2840 {
