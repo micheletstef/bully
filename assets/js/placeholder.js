@@ -810,12 +810,27 @@ function buildSnapshotHtml(config) {
         opacity: 0.98;
       }
 
+      .loop-row-track.vertical-scroll {
+        flex-direction: column;
+        width: 100%;
+        height: max-content;
+      }
+
       @keyframes loop-x {
         from {
           transform: translateX(0);
         }
         to {
           transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      @keyframes loop-y {
+        from {
+          transform: translateY(0);
+        }
+        to {
+          transform: translateY(var(--loop-distance));
         }
       }
 
@@ -892,11 +907,16 @@ function buildSnapshotHtml(config) {
         function appendSequence(track, collectNodes) {
           const nodes = [];
           let startNode = null;
+          const verticalFlow = state.artworkOrientation === "vertical";
 
           if (sidePadding > 0) {
             const spacerStart = document.createElement("div");
             spacerStart.className = "loop-spacer";
-            spacerStart.style.width = sidePadding + "px";
+            if (verticalFlow) {
+              spacerStart.style.height = sidePadding + "px";
+            } else {
+              spacerStart.style.width = sidePadding + "px";
+            }
             track.appendChild(spacerStart);
             nodes.push(spacerStart);
             startNode = spacerStart;
@@ -919,7 +939,11 @@ function buildSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerEnd = document.createElement("div");
             spacerEnd.className = "loop-spacer";
-            spacerEnd.style.width = sidePadding + "px";
+            if (verticalFlow) {
+              spacerEnd.style.height = sidePadding + "px";
+            } else {
+              spacerEnd.style.width = sidePadding + "px";
+            }
             track.appendChild(spacerEnd);
             nodes.push(spacerEnd);
           }
@@ -937,6 +961,9 @@ function buildSnapshotHtml(config) {
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          if (state.artworkOrientation === "vertical") {
+            track.classList.add("vertical-scroll");
+          }
           row.appendChild(track);
           loopFill.appendChild(row);
           rows.push(track);
@@ -950,16 +977,22 @@ function buildSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapWidth = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = Math.max(0, Number(state.assetGap) || 0);
+        const verticalFlow = state.artworkOrientation === "vertical";
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
           const secondRect = secondSequenceStartNode.getBoundingClientRect();
-          loopDistance = secondRect.left - firstRect.left;
+          loopDistance = verticalFlow
+            ? secondRect.top - firstRect.top
+            : secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
-            + Math.max(0, firstSequenceNodes.length - 1) * gapWidth;
+          loopDistance = firstSequenceNodes.reduce(
+            (sum, node) =>
+              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
+            0
+          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
@@ -968,6 +1001,7 @@ function buildSnapshotHtml(config) {
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", delay + "s");
+          track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
           track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
         });
@@ -977,7 +1011,7 @@ function buildSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-duration", state.seconds + "s");
         document.documentElement.style.setProperty("--loop-pad-tb", state.padTopBottom + "px");
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
-        document.documentElement.style.setProperty("--loop-gap", gapWidth + "px");
+        document.documentElement.style.setProperty("--loop-gap", gapSize + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
         emitPlayback();
       }
@@ -996,10 +1030,15 @@ function buildSnapshotHtml(config) {
         }
 
         const progress = elapsedMs / durationMs;
-        const viewportWidth = loopStage ? loopStage.clientWidth : 0;
+        const verticalFlow = state.artworkOrientation === "vertical";
+        const viewportSize = loopStage
+          ? verticalFlow
+            ? loopStage.clientHeight
+            : loopStage.clientWidth
+          : 0;
         const stageHeight = loopStage ? loopStage.clientHeight : 0;
         const viewportRatio =
-          state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / state.loopDistance)) : 0.25;
+          state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportSize / state.loopDistance)) : 0.25;
 
         window.parent.postMessage(
           {
@@ -1110,12 +1149,27 @@ function buildPartitionedSnapshotHtml(config) {
         animation-direction: var(--loop-row-direction, normal);
       }
 
+      .loop-row-track.vertical-scroll {
+        flex-direction: column;
+        width: 100%;
+        height: max-content;
+      }
+
       @keyframes loop-x {
         from {
           transform: translateX(0);
         }
         to {
           transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      @keyframes loop-y {
+        from {
+          transform: translateY(0);
+        }
+        to {
+          transform: translateY(var(--loop-distance));
         }
       }
 
@@ -1186,6 +1240,7 @@ function buildPartitionedSnapshotHtml(config) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -1199,7 +1254,11 @@ function buildPartitionedSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerStart = document.createElement("div");
             spacerStart.className = "loop-spacer";
-            spacerStart.style.width = sidePadding + "px";
+            if (verticalFlow) {
+              spacerStart.style.height = sidePadding + "px";
+            } else {
+              spacerStart.style.width = sidePadding + "px";
+            }
             track.appendChild(spacerStart);
             nodes.push(spacerStart);
             startNode = spacerStart;
@@ -1224,7 +1283,11 @@ function buildPartitionedSnapshotHtml(config) {
           if (sidePadding > 0) {
             const spacerEnd = document.createElement("div");
             spacerEnd.className = "loop-spacer";
-            spacerEnd.style.width = sidePadding + "px";
+            if (verticalFlow) {
+              spacerEnd.style.height = sidePadding + "px";
+            } else {
+              spacerEnd.style.width = sidePadding + "px";
+            }
             track.appendChild(spacerEnd);
             nodes.push(spacerEnd);
           }
@@ -1242,6 +1305,9 @@ function buildPartitionedSnapshotHtml(config) {
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          if (verticalFlow) {
+            track.classList.add("vertical-scroll");
+          }
           row.appendChild(track);
           container.appendChild(row);
           rows.push(track);
@@ -1255,16 +1321,21 @@ function buildPartitionedSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapWidth = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
           const secondRect = secondSequenceStartNode.getBoundingClientRect();
-          loopDistance = secondRect.left - firstRect.left;
+          loopDistance = verticalFlow
+            ? secondRect.top - firstRect.top
+            : secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
-            + Math.max(0, firstSequenceNodes.length - 1) * gapWidth;
+          loopDistance = firstSequenceNodes.reduce(
+            (sum, node) =>
+              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
+            0
+          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
@@ -1272,6 +1343,7 @@ function buildPartitionedSnapshotHtml(config) {
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", delay + "s");
+          track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-distance", safeDistance + "px");
           const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
           track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
@@ -2214,14 +2286,6 @@ function reorderArtworksByIds(idOrder) {
   sendLoopConfigToPreview();
 }
 
-function pointerInsideVisualization(x, y) {
-  if (!loopVisualization || !Number.isFinite(x) || !Number.isFinite(y)) {
-    return true;
-  }
-  const rect = loopVisualization.getBoundingClientRect();
-  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-}
-
 async function initLoopSortable() {
   if (!loopPreviewTrack || loopPreviewSortable) {
     return;
@@ -2241,35 +2305,14 @@ async function initLoopSortable() {
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
-      onStart: (evt) => {
-        draggingArtworkIndex = evt.oldIndex;
-      },
       onChange: () => {
         updateActiveWindow();
       },
-      onEnd: (evt) => {
+      onEnd: () => {
         const idOrder = [...loopPreviewTrack.querySelectorAll(".loop-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
         reorderArtworksByIds(idOrder);
-
-        const px =
-          evt.originalEvent && Number.isFinite(evt.originalEvent.clientX)
-            ? evt.originalEvent.clientX
-            : latestPointer.x;
-        const py =
-          evt.originalEvent && Number.isFinite(evt.originalEvent.clientY)
-            ? evt.originalEvent.clientY
-            : latestPointer.y;
-
-        if (!pointerInsideVisualization(px, py) && evt.item && evt.item.dataset.artworkId) {
-          const removeIndex = loopArtworks.findIndex((item) => item.id === evt.item.dataset.artworkId);
-          if (removeIndex >= 0) {
-            removeArtwork(removeIndex);
-          }
-        }
-
-        draggingArtworkIndex = null;
         renderLoopPreview();
       }
     });
@@ -2616,16 +2659,11 @@ async function init() {
   bindPartitionTrackDrop(partitionTrackRight, "right");
 
   if (loopVisualization) {
-    loopVisualization.addEventListener("pointermove", (event) => {
-      latestPointer = { x: event.clientX, y: event.clientY };
-    });
-
     loopVisualization.addEventListener("dragover", (event) => {
       if (currentDirectionIsPartitioned()) {
         return;
       }
       event.preventDefault();
-      latestPointer = { x: event.clientX, y: event.clientY };
       loopVisualization.classList.add("drag-over");
     });
 

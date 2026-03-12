@@ -81,12 +81,27 @@
         animation-direction: var(--loop-row-direction, normal);
       }
 
+      .loop-row-track.vertical-scroll {
+        flex-direction: column;
+        width: 100%;
+        height: max-content;
+      }
+
       @keyframes loop-x {
         from {
           transform: translateX(0);
         }
         to {
           transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      @keyframes loop-y {
+        from {
+          transform: translateY(0);
+        }
+        to {
+          transform: translateY(var(--loop-distance));
         }
       }
 
@@ -157,6 +172,7 @@
       let playbackTimer = null;
       let primaryTrack = null;
       let primaryDistance = 1;
+      let primaryOrientation = "horizontal";
       let partitionMetrics = {
         left: { loopDistance: 1, viewportRatio: 0.25 },
         curve: { loopDistance: 1, viewportRatio: 0.25 },
@@ -198,6 +214,7 @@
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -211,7 +228,11 @@
           if (sidePadding > 0) {
             const spacerStart = document.createElement("div");
             spacerStart.className = "loop-spacer";
-            spacerStart.style.width = `${sidePadding}px`;
+            if (verticalFlow) {
+              spacerStart.style.height = `${sidePadding}px`;
+            } else {
+              spacerStart.style.width = `${sidePadding}px`;
+            }
             track.appendChild(spacerStart);
             nodes.push(spacerStart);
             startNode = spacerStart;
@@ -236,7 +257,11 @@
           if (sidePadding > 0) {
             const spacerEnd = document.createElement("div");
             spacerEnd.className = "loop-spacer";
-            spacerEnd.style.width = `${sidePadding}px`;
+            if (verticalFlow) {
+              spacerEnd.style.height = `${sidePadding}px`;
+            } else {
+              spacerEnd.style.width = `${sidePadding}px`;
+            }
             track.appendChild(spacerEnd);
             nodes.push(spacerEnd);
           }
@@ -254,6 +279,9 @@
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          if (verticalFlow) {
+            track.classList.add("vertical-scroll");
+          }
           row.appendChild(track);
           container.appendChild(row);
           rows.push(track);
@@ -267,18 +295,21 @@
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapWidth = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
           const secondRect = secondSequenceStartNode.getBoundingClientRect();
-          loopDistance = secondRect.left - firstRect.left;
+          loopDistance = verticalFlow
+            ? secondRect.top - firstRect.top
+            : secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
           loopDistance = firstSequenceNodes.reduce(
-            (sum, node) => sum + node.getBoundingClientRect().width,
+            (sum, node) =>
+              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
             0
-          ) + Math.max(0, firstSequenceNodes.length - 1) * gapWidth;
+          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
@@ -286,6 +317,7 @@
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", `${delay}s`);
+          track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-distance", `${safeDistance}px`);
           const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
           track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
@@ -309,6 +341,7 @@
         );
         primaryTrack = null;
         primaryDistance = 1;
+        primaryOrientation = "horizontal";
 
         for (const key of PARTITION_KEYS) {
           const container = partitionContainers[key];
@@ -321,18 +354,22 @@
             : [DEFAULT_SOURCE];
           const normalizedSources = sourceList.map(normalizeArtworkSource);
           const result = await renderPartition(container, normalizedSources, key);
-          const partitionViewportWidth = container.clientWidth || 0;
+          const partitionVerticalFlow = orientationForPartition(key) === "vertical";
+          const partitionViewportSize = partitionVerticalFlow
+            ? container.clientHeight || 0
+            : container.clientWidth || 0;
           partitionMetrics[key] = {
             loopDistance: result.loopDistance,
             viewportRatio:
               result.loopDistance > 0
-                ? Math.min(1, Math.max(0.01, partitionViewportWidth / result.loopDistance))
+                ? Math.min(1, Math.max(0.01, partitionViewportSize / result.loopDistance))
                 : 0.25
           };
 
           if (!primaryTrack && result.primaryTrack) {
             primaryTrack = result.primaryTrack;
             primaryDistance = result.loopDistance;
+            primaryOrientation = partitionVerticalFlow ? "vertical" : "horizontal";
           }
         }
 
@@ -353,9 +390,13 @@
         }
 
         const progress = elapsedMs / durationMs;
-        const viewportWidth = loopStage ? loopStage.clientWidth : 0;
+        const viewportSize = loopStage
+          ? primaryOrientation === "vertical"
+            ? loopStage.clientHeight
+            : loopStage.clientWidth
+          : 0;
         const viewportRatio =
-          primaryDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / primaryDistance)) : 0.25;
+          primaryDistance > 0 ? Math.min(1, Math.max(0.01, viewportSize / primaryDistance)) : 0.25;
         const stageHeight = loopStage ? loopStage.clientHeight : 0;
 
         window.parent.postMessage(
