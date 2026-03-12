@@ -1948,10 +1948,19 @@ function updatePartitionActiveWindows() {
       return;
     }
 
-    const distance = Math.max(
-      1,
-      Number(partitionLoopDistances[partitionKey]) || trackEl.scrollWidth || 1
-    );
+    const previewItems = [...trackEl.querySelectorAll(".partition-preview-item")];
+    if (!previewItems.length) {
+      primaryWindow.style.display = "none";
+      secondaryWindow.style.display = "none";
+      return;
+    }
+
+    const styles = getComputedStyle(trackEl);
+    const gapRaw = Number.parseFloat(styles.gap || styles.columnGap || "0");
+    const gap = Number.isFinite(gapRaw) ? Math.max(0, gapRaw) : 0;
+    const itemWidth = previewItems.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0);
+    const sequenceWidth = Math.max(1, itemWidth + Math.max(0, previewItems.length - 1) * gap);
+    const distance = sequenceWidth;
     const ratioRaw = Number(partitionViewportRatios[partitionKey]);
     const viewportRatio = Number.isFinite(ratioRaw)
       ? Math.max(0.01, Math.min(1, ratioRaw))

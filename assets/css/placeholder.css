@@ -333,7 +333,7 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(76vw, 1180px);
+  width: max-content;
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
   display: none;
   grid-template-columns: 1fr;
@@ -605,10 +605,10 @@ body {
   align-items: center;
   gap: 4px;
   min-height: 54px;
+  width: fit-content;
   border: 0;
   padding: 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   background: #f1f1f1;
 }
 
