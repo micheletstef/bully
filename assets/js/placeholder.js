@@ -40,10 +40,12 @@ let loopPreviewSortable = null;
 let latestPointer = { x: null, y: null };
 let loopElapsedSeconds = 0;
 let loopDurationSeconds = 16;
+let loopTraverseSeconds = 16;
 let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
+let loopDistanceSource = 1;
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 let loopRowGap = 0;
 
@@ -577,8 +579,8 @@ function syncSpeedReadout() {
   if (!speedValue) {
     return;
   }
-  const seconds = Number.isFinite(loopDurationSeconds) && loopDurationSeconds > 0
-    ? loopDurationSeconds
+  const seconds = Number.isFinite(loopTraverseSeconds) && loopTraverseSeconds > 0
+    ? loopTraverseSeconds
     : currentSpeedSeconds();
   speedValue.textContent = `${seconds.toFixed(1)}s`;
 }
@@ -819,9 +821,17 @@ function updateActiveWindow() {
   const billboardAspect = 5900 / 3480;
   const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
-  const x = sequenceWidth * normalizedProgress;
+  const previewScale = getPreviewScale();
+  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
+  const x = scaledLoopDistance * normalizedProgress;
+  const traverseTravelPx = Math.max(1, scaledLoopDistance - activeWidth);
+  const traverseRatio = Math.max(0, Math.min(1, traverseTravelPx / scaledLoopDistance));
+  const traverseDuration = Math.max(0.1, loopDurationSeconds * traverseRatio);
+  const traverseProgress = Math.max(0, Math.min(1, x / traverseTravelPx));
+  const traverseElapsed = traverseDuration * traverseProgress;
+  loopTraverseSeconds = traverseDuration;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
-  const mainWidth = Math.min(activeWidth, Math.max(0, sequenceWidth - x));
+  const mainWidth = Math.min(activeWidth, Math.max(0, scaledLoopDistance - x));
   const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
   const frameTopOffset = 0;
@@ -853,7 +863,7 @@ function updateActiveWindow() {
 
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
-    loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s/${Math.round(loopDurationSeconds)}s`;
+    loopElapsedTime.textContent = `${traverseElapsed.toFixed(1)}s/${traverseDuration.toFixed(1)}s`;
     let centerX = drawX + mainWidth / 2;
     if (mainWidth <= 0 && overflowWidth > 0) {
       centerX = baseX + overflowWidth / 2;
@@ -1058,6 +1068,7 @@ async function init() {
     const durationSeconds = Number(payload.durationSeconds);
     const stageHeight = Number(payload.stageHeight);
     const assetGap = Number(payload.assetGap);
+    const loopDistance = Number(payload.loopDistance);
 
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
@@ -1076,6 +1087,9 @@ async function init() {
     }
     if (Number.isFinite(assetGap) && assetGap >= 0) {
       loopAssetGap = assetGap;
+    }
+    if (Number.isFinite(loopDistance) && loopDistance > 0) {
+      loopDistanceSource = loopDistance;
     }
     loopPadTopBottom = currentPadTopBottom();
     loopPadLeftRight = currentPadLeftRight();
