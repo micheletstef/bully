@@ -20,9 +20,9 @@ const partitionedUploads = document.getElementById("partitionedUploads");
 const partitionUploadLeft = document.getElementById("partitionUploadLeft");
 const partitionUploadCurve = document.getElementById("partitionUploadCurve");
 const partitionUploadRight = document.getElementById("partitionUploadRight");
-const partitionListLeft = document.getElementById("partitionListLeft");
-const partitionListCurve = document.getElementById("partitionListCurve");
-const partitionListRight = document.getElementById("partitionListRight");
+const partitionTrackLeft = document.getElementById("partitionTrackLeft");
+const partitionTrackCurve = document.getElementById("partitionTrackCurve");
+const partitionTrackRight = document.getElementById("partitionTrackRight");
 let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
@@ -58,6 +58,11 @@ let loopPlaybackProgress = 0;
 let loopPlaybackViewportRatio = 0.25;
 let sortableModulePromise = null;
 let loopPreviewSortable = null;
+let partitionSortables = {
+  left: null,
+  curve: null,
+  right: null
+};
 let latestPointer = { x: null, y: null };
 let loopElapsedSeconds = 0;
 let loopDurationSeconds = 16;
@@ -404,7 +409,7 @@ async function addArtworkFiles(files, partitionKey = null) {
 
   if (shouldTargetPartition) {
     savePartitionArtworks(partitionArtworks);
-    renderPartitionArtworkLists();
+    renderPartitionEditors();
   } else {
     saveArtworks(loopArtworks);
     renderLoopPreview();
@@ -472,7 +477,7 @@ function syncDirectionModeUI() {
     if (loopElapsedTime) {
       loopElapsedTime.style.display = "none";
     }
-    renderPartitionArtworkLists();
+    renderPartitionEditors();
   } else {
     renderLoopPreview();
   }
@@ -1779,6 +1784,36 @@ function renderLoopPreview() {
   updateActiveWindow();
 }
 
+function partitionTrackElement(partitionKey) {
+  const key = normalizePartitionKey(partitionKey);
+  if (key === "left") {
+    return partitionTrackLeft;
+  }
+  if (key === "curve") {
+    return partitionTrackCurve;
+  }
+  if (key === "right") {
+    return partitionTrackRight;
+  }
+  return null;
+}
+
+function reorderPartitionArtworksByIds(partitionKey, idOrder) {
+  const key = normalizePartitionKey(partitionKey);
+  if (!key) {
+    return;
+  }
+  const current = partitionArtworks[key] || [];
+  const byId = new Map(current.map((item) => [item.id, item]));
+  const reordered = idOrder.map((id) => byId.get(id)).filter((item) => item);
+  if (reordered.length !== current.length) {
+    return;
+  }
+  partitionArtworks[key] = reordered;
+  savePartitionArtworks(partitionArtworks);
+  sendLoopConfigToPreview();
+}
+
 function removePartitionArtwork(partitionKey, index) {
   const key = normalizePartitionKey(partitionKey);
   if (!key) {
@@ -1790,71 +1825,126 @@ function removePartitionArtwork(partitionKey, index) {
   }
   items.splice(index, 1);
   savePartitionArtworks(partitionArtworks);
-  renderPartitionArtworkLists();
+  renderPartitionEditor(key);
   sendLoopConfigToPreview();
 }
 
-function renderPartitionList(listEl, partitionKey) {
-  if (!listEl) {
+async function initPartitionSortable(partitionKey, trackEl) {
+  const key = normalizePartitionKey(partitionKey);
+  if (!key || !trackEl) {
     return;
   }
+
+  try {
+    const mod = await getSortableModule();
+    const Sortable = mod.default || mod.Sortable || mod;
+    partitionSortables[key] = Sortable.create(trackEl, {
+      animation: 140,
+      forceFallback: true,
+      fallbackOnBody: true,
+      fallbackTolerance: 4,
+      draggable: ".partition-preview-item",
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      dragClass: "sortable-drag",
+      onEnd: () => {
+        const idOrder = [...trackEl.querySelectorAll(".partition-preview-item")]
+          .map((node) => node.dataset.artworkId)
+          .filter((id) => !!id);
+        reorderPartitionArtworksByIds(key, idOrder);
+        renderPartitionEditor(key);
+      }
+    });
+  } catch (error) {
+    // Keep basic visual editor if Sortable fails to load.
+  }
+}
+
+function renderPartitionEditor(partitionKey) {
   const key = normalizePartitionKey(partitionKey);
-  if (!key) {
-    listEl.innerHTML = "";
+  const trackEl = partitionTrackElement(key);
+  if (!key || !trackEl) {
     return;
+  }
+  if (partitionSortables[key] && typeof partitionSortables[key].destroy === "function") {
+    partitionSortables[key].destroy();
+    partitionSortables[key] = null;
   }
   const items = partitionArtworks[key] || [];
-  listEl.innerHTML = "";
+  trackEl.innerHTML = "";
 
   if (!items.length) {
     const hint = document.createElement("div");
     hint.className = "settings-hint";
     hint.textContent = "(none)";
-    listEl.appendChild(hint);
+    trackEl.appendChild(hint);
     return;
   }
 
   items.forEach((item, index) => {
-    const row = document.createElement("div");
-    row.className = "artwork-item";
+    const tile = document.createElement("div");
+    tile.className = "partition-preview-item";
+    tile.dataset.artworkId = item.id;
 
-    const thumb = document.createElement("img");
-    thumb.className = "artwork-thumb";
-    thumb.src = item.src;
-    thumb.alt = "";
-    row.appendChild(thumb);
-
-    const name = document.createElement("span");
-    name.className = "artwork-index";
-    name.textContent = item.name || `asset ${index + 1}`;
-    row.appendChild(name);
-
-    const suffix = document.createElement("span");
-    suffix.className = "artwork-suffix";
-    suffix.textContent = artworkLastFive(item.name || item.src || "");
-    row.appendChild(suffix);
+    const image = document.createElement("img");
+    image.src = item.src;
+    image.alt = "";
+    image.draggable = false;
+    tile.appendChild(image);
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
-    removeButton.className = "artwork-remove";
-    removeButton.textContent = "remove";
+    removeButton.className = "remove-partition-item";
+    removeButton.textContent = "x";
+    removeButton.title = "Remove asset";
+    removeButton.setAttribute("aria-label", "Remove asset");
     removeButton.addEventListener("click", () => {
       removePartitionArtwork(key, index);
     });
-    row.appendChild(removeButton);
-    listEl.appendChild(row);
+    tile.appendChild(removeButton);
+    trackEl.appendChild(tile);
   });
+  initPartitionSortable(key, trackEl);
 }
 
-function renderPartitionArtworkLists() {
-  renderPartitionList(partitionListLeft, "left");
-  renderPartitionList(partitionListCurve, "curve");
-  renderPartitionList(partitionListRight, "right");
+function renderPartitionEditors() {
+  renderPartitionEditor("left");
+  renderPartitionEditor("curve");
+  renderPartitionEditor("right");
 }
 
-function artworkLastFive(path) {
-  const name = String(path || "");
-  return name.slice(-5);
+function bindPartitionTrackDrop(trackEl, partitionKey) {
+  if (!trackEl) {
+    return;
+  }
+  const key = normalizePartitionKey(partitionKey);
+  if (!key) {
+    return;
+  }
+
+  trackEl.addEventListener("dragover", (event) => {
+    if (!currentDirectionIsPartitioned()) {
+      return;
+    }
+    event.preventDefault();
+    trackEl.classList.add("drag-over");
+  });
+
+  trackEl.addEventListener("dragleave", () => {
+    trackEl.classList.remove("drag-over");
+  });
+
+  trackEl.addEventListener("drop", async (event) => {
+    trackEl.classList.remove("drag-over");
+    if (!currentDirectionIsPartitioned()) {
+      return;
+    }
+    event.preventDefault();
+    if (!event.dataTransfer || !event.dataTransfer.files) {
+      return;
+    }
+    await addArtworkFiles(event.dataTransfer.files, key);
+  });
 }
 
 function reorderArtworksByIds(idOrder) {
@@ -2161,7 +2251,7 @@ async function init() {
   syncSpeedReadout();
   loopRowGap = currentRowGap();
   renderLoopPreview();
-  renderPartitionArtworkLists();
+  renderPartitionEditors();
   syncDirectionModeUI();
 
   if (speedControl) {
@@ -2271,6 +2361,10 @@ async function init() {
       }
     });
   }
+
+  bindPartitionTrackDrop(partitionTrackLeft, "left");
+  bindPartitionTrackDrop(partitionTrackCurve, "curve");
+  bindPartitionTrackDrop(partitionTrackRight, "right");
 
   if (loopVisualization) {
     loopVisualization.addEventListener("pointermove", (event) => {

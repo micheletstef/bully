@@ -562,7 +562,21 @@ body {
 .partitioned-uploads {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.partition-editor {
+  border: 1px solid #d0d0d0;
+  padding: 4px;
+  background: #fff;
+}
+
+.partition-editor-head {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .partitioned-uploads input[type="file"] {
@@ -579,6 +593,64 @@ body {
   margin-right: 8px;
   padding: 1px 6px;
   cursor: pointer;
+}
+
+.partition-preview-track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  border: 1px dashed #bdbdbd;
+  padding: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #fafafa;
+}
+
+.partition-preview-track.drag-over {
+  border-color: #d30000;
+  background: #f7f7f7;
+}
+
+.partition-preview-item {
+  position: relative;
+  flex: 0 0 auto;
+  height: 20px;
+  outline: 1px solid rgba(0, 0, 0, 0.2);
+  outline-offset: -1px;
+  cursor: grab;
+  background: #fff;
+}
+
+.partition-preview-item img {
+  height: 100%;
+  width: auto;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.partition-preview-item .remove-partition-item {
+  position: absolute;
+  right: 0;
+  top: 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b6b6b;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10px;
+  line-height: 1;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.partition-preview-item:hover .remove-partition-item,
+.partition-preview-item:focus-within .remove-partition-item {
+  opacity: 1;
 }
 
 @media (max-width: 1000px) {

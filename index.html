@@ -139,21 +139,27 @@
               </section>
               <section class="settings-group">
                 <div id="partitionedUploads" class="partitioned-uploads" style="display: none">
-                  <div class="settings-row">
-                    <span class="settings-label">facing 7th</span>
-                    <input id="partitionUploadLeft" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  <div class="partition-editor">
+                    <div class="partition-editor-head">
+                      <span class="settings-label">facing 7th</span>
+                      <input id="partitionUploadLeft" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                    </div>
+                    <div id="partitionTrackLeft" class="partition-preview-track" data-partition-key="left"></div>
                   </div>
-                  <div id="partitionListLeft" class="artwork-list"></div>
-                  <div class="settings-row">
-                    <span class="settings-label">curve</span>
-                    <input id="partitionUploadCurve" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  <div class="partition-editor">
+                    <div class="partition-editor-head">
+                      <span class="settings-label">curve</span>
+                      <input id="partitionUploadCurve" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                    </div>
+                    <div id="partitionTrackCurve" class="partition-preview-track" data-partition-key="curve"></div>
                   </div>
-                  <div id="partitionListCurve" class="artwork-list"></div>
-                  <div class="settings-row">
-                    <span class="settings-label">facing 47th</span>
-                    <input id="partitionUploadRight" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  <div class="partition-editor">
+                    <div class="partition-editor-head">
+                      <span class="settings-label">facing 47th</span>
+                      <input id="partitionUploadRight" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                    </div>
+                    <div id="partitionTrackRight" class="partition-preview-track" data-partition-key="right"></div>
                   </div>
-                  <div id="partitionListRight" class="artwork-list"></div>
                 </div>
               </section>
               <section class="settings-group">
