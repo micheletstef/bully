@@ -34,6 +34,8 @@ let loopPreviewSortable = null;
 let latestPointer = { x: null, y: null };
 let loopElapsedSeconds = 0;
 let loopDurationSeconds = 16;
+let loopStageHeight = 1;
+let loopAssetGap = 0;
 
 function normalizeHref(href) {
   if (!href) {
@@ -506,11 +508,14 @@ function syncVisualizationBackground() {
   loopVisualization.style.background = currentBackgroundColor();
 }
 
-function syncVisualizationGap() {
-  if (!loopVisualization) {
+function syncVisualizationGapScaled() {
+  if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  loopVisualization.style.setProperty("--preview-gap", `${currentAssetGap()}px`);
+  const previewHeight = Math.max(1, loopPreviewTrack.clientHeight || 1);
+  const sourceHeight = Math.max(1, loopStageHeight);
+  const scaledGap = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
+  loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
 }
 
 function renderLoopPreview() {
@@ -534,6 +539,7 @@ function renderLoopPreview() {
   });
 
   initLoopSortable();
+  syncVisualizationGapScaled();
   updateActiveWindow();
 }
 
@@ -661,7 +667,11 @@ function updateActiveWindow() {
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s / ${loopDurationSeconds.toFixed(1)}s`;
-    loopElapsedTime.style.transform = `translateX(${drawX + activeWidth / 2}px) translateX(-50%)`;
+    const absoluteLeft = loopVisualization.offsetLeft + drawX + activeWidth / 2;
+    const absoluteTop = loopVisualization.offsetTop + loopVisualization.offsetHeight + 2;
+    loopElapsedTime.style.left = `${absoluteLeft}px`;
+    loopElapsedTime.style.top = `${absoluteTop}px`;
+    loopElapsedTime.style.transform = "translateX(-50%)";
   }
 }
 
@@ -821,7 +831,8 @@ async function init() {
   if (assetGapControl) {
     assetGapControl.addEventListener("input", () => {
       saveAssetGap(currentAssetGap());
-      syncVisualizationGap();
+      loopAssetGap = currentAssetGap();
+      syncVisualizationGapScaled();
       sendLoopConfigToPreview();
     });
   }
@@ -868,6 +879,8 @@ async function init() {
     const viewportRatio = Number(payload.viewportRatio);
     const elapsedSeconds = Number(payload.elapsedSeconds);
     const durationSeconds = Number(payload.durationSeconds);
+    const stageHeight = Number(payload.stageHeight);
+    const assetGap = Number(payload.assetGap);
 
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
@@ -881,6 +894,13 @@ async function init() {
     if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
       loopDurationSeconds = durationSeconds;
     }
+    if (Number.isFinite(stageHeight) && stageHeight > 0) {
+      loopStageHeight = stageHeight;
+    }
+    if (Number.isFinite(assetGap) && assetGap >= 0) {
+      loopAssetGap = assetGap;
+    }
+    syncVisualizationGapScaled();
     updateActiveWindow();
   });
 
@@ -896,7 +916,8 @@ async function init() {
   });
 
   syncVisualizationBackground();
-  syncVisualizationGap();
+  loopAssetGap = currentAssetGap();
+  syncVisualizationGapScaled();
 }
 
 init();

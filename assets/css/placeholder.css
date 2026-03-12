@@ -299,9 +299,6 @@ body {
 
 .loop-elapsed-time {
   position: absolute;
-  top: 52px;
-  left: 0;
-  transform: translateX(-50%);
   font-size: 10px;
   color: #aa0000;
   white-space: nowrap;
