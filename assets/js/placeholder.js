@@ -126,6 +126,7 @@ const preview3dThreeState = {
   textureSource: "",
   textureRequestToken: 0
 };
+let hasWarnedMissingThree = false;
 const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
@@ -1038,9 +1039,13 @@ function ensureThreePreviewSetup() {
   }
   const THREE = getThreeLib();
   if (!THREE) {
-    console.warn("THREE is not available on window.");
+    if (!hasWarnedMissingThree) {
+      console.warn("THREE is not available on window.");
+      hasWarnedMissingThree = true;
+    }
     return false;
   }
+  hasWarnedMissingThree = false;
   if (preview3dThreeState.renderer && preview3dThreeState.scene && preview3dThreeState.camera && preview3dThreeState.mesh) {
     return true;
   }
@@ -3557,6 +3562,12 @@ async function init() {
     });
     updatePartitionActiveWindows();
     sendLoopConfigToPreview();
+    if (previewViewMode === "3d") {
+      render3dPreview();
+    }
+  });
+
+  window.addEventListener("three-ready", () => {
     if (previewViewMode === "3d") {
       render3dPreview();
     }
