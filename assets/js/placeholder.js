@@ -14,6 +14,15 @@ const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
 const saveVersionButton = document.getElementById("saveVersionButton");
 const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
+const settingsTitle = document.getElementById("settingsTitle");
+const appShell = document.querySelector(".app-shell");
+const partitionedUploads = document.getElementById("partitionedUploads");
+const partitionUploadLeft = document.getElementById("partitionUploadLeft");
+const partitionUploadCurve = document.getElementById("partitionUploadCurve");
+const partitionUploadRight = document.getElementById("partitionUploadRight");
+const partitionListLeft = document.getElementById("partitionListLeft");
+const partitionListCurve = document.getElementById("partitionListCurve");
+const partitionListRight = document.getElementById("partitionListRight");
 let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
@@ -30,10 +39,19 @@ const STORAGE_KEYS = {
   rowGap: "billboard.loopRowGap",
   reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
-  artworks: "billboard.loopArtworks"
+  artworks: "billboard.loopArtworks",
+  partitionArtworks: "billboard.partitionArtworks"
 };
+const PARTITION_DIRECTION_NAME = "partitioned";
+const PARTITION_KEYS = ["left", "curve", "right"];
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
+const DEFAULT_PARTITION_ARTWORKS = {
+  left: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
+  curve: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
+  right: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")]
+};
 let loopArtworks = [...DEFAULT_ARTWORKS];
+let partitionArtworks = createDefaultPartitionArtworks();
 let draggingArtworkIndex = null;
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
@@ -54,6 +72,7 @@ let loopRowGap = 0;
 let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
+let activeDirectionName = null;
 
 function getAppBasePath() {
   const path = window.location.pathname || "/";
@@ -145,6 +164,33 @@ function normalizeArtworkItem(item) {
     src,
     name
   };
+}
+
+function cloneArtworkItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => normalizeArtworkItem(item))
+    .filter((item) => item !== null);
+}
+
+function createDefaultPartitionArtworks() {
+  return {
+    left: cloneArtworkItems(DEFAULT_PARTITION_ARTWORKS.left),
+    curve: cloneArtworkItems(DEFAULT_PARTITION_ARTWORKS.curve),
+    right: cloneArtworkItems(DEFAULT_PARTITION_ARTWORKS.right)
+  };
+}
+
+function normalizePartitionKey(key) {
+  const clean = String(key || "").toLowerCase();
+  return PARTITION_KEYS.includes(clean) ? clean : null;
+}
+
+function isPartitionedDirection(name) {
+  return String(name || "").toLowerCase() === PARTITION_DIRECTION_NAME;
+}
+
+function currentDirectionIsPartitioned() {
+  return isPartitionedDirection(activeDirectionName || getCurrentDirectionName());
 }
 
 function fileExtension(name) {
@@ -404,14 +450,11 @@ function loadOutputSnapshot(snapshot) {
     return;
   }
   const rawHtml = typeof snapshot.html === "string" ? snapshot.html : "";
-  const hasPlaybackEmitter = rawHtml.includes('type: "loopPlayback"');
   const hasConfig = snapshot.config && typeof snapshot.config === "object";
-  const renderedHtml =
-    rawHtml.trim() && (hasPlaybackEmitter || !hasConfig)
-      ? rawHtml
-      : hasConfig
-        ? buildSnapshotHtml(snapshot.config)
-        : "";
+  const normalizedConfig = hasConfig
+    ? coerceSnapshotLoopConfig(snapshot.config)
+    : extractLoopConfigFromSnapshotHtml(rawHtml);
+  const renderedHtml = normalizedConfig ? buildSnapshotHtml(normalizedConfig) : rawHtml;
   if (!renderedHtml.trim()) {
     return;
   }
@@ -672,16 +715,18 @@ function buildSnapshotHtml(config) {
       let primaryTrack = null;
 
       function normalizeArtworkSource(path) {
-        if (/^(https?:|data:|blob:)/.test(path)) {
-          return path;
+        const source = String(path || "").trim();
+        if (!source) {
+          return "";
         }
-        if (path.startsWith("../../") || path.startsWith("../")) {
-          return path;
+        if (/^(https?:|data:|blob:)/.test(source)) {
+          return source;
         }
-        if (path.startsWith("assets/")) {
-          return path;
+        const assetsIndex = source.indexOf("assets/");
+        if (assetsIndex >= 0) {
+          return source.slice(assetsIndex);
         }
-        return path;
+        return source;
       }
 
       function waitForImage(img) {
@@ -848,6 +893,78 @@ function buildSnapshotHtml(config) {
     <\/script>
   </body>
 </html>`;
+}
+
+function coerceSnapshotLoopConfig(candidate) {
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  const secondsRaw = Number(candidate.seconds);
+  const seconds = Number.isFinite(secondsRaw) && secondsRaw > 0 ? secondsRaw : 16;
+  const artworks = Array.isArray(candidate.artworks)
+    ? candidate.artworks
+      .map((item) => String(item).trim())
+      .map((item) => normalizeSnapshotArtworkSource(item))
+      .filter((item) => item.length > 0)
+    : [];
+
+  const padTopBottomRaw = Number(candidate.padTopBottom);
+  const padLeftRightRaw = Number(candidate.padLeftRight);
+  const assetGapRaw = Number(candidate.assetGap);
+  const rowCountRaw = Number(candidate.rowCount);
+  const rowOffsetRaw = Number(candidate.rowOffset);
+  const rowGapRaw = Number(candidate.rowGap);
+  const backgroundColor =
+    typeof candidate.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.backgroundColor)
+      ? candidate.backgroundColor
+      : "#fff8a5";
+
+  return {
+    seconds,
+    artworks,
+    padTopBottom: Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0 ? padTopBottomRaw : 0,
+    padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
+    backgroundColor,
+    assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : 0,
+    rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
+    rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
+    rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
+    reverseOddRows: !!candidate.reverseOddRows
+  };
+}
+
+function normalizeSnapshotArtworkSource(path) {
+  const source = String(path || "").trim();
+  if (!source) {
+    return "";
+  }
+  if (/^(https?:|data:|blob:)/.test(source)) {
+    return source;
+  }
+  const assetsIndex = source.indexOf("assets/");
+  if (assetsIndex >= 0) {
+    return source.slice(assetsIndex);
+  }
+  return source;
+}
+
+function extractLoopConfigFromSnapshotHtml(html) {
+  if (typeof html !== "string" || !html.trim()) {
+    return null;
+  }
+
+  const match = html.match(/const\s+state\s*=\s*(\{[\s\S]*?\})\s*;/);
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const parsed = Function(`"use strict"; return (${match[1]});`)();
+    return coerceSnapshotLoopConfig(parsed);
+  } catch (error) {
+    return null;
+  }
 }
 
 async function fetchOutputsFromServer() {
@@ -1099,6 +1216,10 @@ function saveArtworks(artworks) {
   writeStorage(STORAGE_KEYS.artworks, JSON.stringify(artworks));
 }
 
+function savePartitionArtworks(artworksByPartition) {
+  writeStorage(STORAGE_KEYS.partitionArtworks, JSON.stringify(artworksByPartition));
+}
+
 function restoreArtworks() {
   const rawValue = readStorage(STORAGE_KEYS.artworks);
   if (!rawValue) {
@@ -1116,6 +1237,30 @@ function restoreArtworks() {
     return cleaned.length ? cleaned : [...DEFAULT_ARTWORKS];
   } catch (error) {
     return [...DEFAULT_ARTWORKS];
+  }
+}
+
+function restorePartitionArtworks() {
+  const defaults = createDefaultPartitionArtworks();
+  const rawValue = readStorage(STORAGE_KEYS.partitionArtworks);
+  if (!rawValue) {
+    return defaults;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== "object") {
+      return defaults;
+    }
+
+    const restored = {};
+    PARTITION_KEYS.forEach((key) => {
+      const cleaned = cloneArtworkItems(parsed[key]);
+      restored[key] = cleaned.length ? cleaned : cloneArtworkItems(defaults[key]);
+    });
+    return restored;
+  } catch (error) {
+    return defaults;
   }
 }
 

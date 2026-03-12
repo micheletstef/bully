@@ -329,6 +329,11 @@ body {
   display: none;
 }
 
+.app-shell.partitioned-mode .loop-visualization,
+.app-shell.partitioned-mode #loopElapsedTime {
+  display: none !important;
+}
+
 .billboard-info {
   position: fixed;
   top: 18px;
@@ -545,6 +550,28 @@ body {
 }
 
 .add-artwork-row input::file-selector-button {
+  border: 1px solid #b3b3b3;
+  background: #fff;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  margin-right: 8px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.partitioned-uploads {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.partitioned-uploads input[type="file"] {
+  width: 100%;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+}
+
+.partitioned-uploads input[type="file"]::file-selector-button {
   border: 1px solid #b3b3b3;
   background: #fff;
   font-family: "Courier New", Courier, monospace;

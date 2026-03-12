@@ -86,7 +86,7 @@
             </table>
 
             <div class="settings-panel">
-              <h3 class="settings-title">linear loop settings</h3>
+              <h3 id="settingsTitle" class="settings-title">linear loop settings</h3>
 
               <section class="settings-group">
                 <div class="settings-row">
@@ -135,6 +135,25 @@
                 <div class="settings-row">
                   <span class="settings-label">reverse odd rows</span>
                   <input id="reverseOddRowsControl" type="checkbox" />
+                </div>
+              </section>
+              <section class="settings-group">
+                <div id="partitionedUploads" class="partitioned-uploads" style="display: none">
+                  <div class="settings-row">
+                    <span class="settings-label">facing 7th</span>
+                    <input id="partitionUploadLeft" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  </div>
+                  <div id="partitionListLeft" class="artwork-list"></div>
+                  <div class="settings-row">
+                    <span class="settings-label">curve</span>
+                    <input id="partitionUploadCurve" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  </div>
+                  <div id="partitionListCurve" class="artwork-list"></div>
+                  <div class="settings-row">
+                    <span class="settings-label">facing 47th</span>
+                    <input id="partitionUploadRight" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf" multiple />
+                  </div>
+                  <div id="partitionListRight" class="artwork-list"></div>
                 </div>
               </section>
               <section class="settings-group">
