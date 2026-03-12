@@ -99,6 +99,12 @@ let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
 const preview3dImageCache = new Map();
+const preview3dCamera = {
+  yaw: -0.78,
+  pitch: 0.96,
+  perspective: 1
+};
+let preview3dDragState = null;
 
 function getAppBasePath() {
   const path = window.location.pathname || "/";
@@ -701,12 +707,10 @@ function buildTopViewSpine() {
 }
 
 function projectBillboardVertex(x, y, z) {
-  const yaw = -0.78;
-  const pitch = 0.96;
-  const cosYaw = Math.cos(yaw);
-  const sinYaw = Math.sin(yaw);
-  const cosPitch = Math.cos(pitch);
-  const sinPitch = Math.sin(pitch);
+  const cosYaw = Math.cos(preview3dCamera.yaw);
+  const sinYaw = Math.sin(preview3dCamera.yaw);
+  const cosPitch = Math.cos(preview3dCamera.pitch);
+  const sinPitch = Math.sin(preview3dCamera.pitch);
 
   const x1 = x * cosYaw - y * sinYaw;
   const y1 = x * sinYaw + y * cosYaw;
@@ -716,7 +720,7 @@ function projectBillboardVertex(x, y, z) {
   const z2 = y1 * sinPitch + z1 * cosPitch;
 
   const cameraDepth = 6400;
-  const focal = 4600;
+  const focal = 4600 * preview3dCamera.perspective;
   const denom = Math.max(320, cameraDepth + y2);
   const perspective = focal / denom;
 
@@ -724,6 +728,78 @@ function projectBillboardVertex(x, y, z) {
     x: x1 * perspective,
     y: -z2 * perspective
   };
+}
+
+function clampPreview3dCamera() {
+  preview3dCamera.pitch = Math.min(1.45, Math.max(0.2, preview3dCamera.pitch));
+  preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+}
+
+function clear3dDragState() {
+  preview3dDragState = null;
+  if (billboard3dCanvas) {
+    billboard3dCanvas.style.cursor = "grab";
+  }
+}
+
+function apply3dDrag(clientX, clientY) {
+  if (!preview3dDragState) {
+    return;
+  }
+  const dx = clientX - preview3dDragState.lastX;
+  const dy = clientY - preview3dDragState.lastY;
+  preview3dDragState.lastX = clientX;
+  preview3dDragState.lastY = clientY;
+
+  if (preview3dDragState.adjustPerspective) {
+    preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003;
+  } else {
+    preview3dCamera.yaw += dx * 0.005;
+    preview3dCamera.pitch -= dy * 0.004;
+  }
+  clampPreview3dCamera();
+  if (previewViewMode === "3d") {
+    draw3dFrame();
+  }
+}
+
+function setup3dCanvasInteraction() {
+  if (!billboard3dCanvas) {
+    return;
+  }
+  billboard3dCanvas.style.cursor = "grab";
+  billboard3dCanvas.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+  });
+  billboard3dCanvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 && event.button !== 2) {
+      return;
+    }
+    preview3dDragState = {
+      lastX: event.clientX,
+      lastY: event.clientY,
+      adjustPerspective: event.button === 2 || event.shiftKey
+    };
+    billboard3dCanvas.style.cursor = "grabbing";
+    try {
+      billboard3dCanvas.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore capture failures.
+    }
+    event.preventDefault();
+  });
+  billboard3dCanvas.addEventListener("pointermove", (event) => {
+    apply3dDrag(event.clientX, event.clientY);
+  });
+  billboard3dCanvas.addEventListener("pointerup", () => {
+    clear3dDragState();
+  });
+  billboard3dCanvas.addEventListener("pointercancel", () => {
+    clear3dDragState();
+  });
+  billboard3dCanvas.addEventListener("pointerleave", () => {
+    clear3dDragState();
+  });
 }
 
 function draw3dFrame() {
@@ -3148,6 +3224,7 @@ async function init() {
     }
   });
 
+  setup3dCanvasInteraction();
   syncVisualizationBackground();
   loopAssetGap = currentAssetGap();
   loopPadTopBottom = currentPadTopBottom();
