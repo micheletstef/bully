@@ -243,12 +243,18 @@ body {
   position: absolute;
   top: calc(4px + var(--preview-pad-tb, 0px));
   bottom: calc(4px + var(--preview-pad-tb, 0px));
-  left: calc(4px + var(--preview-pad-lr, 0px));
+  left: 4px;
   display: flex;
   width: fit-content;
   height: auto;
   gap: var(--preview-gap, 0px);
   z-index: 1;
+}
+
+.loop-preview-track::before,
+.loop-preview-track::after {
+  content: "";
+  flex: 0 0 var(--preview-pad-lr, 0px);
 }
 
 .loop-preview-item {

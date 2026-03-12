@@ -616,10 +616,7 @@ function syncVisualizationGeometry() {
   if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
     return;
   }
-  const previewPadLR = Number.parseFloat(
-    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-lr")
-  );
-  const horizontalPadding = 8 + (Number.isFinite(previewPadLR) ? previewPadLR * 2 : 0);
+  const horizontalPadding = 8;
   loopVisualization.style.width = `${totalWidth + horizontalPadding}px`;
 }
 
