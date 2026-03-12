@@ -23,7 +23,7 @@ body {
   width: 300px;
   overflow: auto;
   padding: 18px 14px 24px;
-  background: #fff;
+  background: transparent;
   z-index: 10;
 }
 
@@ -44,7 +44,7 @@ body {
   width: 100%;
   border: 0;
   text-align: left;
-  background: #fff;
+  background: transparent;
   color: #1f1f1f;
   padding: 2px 0;
   font-family: "Courier New", Courier, monospace;
@@ -60,7 +60,7 @@ body {
 .direction-item:hover,
 .direction-item:focus {
   color: #1f1f1f;
-  background: #fff;
+  background: transparent;
   outline: none;
 }
 
@@ -109,32 +109,34 @@ body {
   bottom: 24px;
   transform: translateX(-50%);
   width: min(76vw, 1180px);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  display: block;
 }
 
-.info-card {
-  background: #000;
-  color: #fff;
-  padding: 18px;
-  font-family: Arial, Helvetica, sans-serif;
-  line-height: 1.25;
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  color: #1f1f1f;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 12px;
 }
 
-.info-card h3 {
-  margin: 0 0 12px;
-  font-size: 18px;
+.spec-table th,
+.spec-table td {
+  border: 1px solid #8d8d8d;
+  padding: 6px 8px;
+  vertical-align: top;
 }
 
-.info-card p {
-  margin: 0 0 8px;
-  font-size: 14px;
+.spec-table th {
+  width: 180px;
+  text-align: left;
+  font-weight: 400;
+  text-transform: lowercase;
 }
 
 @media (max-width: 1000px) {
   .billboard-info {
-    grid-template-columns: 1fr;
     width: min(92vw, 1180px);
   }
 }
