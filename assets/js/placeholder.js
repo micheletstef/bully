@@ -841,7 +841,7 @@ function buildSnapshotHtml(config) {
       }
 
       .loop-artwork.vertical {
-        transform: rotate(90deg);
+        transform: rotate(-90deg);
         transform-origin: center;
       }
 
@@ -977,8 +977,20 @@ function buildSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapSize = Math.max(0, Number(state.assetGap) || 0);
         const verticalFlow = state.artworkOrientation === "vertical";
+
+        if (verticalFlow) {
+          allImages.forEach((image) => {
+            const rect = image.getBoundingClientRect();
+            const extraSpacing = Math.max(0, rect.width - rect.height);
+            image.style.marginBottom = extraSpacing + "px";
+          });
+        } else {
+          allImages.forEach((image) => {
+            image.style.marginBottom = "0px";
+          });
+        }
+        const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -1180,7 +1192,7 @@ function buildPartitionedSnapshotHtml(config) {
       }
 
       .loop-artwork.vertical {
-        transform: rotate(90deg);
+        transform: rotate(-90deg);
         transform-origin: center;
       }
 
@@ -1320,6 +1332,18 @@ function buildPartitionedSnapshotHtml(config) {
         }
 
         await Promise.all(allImages.map(waitForImage));
+
+        if (verticalFlow) {
+          allImages.forEach((image) => {
+            const rect = image.getBoundingClientRect();
+            const extraSpacing = Math.max(0, rect.width - rect.height);
+            image.style.marginBottom = extraSpacing + "px";
+          });
+        } else {
+          allImages.forEach((image) => {
+            image.style.marginBottom = "0px";
+          });
+        }
 
         const gapSize = Math.max(0, Number(state.assetGap) || 0);
         let loopDistance = 0;
