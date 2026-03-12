@@ -1365,7 +1365,7 @@ async function syncThreeLoopTexture() {
   );
   const createTextureFromCanvas = (canvas) => {
     const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
@@ -1513,10 +1513,21 @@ function renderThreeFrame() {
       if (!partitionTexture) {
         return;
       }
+      const ratioRaw = Number(partitionViewportRatios[partitionKey]);
+      const viewportRatio = Number.isFinite(ratioRaw)
+        ? Math.max(0.01, Math.min(1, ratioRaw))
+        : Math.max(0.01, Math.min(1, loopPlaybackViewportRatio || 0.25));
+      partitionTexture.repeat.x = 0.5 * viewportRatio;
+      partitionTexture.repeat.y = 1;
       partitionTexture.offset.x = progress * 0.5;
       partitionTexture.offset.y = 0;
     });
   } else if (texture) {
+    const viewportRatio = Number.isFinite(loopPlaybackViewportRatio)
+      ? Math.max(0.01, Math.min(1, loopPlaybackViewportRatio))
+      : 0.25;
+    texture.repeat.x = 0.5 * viewportRatio;
+    texture.repeat.y = 1;
     texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
     texture.offset.y = preview3dThreeState.textureOffsetY;
   }
