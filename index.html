@@ -143,9 +143,35 @@
                   <span class="settings-label">asset gap</span>
                   <input id="assetGapControl" type="number" min="0" max="800" step="1" value="0" />
                 </div>
-                <div class="settings-row">
-                  <span class="settings-label">artwork rotation</span>
-                  <input id="artworkRotationControl" type="number" min="-180" max="180" step="1" value="0" />
+                <div id="linearOrientationRow" class="settings-row">
+                  <span class="settings-label">artwork orientation</span>
+                  <select id="artworkOrientationControl">
+                    <option value="horizontal">horizontal</option>
+                    <option value="vertical">vertical</option>
+                  </select>
+                </div>
+                <div id="partitionOrientationRows">
+                  <div class="settings-row">
+                    <span class="settings-label">facing 7th orientation</span>
+                    <select id="partitionOrientationLeftControl">
+                      <option value="horizontal">horizontal</option>
+                      <option value="vertical">vertical</option>
+                    </select>
+                  </div>
+                  <div class="settings-row">
+                    <span class="settings-label">curve orientation</span>
+                    <select id="partitionOrientationCurveControl">
+                      <option value="horizontal">horizontal</option>
+                      <option value="vertical">vertical</option>
+                    </select>
+                  </div>
+                  <div class="settings-row">
+                    <span class="settings-label">facing 47th orientation</span>
+                    <select id="partitionOrientationRightControl">
+                      <option value="horizontal">horizontal</option>
+                      <option value="vertical">vertical</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="settings-row">
                   <span class="settings-label">rows</span>

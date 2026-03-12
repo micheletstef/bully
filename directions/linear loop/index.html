@@ -13,7 +13,6 @@
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
-        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -85,7 +84,10 @@
         height: 100%;
         width: auto;
         flex: 0 0 auto;
-        transform: rotate(var(--loop-artwork-rotation));
+      }
+
+      .loop-artwork.vertical {
+        transform: rotate(90deg);
         transform-origin: center;
       }
 
@@ -112,7 +114,7 @@
         backgroundColor: "#fff8a5",
         loopDistance: 1024,
         assetGap: 0,
-        artworkRotation: 0,
+        artworkOrientation: "horizontal",
         rowCount: 1,
         rowOffset: 0,
         rowGap: 0,
@@ -175,7 +177,8 @@
 
           sources.forEach((src) => {
             const image = document.createElement("img");
-            image.className = "loop-artwork";
+            image.className =
+              state.artworkOrientation === "vertical" ? "loop-artwork vertical" : "loop-artwork";
             image.src = src;
             image.alt = "";
             track.appendChild(image);
@@ -252,10 +255,6 @@
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${gapWidth}px`);
         document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);
-        document.documentElement.style.setProperty(
-          "--loop-artwork-rotation",
-          `${Number(state.artworkRotation) || 0}deg`
-        );
         emitPlayback();
       }
 
@@ -335,9 +334,14 @@
           state.assetGap = assetGap;
         }
 
-        const artworkRotation = Number(payload.artworkRotation);
-        if (Number.isFinite(artworkRotation)) {
-          state.artworkRotation = Math.max(-180, Math.min(180, artworkRotation));
+        if (typeof payload.artworkOrientation === "string") {
+          state.artworkOrientation = payload.artworkOrientation === "vertical" ? "vertical" : "horizontal";
+        } else {
+          const artworkRotation = Number(payload.artworkRotation);
+          if (Number.isFinite(artworkRotation)) {
+            const normalized = ((artworkRotation % 360) + 360) % 360;
+            state.artworkOrientation = normalized === 90 || normalized === 270 ? "vertical" : "horizontal";
+          }
         }
 
         const rowCount = Number(payload.rowCount);

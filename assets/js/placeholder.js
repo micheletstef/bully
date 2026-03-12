@@ -7,7 +7,12 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const assetGapControl = document.getElementById("assetGapControl");
-const artworkRotationControl = document.getElementById("artworkRotationControl");
+const artworkOrientationControl = document.getElementById("artworkOrientationControl");
+const linearOrientationRow = document.getElementById("linearOrientationRow");
+const partitionOrientationRows = document.getElementById("partitionOrientationRows");
+const partitionOrientationLeftControl = document.getElementById("partitionOrientationLeftControl");
+const partitionOrientationCurveControl = document.getElementById("partitionOrientationCurveControl");
+const partitionOrientationRightControl = document.getElementById("partitionOrientationRightControl");
 const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
@@ -32,7 +37,8 @@ const STORAGE_KEYS = {
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
   assetGap: "billboard.loopAssetGap",
-  artworkRotation: "billboard.loopArtworkRotation",
+  artworkOrientation: "billboard.loopArtworkOrientation",
+  partitionArtworkOrientations: "billboard.partitionArtworkOrientations",
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
   rowGap: "billboard.loopRowGap",
@@ -476,6 +482,12 @@ function syncDirectionModeUI() {
     const base = activeDirectionName || "linear loop";
     settingsTitle.textContent = `${base} settings`;
   }
+  if (linearOrientationRow) {
+    linearOrientationRow.style.display = partitioned ? "none" : "";
+  }
+  if (partitionOrientationRows) {
+    partitionOrientationRows.style.display = partitioned ? "" : "none";
+  }
   if (partitioned) {
     if (loopActiveWindow) {
       loopActiveWindow.style.display = "none";
@@ -585,15 +597,38 @@ function currentAssetGap() {
   return Number(assetGapControl.value) || 0;
 }
 
-function currentArtworkRotation() {
-  if (!artworkRotationControl) {
-    return 0;
+function normalizeArtworkOrientation(value) {
+  return String(value || "").toLowerCase() === "vertical" ? "vertical" : "horizontal";
+}
+
+function rotationToOrientation(value) {
+  const rotation = Number(value);
+  if (!Number.isFinite(rotation)) {
+    return "horizontal";
   }
-  const parsed = Number(artworkRotationControl.value);
-  if (!Number.isFinite(parsed)) {
-    return 0;
+  const normalized = ((rotation % 360) + 360) % 360;
+  return normalized === 90 || normalized === 270 ? "vertical" : "horizontal";
+}
+
+function currentArtworkOrientation() {
+  if (!artworkOrientationControl) {
+    return "horizontal";
   }
-  return Math.max(-180, Math.min(180, parsed));
+  return normalizeArtworkOrientation(artworkOrientationControl.value);
+}
+
+function currentPartitionArtworkOrientations() {
+  return {
+    left: normalizeArtworkOrientation(
+      partitionOrientationLeftControl ? partitionOrientationLeftControl.value : "horizontal"
+    ),
+    curve: normalizeArtworkOrientation(
+      partitionOrientationCurveControl ? partitionOrientationCurveControl.value : "horizontal"
+    ),
+    right: normalizeArtworkOrientation(
+      partitionOrientationRightControl ? partitionOrientationRightControl.value : "horizontal"
+    )
+  };
 }
 
 function currentRowCount() {
@@ -671,7 +706,7 @@ function getCurrentLoopConfig() {
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
     assetGap: currentAssetGap(),
-    artworkRotation: currentArtworkRotation(),
+    artworkOrientation: currentArtworkOrientation(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
@@ -685,6 +720,7 @@ function getCurrentLoopConfig() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
+    config.artworkOrientations = currentPartitionArtworkOrientations();
   } else {
     config.artworks = loopArtworks.map((item) => item.src);
   }
@@ -718,7 +754,6 @@ function buildSnapshotHtml(config) {
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
-        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -788,7 +823,10 @@ function buildSnapshotHtml(config) {
         height: 100%;
         width: auto;
         flex: 0 0 auto;
-        transform: rotate(var(--loop-artwork-rotation));
+      }
+
+      .loop-artwork.vertical {
+        transform: rotate(90deg);
         transform-origin: center;
       }
 
@@ -866,7 +904,8 @@ function buildSnapshotHtml(config) {
 
           sources.forEach((src) => {
             const image = document.createElement("img");
-            image.className = "loop-artwork";
+            image.className =
+              state.artworkOrientation === "vertical" ? "loop-artwork vertical" : "loop-artwork";
             image.src = src;
             image.alt = "";
             track.appendChild(image);
@@ -940,10 +979,6 @@ function buildSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", gapWidth + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
-        document.documentElement.style.setProperty(
-          "--loop-artwork-rotation",
-          (Number(state.artworkRotation) || 0) + "deg"
-        );
         emitPlayback();
       }
 
@@ -1012,7 +1047,6 @@ function buildPartitionedSnapshotHtml(config) {
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
         --loop-row-gap: 0px;
-        --loop-artwork-rotation: 0deg;
       }
 
       html,
@@ -1089,7 +1123,10 @@ function buildPartitionedSnapshotHtml(config) {
         height: 100%;
         width: auto;
         flex: 0 0 auto;
-        transform: rotate(var(--loop-artwork-rotation));
+      }
+
+      .loop-artwork.vertical {
+        transform: rotate(90deg);
         transform-origin: center;
       }
 
@@ -1138,7 +1175,14 @@ function buildPartitionedSnapshotHtml(config) {
         });
       }
 
-      async function renderPartition(container, sources) {
+      function orientationForPartition(partitionKey) {
+        if (state.artworkOrientations && typeof state.artworkOrientations === "object") {
+          return state.artworkOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+        }
+        return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
+      }
+
+      async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
@@ -1163,7 +1207,10 @@ function buildPartitionedSnapshotHtml(config) {
 
           sources.forEach((src) => {
             const image = document.createElement("img");
-            image.className = "loop-artwork";
+            image.className =
+              orientationForPartition(partitionKey) === "vertical"
+                ? "loop-artwork vertical"
+                : "loop-artwork";
             image.src = src;
             image.alt = "";
             track.appendChild(image);
@@ -1241,10 +1288,6 @@ function buildPartitionedSnapshotHtml(config) {
         document.documentElement.style.setProperty("--loop-bg", safeBackground);
         document.documentElement.style.setProperty("--loop-gap", Math.max(0, Number(state.assetGap) || 0) + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
-        document.documentElement.style.setProperty(
-          "--loop-artwork-rotation",
-          (Number(state.artworkRotation) || 0) + "deg"
-        );
 
         const partitions = state.artworksByPartition && typeof state.artworksByPartition === "object"
           ? state.artworksByPartition
@@ -1257,7 +1300,7 @@ function buildPartitionedSnapshotHtml(config) {
           }
           const raw = Array.isArray(partitions[key]) ? partitions[key] : [];
           const sources = raw.length ? raw.map(normalizeArtworkSource) : [DEFAULT_SOURCE];
-          await renderPartition(container, sources);
+          await renderPartition(container, sources, key);
         }
       }
 
@@ -1307,7 +1350,19 @@ function coerceSnapshotLoopConfig(candidate) {
   const padTopBottomRaw = Number(candidate.padTopBottom);
   const padLeftRightRaw = Number(candidate.padLeftRight);
   const assetGapRaw = Number(candidate.assetGap);
-  const artworkRotationRaw = Number(candidate.artworkRotation);
+  const artworkOrientation = normalizeArtworkOrientation(
+    typeof candidate.artworkOrientation === "string"
+      ? candidate.artworkOrientation
+      : rotationToOrientation(candidate.artworkRotation)
+  );
+  const artworkOrientations =
+    candidate.artworkOrientations && typeof candidate.artworkOrientations === "object"
+      ? {
+          left: normalizeArtworkOrientation(candidate.artworkOrientations.left),
+          curve: normalizeArtworkOrientation(candidate.artworkOrientations.curve),
+          right: normalizeArtworkOrientation(candidate.artworkOrientations.right)
+        }
+      : null;
   const rowCountRaw = Number(candidate.rowCount);
   const rowOffsetRaw = Number(candidate.rowOffset);
   const rowGapRaw = Number(candidate.rowGap);
@@ -1324,9 +1379,8 @@ function coerceSnapshotLoopConfig(candidate) {
     padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
     backgroundColor,
     assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : 0,
-    artworkRotation: Number.isFinite(artworkRotationRaw)
-      ? Math.max(-180, Math.min(180, artworkRotationRaw))
-      : 0,
+    artworkOrientation,
+    artworkOrientations,
     rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
     rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
     rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
@@ -1483,8 +1537,17 @@ function saveAssetGap(value) {
   writeStorage(STORAGE_KEYS.assetGap, String(value));
 }
 
-function saveArtworkRotation(value) {
-  writeStorage(STORAGE_KEYS.artworkRotation, String(value));
+function saveArtworkOrientation(value) {
+  writeStorage(STORAGE_KEYS.artworkOrientation, normalizeArtworkOrientation(value));
+}
+
+function savePartitionArtworkOrientations(value) {
+  const safe = {
+    left: normalizeArtworkOrientation(value && value.left),
+    curve: normalizeArtworkOrientation(value && value.curve),
+    right: normalizeArtworkOrientation(value && value.right)
+  };
+  writeStorage(STORAGE_KEYS.partitionArtworkOrientations, JSON.stringify(safe));
 }
 
 function saveRowCount(value) {
@@ -1568,15 +1631,31 @@ function restoreLoopLayoutSettings() {
     }
   }
 
-  if (artworkRotationControl) {
-    const raw = readStorage(STORAGE_KEYS.artworkRotation);
+  if (artworkOrientationControl) {
+    const raw = readStorage(STORAGE_KEYS.artworkOrientation);
     if (raw !== null) {
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed)) {
-        const min = Number(artworkRotationControl.min || -180);
-        const max = Number(artworkRotationControl.max || 180);
-        artworkRotationControl.value = String(Math.min(max, Math.max(min, parsed)));
+      artworkOrientationControl.value = normalizeArtworkOrientation(raw);
+    } else {
+      const legacyRaw = readStorage("billboard.loopArtworkRotation");
+      artworkOrientationControl.value = rotationToOrientation(legacyRaw);
+    }
+  }
+
+  const rawPartitionOrientations = readStorage(STORAGE_KEYS.partitionArtworkOrientations);
+  if (rawPartitionOrientations) {
+    try {
+      const parsed = JSON.parse(rawPartitionOrientations);
+      if (partitionOrientationLeftControl) {
+        partitionOrientationLeftControl.value = normalizeArtworkOrientation(parsed.left);
       }
+      if (partitionOrientationCurveControl) {
+        partitionOrientationCurveControl.value = normalizeArtworkOrientation(parsed.curve);
+      }
+      if (partitionOrientationRightControl) {
+        partitionOrientationRightControl.value = normalizeArtworkOrientation(parsed.right);
+      }
+    } catch (error) {
+      // Ignore invalid storage values.
     }
   }
 
@@ -1704,7 +1783,7 @@ function sendLoopConfigToPreview() {
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
     assetGap: currentAssetGap(),
-    artworkRotation: currentArtworkRotation(),
+    artworkOrientation: currentArtworkOrientation(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
@@ -1716,6 +1795,7 @@ function sendLoopConfigToPreview() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
+    payload.artworkOrientations = currentPartitionArtworkOrientations();
   } else {
     payload.artworks = loopArtworks.map((item) => item.src);
   }
@@ -1938,9 +2018,14 @@ async function initPartitionSortable(partitionKey, trackEl) {
       fallbackOnBody: true,
       fallbackTolerance: 4,
       draggable: ".partition-preview-item",
+      invertSwap: true,
+      swapThreshold: 0.65,
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
+      onChange: () => {
+        updatePartitionActiveWindows();
+      },
       onEnd: () => {
         const idOrder = [...trackEl.querySelectorAll(".partition-preview-item")]
           .map((node) => node.dataset.artworkId)
@@ -2475,12 +2560,21 @@ async function init() {
     });
   }
 
-  if (artworkRotationControl) {
-    artworkRotationControl.addEventListener("input", () => {
-      saveArtworkRotation(currentArtworkRotation());
+  if (artworkOrientationControl) {
+    artworkOrientationControl.addEventListener("change", () => {
+      saveArtworkOrientation(currentArtworkOrientation());
       sendLoopConfigToPreview();
     });
   }
+
+  [partitionOrientationLeftControl, partitionOrientationCurveControl, partitionOrientationRightControl]
+    .filter((control) => !!control)
+    .forEach((control) => {
+      control.addEventListener("change", () => {
+        savePartitionArtworkOrientations(currentPartitionArtworkOrientations());
+        sendLoopConfigToPreview();
+      });
+    });
 
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
