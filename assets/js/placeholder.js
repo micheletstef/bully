@@ -7,6 +7,16 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const previewViewModeControl = document.getElementById("previewViewModeControl");
+const openViewControlsButton = document.getElementById("openViewControlsButton");
+const closeViewControlsButton = document.getElementById("closeViewControlsButton");
+const viewControlsModal = document.getElementById("viewControlsModal");
+const cameraYawControl = document.getElementById("cameraYawControl");
+const cameraPitchControl = document.getElementById("cameraPitchControl");
+const cameraPerspectiveControl = document.getElementById("cameraPerspectiveControl");
+const cameraFitControl = document.getElementById("cameraFitControl");
+const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
+const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
+const resetViewControlsButton = document.getElementById("resetViewControlsButton");
 const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
 const linearOrientationRow = document.getElementById("linearOrientationRow");
@@ -45,6 +55,12 @@ const STORAGE_KEYS = {
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
   rowGap: "billboard.loopRowGap",
+  cameraYaw: "billboard.preview3dCameraYaw",
+  cameraPitch: "billboard.preview3dCameraPitch",
+  cameraPerspective: "billboard.preview3dCameraPerspective",
+  cameraFit: "billboard.preview3dCameraFit",
+  cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
+  cameraTextureQuality: "billboard.preview3dTextureQuality",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks"
@@ -90,6 +106,8 @@ let partitionLoopDistances = {
   right: 1
 };
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
+const BILLBOARD_DESIGN_WIDTH = 5900;
+const BILLBOARD_DESIGN_HEIGHT = 3480;
 let loopRowGap = 0;
 let knownDirections = [];
 let sharedOutputs = [];
@@ -103,6 +121,11 @@ const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
   perspective: 1
+};
+const preview3dRenderSettings = {
+  fit: 0.84,
+  dragSensitivity: 1,
+  textureQuality: 1.75
 };
 let preview3dDragState = null;
 
@@ -612,20 +635,28 @@ async function build3dSurfaceStrip(targetHeight) {
     return null;
   }
 
-  const pad = Math.max(0, Number(currentPadLeftRight()) || 0);
-  const gap = Math.max(0, Number(currentAssetGap()) || 0);
-  const stripHeight = Math.max(64, Math.round(targetHeight));
-  const widths = images.map((img) => {
+  const padLRDesign = Math.max(0, Number(currentPadLeftRight()) || 0);
+  const padTBDesign = Math.max(0, Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(currentPadTopBottom()) || 0));
+  const gapDesign = Math.max(0, Number(currentAssetGap()) || 0);
+  const artworkHeightDesign = Math.max(1, BILLBOARD_DESIGN_HEIGHT - padTBDesign * 2);
+  const scale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const stripHeight = Math.max(128, Math.round(BILLBOARD_DESIGN_HEIGHT * scale));
+  const artworkHeightPx = Math.max(1, Math.round(artworkHeightDesign * scale));
+  const padTBPx = Math.max(0, Math.round((stripHeight - artworkHeightPx) / 2));
+  const padLRPx = Math.max(0, Math.round(padLRDesign * scale));
+  const gapPx = Math.max(0, Math.round(gapDesign * scale));
+  const widthsDesign = images.map((img) => {
     const sourceWidth = Math.max(1, img.naturalWidth || img.width || 1);
     const sourceHeight = Math.max(1, img.naturalHeight || img.height || 1);
     if (orientation === "vertical") {
-      return Math.max(1, (sourceHeight / sourceWidth) * stripHeight);
+      return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign);
     }
-    return Math.max(1, (sourceWidth / sourceHeight) * stripHeight);
+    return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign);
   });
+  const widths = widthsDesign.map((width) => Math.max(1, Math.round(width * scale)));
   const sequenceWidth = Math.max(
     1,
-    Math.round(pad * 2 + widths.reduce((sum, value) => sum + value, 0) + Math.max(0, images.length - 1) * gap)
+    Math.round(padLRPx * 2 + widths.reduce((sum, value) => sum + value, 0) + Math.max(0, images.length - 1) * gapPx)
   );
   const stripCanvas = document.createElement("canvas");
   stripCanvas.width = sequenceWidth * 2;
@@ -634,23 +665,25 @@ async function build3dSurfaceStrip(targetHeight) {
   if (!stripCtx) {
     return null;
   }
+  stripCtx.imageSmoothingEnabled = true;
+  stripCtx.imageSmoothingQuality = "high";
 
   const drawSequence = (startX) => {
-    let cursor = startX + pad;
+    let cursor = startX + padLRPx;
     images.forEach((img, idx) => {
       const drawWidth = widths[idx];
       if (orientation === "vertical") {
         stripCtx.save();
-        stripCtx.translate(cursor + drawWidth / 2, stripHeight / 2);
+        stripCtx.translate(cursor + drawWidth / 2, padTBPx + artworkHeightPx / 2);
         stripCtx.rotate(-Math.PI / 2);
-        stripCtx.drawImage(img, -stripHeight / 2, -drawWidth / 2, stripHeight, drawWidth);
+        stripCtx.drawImage(img, -artworkHeightPx / 2, -drawWidth / 2, artworkHeightPx, drawWidth);
         stripCtx.restore();
       } else {
-        stripCtx.drawImage(img, cursor, 0, drawWidth, stripHeight);
+        stripCtx.drawImage(img, cursor, padTBPx, drawWidth, artworkHeightPx);
       }
       cursor += drawWidth;
       if (idx < images.length - 1) {
-        cursor += gap;
+        cursor += gapPx;
       }
     });
   };
@@ -733,6 +766,92 @@ function projectBillboardVertex(x, y, z) {
 function clampPreview3dCamera() {
   preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+  preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
+  preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
+  preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
+}
+
+function syncViewControlsUI() {
+  if (cameraYawControl) {
+    cameraYawControl.value = String(preview3dCamera.yaw);
+  }
+  if (cameraPitchControl) {
+    cameraPitchControl.value = String(preview3dCamera.pitch);
+  }
+  if (cameraPerspectiveControl) {
+    cameraPerspectiveControl.value = String(preview3dCamera.perspective);
+  }
+  if (cameraFitControl) {
+    cameraFitControl.value = String(preview3dRenderSettings.fit);
+  }
+  if (cameraDragSensitivityControl) {
+    cameraDragSensitivityControl.value = String(preview3dRenderSettings.dragSensitivity);
+  }
+  if (cameraTextureQualityControl) {
+    cameraTextureQualityControl.value = String(preview3dRenderSettings.textureQuality);
+  }
+  if (previewViewModeControl) {
+    previewViewModeControl.value = previewViewMode;
+  }
+}
+
+function persistPreview3dSettings() {
+  writeStorage(STORAGE_KEYS.cameraYaw, String(preview3dCamera.yaw));
+  writeStorage(STORAGE_KEYS.cameraPitch, String(preview3dCamera.pitch));
+  writeStorage(STORAGE_KEYS.cameraPerspective, String(preview3dCamera.perspective));
+  writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
+  writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
+  writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
+}
+
+function restorePreview3dSettings() {
+  preview3dCamera.yaw = readStoredNumber(STORAGE_KEYS.cameraYaw, preview3dCamera.yaw);
+  preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, preview3dCamera.pitch);
+  preview3dCamera.perspective = readStoredNumber(STORAGE_KEYS.cameraPerspective, preview3dCamera.perspective);
+  preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, preview3dRenderSettings.fit);
+  preview3dRenderSettings.dragSensitivity = readStoredNumber(
+    STORAGE_KEYS.cameraDragSensitivity,
+    preview3dRenderSettings.dragSensitivity
+  );
+  preview3dRenderSettings.textureQuality = readStoredNumber(
+    STORAGE_KEYS.cameraTextureQuality,
+    preview3dRenderSettings.textureQuality
+  );
+  clampPreview3dCamera();
+}
+
+function setViewControlsOpen(isOpen) {
+  if (!viewControlsModal) {
+    return;
+  }
+  viewControlsModal.hidden = !isOpen;
+}
+
+function setupViewControlsModal() {
+  if (!viewControlsModal) {
+    return;
+  }
+  if (openViewControlsButton) {
+    openViewControlsButton.addEventListener("click", () => {
+      syncViewControlsUI();
+      setViewControlsOpen(true);
+    });
+  }
+  if (closeViewControlsButton) {
+    closeViewControlsButton.addEventListener("click", () => {
+      setViewControlsOpen(false);
+    });
+  }
+  viewControlsModal.addEventListener("click", (event) => {
+    if (event.target === viewControlsModal) {
+      setViewControlsOpen(false);
+    }
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && viewControlsModal && !viewControlsModal.hidden) {
+      setViewControlsOpen(false);
+    }
+  });
 }
 
 function clear3dDragState() {
@@ -740,6 +859,7 @@ function clear3dDragState() {
   if (billboard3dCanvas) {
     billboard3dCanvas.style.cursor = "grab";
   }
+  persistPreview3dSettings();
 }
 
 function apply3dDrag(clientX, clientY) {
@@ -752,12 +872,13 @@ function apply3dDrag(clientX, clientY) {
   preview3dDragState.lastY = clientY;
 
   if (preview3dDragState.adjustPerspective) {
-    preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003;
+    preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003 * preview3dRenderSettings.dragSensitivity;
   } else {
-    preview3dCamera.yaw += dx * 0.005;
-    preview3dCamera.pitch -= dy * 0.004;
+    preview3dCamera.yaw += dx * 0.005 * preview3dRenderSettings.dragSensitivity;
+    preview3dCamera.pitch -= dy * 0.004 * preview3dRenderSettings.dragSensitivity;
   }
   clampPreview3dCamera();
+  syncViewControlsUI();
   if (previewViewMode === "3d") {
     draw3dFrame();
   }
@@ -812,8 +933,10 @@ function draw3dFrame() {
     return;
   }
   ctx.clearRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   const spine = buildTopViewSpine();
-  const extrusionHeight = 3480;
+  const extrusionHeight = BILLBOARD_DESIGN_HEIGHT;
   const topProjectedRaw = spine.points.map((point) => ({
     ...projectBillboardVertex(point.x, point.y, 0),
     s: point.s
@@ -832,7 +955,7 @@ function draw3dFrame() {
 
   const projectedWidth = Math.max(1, bounds.maxX - bounds.minX);
   const projectedHeight = Math.max(1, bounds.maxY - bounds.minY);
-  const fit = 0.84;
+  const fit = preview3dRenderSettings.fit;
   const fitScale = Math.min((width * fit) / projectedWidth, (height * fit) / projectedHeight);
   const offsetX = (width - projectedWidth * fitScale) / 2 - bounds.minX * fitScale;
   const offsetY = (height - projectedHeight * fitScale) / 2 - bounds.minY * fitScale;
@@ -920,7 +1043,10 @@ async function render3dPreview() {
   }
   const size = ensure3dCanvasSize(ctx);
   const token = ++preview3dRenderToken;
-  const targetHeight = Math.min(1800, Math.max(300, Math.round(size.height * 0.8)));
+  const targetHeight = Math.min(
+    3200,
+    Math.max(520, Math.round(size.height * 0.94 * preview3dRenderSettings.textureQuality))
+  );
   const surface = await build3dSurfaceStrip(targetHeight);
   if (token !== preview3dRenderToken) {
     return;
@@ -947,6 +1073,7 @@ function applyPreviewViewMode(mode) {
   if (previewViewMode === "3d") {
     render3dPreview();
   }
+  syncViewControlsUI();
 }
 
 function loadDirection(path, directionName = null) {
@@ -1119,6 +1246,15 @@ function writeStorage(key, value) {
   } catch (error) {
     // Ignore storage failures.
   }
+}
+
+function readStoredNumber(key, fallback) {
+  const raw = readStorage(key);
+  if (raw === null || raw === "") {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function formatTimestampForName(date) {
@@ -2946,8 +3082,9 @@ function renderDirectory(directions) {
 async function init() {
   restoreSpeed();
   restoreLoopLayoutSettings();
+  restorePreview3dSettings();
   previewViewMode = normalizePreviewViewMode(
-    previewViewModeControl ? previewViewModeControl.value : readStorage(STORAGE_KEYS.previewViewMode)
+    readStorage(STORAGE_KEYS.previewViewMode) || (previewViewModeControl ? previewViewModeControl.value : "flat")
   );
   loopArtworks = restoreArtworks();
   partitionArtworks = restorePartitionArtworks();
@@ -2977,6 +3114,8 @@ async function init() {
   renderPartitionEditors();
   syncDirectionModeUI();
   applyPreviewViewMode(previewViewMode);
+  setupViewControlsModal();
+  syncViewControlsUI();
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
@@ -3026,6 +3165,82 @@ async function init() {
       previewViewMode = normalizePreviewViewMode(previewViewModeControl.value);
       savePreviewViewMode(previewViewMode);
       applyPreviewViewMode(previewViewMode);
+    });
+  }
+
+  if (cameraYawControl) {
+    cameraYawControl.addEventListener("input", () => {
+      preview3dCamera.yaw = Number(cameraYawControl.value) || 0;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraPitchControl) {
+    cameraPitchControl.addEventListener("input", () => {
+      preview3dCamera.pitch = Number(cameraPitchControl.value) || 0;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraPerspectiveControl) {
+    cameraPerspectiveControl.addEventListener("input", () => {
+      preview3dCamera.perspective = Number(cameraPerspectiveControl.value) || 1;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraFitControl) {
+    cameraFitControl.addEventListener("input", () => {
+      preview3dRenderSettings.fit = Number(cameraFitControl.value) || preview3dRenderSettings.fit;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraDragSensitivityControl) {
+    cameraDragSensitivityControl.addEventListener("input", () => {
+      preview3dRenderSettings.dragSensitivity =
+        Number(cameraDragSensitivityControl.value) || preview3dRenderSettings.dragSensitivity;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+    });
+  }
+
+  if (cameraTextureQualityControl) {
+    cameraTextureQualityControl.addEventListener("input", () => {
+      preview3dRenderSettings.textureQuality =
+        Number(cameraTextureQualityControl.value) || preview3dRenderSettings.textureQuality;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      render3dPreview();
+    });
+  }
+
+  if (resetViewControlsButton) {
+    resetViewControlsButton.addEventListener("click", () => {
+      preview3dCamera.yaw = -0.78;
+      preview3dCamera.pitch = 0.96;
+      preview3dCamera.perspective = 1;
+      preview3dRenderSettings.fit = 0.84;
+      preview3dRenderSettings.dragSensitivity = 1;
+      preview3dRenderSettings.textureQuality = 1.75;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      render3dPreview();
     });
   }
 

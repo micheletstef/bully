@@ -483,6 +483,59 @@ body {
   outline: none;
 }
 
+.view-controls-dock {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  width: 180px;
+  z-index: 20;
+}
+
+.view-controls-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+}
+
+.view-controls-modal[hidden] {
+  display: none;
+}
+
+.view-controls-panel {
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  padding: 10px;
+  font-size: 11px;
+}
+
+.view-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.view-controls-close {
+  border: 0;
+  background: transparent;
+  color: #666;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.view-controls-close:hover,
+.view-controls-close:focus {
+  color: #111;
+  outline: none;
+}
+
 .action-link {
   display: inline-block;
   color: #1f1f1f;
