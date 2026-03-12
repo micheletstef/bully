@@ -1264,16 +1264,21 @@ function updateActiveWindow() {
   }
 
   const frameHeight = Math.max(1, loopVisualization.clientHeight);
-  const billboardAspect = 5900 / 3480;
-  const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
   const previewScale = getPreviewScale();
   const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
+  const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
+    ? Math.max(0.01, Math.min(1, loopPlaybackViewportRatio))
+    : 0.25;
+  const activeWidth = Math.max(8, Math.min(scaledLoopDistance, scaledLoopDistance * normalizedViewportRatio));
   const x = scaledLoopDistance * normalizedProgress;
-  const traverseTravelPx = Math.max(1, scaledLoopDistance - activeWidth);
+  const traverseTravelPxRaw = scaledLoopDistance - activeWidth;
+  const traverseTravelPx = Math.max(0, traverseTravelPxRaw);
   const traverseRatio = Math.max(0, Math.min(1, traverseTravelPx / scaledLoopDistance));
   const traverseDuration = Math.max(0.1, loopDurationSeconds * traverseRatio);
-  const traverseProgress = Math.max(0, Math.min(1, x / traverseTravelPx));
+  const traverseProgress = traverseTravelPx > 0
+    ? Math.max(0, Math.min(1, x / traverseTravelPx))
+    : 0;
   const traverseElapsed = traverseDuration * traverseProgress;
   loopTraverseSeconds = traverseDuration;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;

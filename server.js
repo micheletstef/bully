@@ -147,6 +147,34 @@ async function handleApi(req, res, urlObj) {
   return false;
 }
 
+async function buildDirectionsListingHtml() {
+  const directionsDir = path.join(ROOT_DIR, "directions");
+  let entries = [];
+  try {
+    entries = await fsp.readdir(directionsDir, { withFileTypes: true });
+  } catch (error) {
+    entries = [];
+  }
+  const links = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => `<li><a href="${encodeURIComponent(entry.name)}/">${entry.name}/</a></li>`)
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>directions</title>
+  </head>
+  <body>
+    <ul>
+      ${links}
+    </ul>
+  </body>
+</html>`;
+}
+
 function safePathFromUrl(urlPath) {
   const decoded = decodeURIComponent(urlPath);
   const normalized = path.normalize(decoded).replace(/^(\.\.[/\\])+/, "");
@@ -154,6 +182,22 @@ function safePathFromUrl(urlPath) {
 }
 
 async function serveStatic(req, res, urlObj) {
+  if (urlObj.pathname === "/favicon.ico") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (urlObj.pathname === "/directions/" || urlObj.pathname === "/directions") {
+    const html = await buildDirectionsListingHtml();
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    res.end(html);
+    return;
+  }
+
   let targetPath = safePathFromUrl(urlObj.pathname);
   if (targetPath.endsWith(path.sep)) {
     targetPath = path.join(targetPath, "index.html");
