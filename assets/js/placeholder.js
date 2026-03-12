@@ -1010,9 +1010,13 @@ function draw3dFrame() {
     segments.push({ p0, p1, p2, p3, sx, sw, dw, dh, avgDepth });
   }
 
-  // Draw far-to-near to prevent the curved plane from visually clipping into itself.
+  // Draw far-to-near to reduce visual self-overlap at steep camera angles.
   segments.sort((a, b) => a.avgDepth - b.avgDepth);
-  segments.forEach(({ p0, p1, p2, p3, sx, sw, dw, dh }) => {
+  let renderedSegments = 0;
+  const drawSegment = ({ p0, p1, p2, p3, sx, sw, dw, dh }) => {
+    if (!Number.isFinite(dw) || !Number.isFinite(dh) || dw <= 0.0001 || dh <= 0.0001) {
+      return false;
+    }
     const area =
       Math.abs(
         (p0.x * p1.y - p1.x * p0.y)
@@ -1020,8 +1024,8 @@ function draw3dFrame() {
           + (p2.x * p3.y - p3.x * p2.y)
           + (p3.x * p0.y - p0.x * p3.y)
       ) * 0.5;
-    if (!Number.isFinite(area) || area < 0.25) {
-      return;
+    if (!Number.isFinite(area) || area < 0.0001) {
+      return false;
     }
 
     ctx.save();
@@ -1042,7 +1046,21 @@ function draw3dFrame() {
     );
     ctx.drawImage(strip, sx, 0, sw, stripHeight, 0, 0, dw, dh);
     ctx.restore();
+    return true;
+  };
+
+  segments.forEach((segment) => {
+    if (drawSegment(segment)) {
+      renderedSegments += 1;
+    }
   });
+
+  // Fallback path: if camera settings make sorting/culling degenerate, still render in source order.
+  if (renderedSegments === 0) {
+    for (let i = 0; i < segments.length; i += 1) {
+      drawSegment(segments[i]);
+    }
+  }
 }
 
 function update3dPreviewAnimation() {
