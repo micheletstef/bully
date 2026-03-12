@@ -516,6 +516,19 @@ function syncVisualizationGapScaled() {
   const sourceHeight = Math.max(1, loopStageHeight);
   const scaledGap = (Math.max(0, loopAssetGap) * previewHeight) / sourceHeight;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
+  requestAnimationFrame(syncVisualizationGeometry);
+}
+
+function syncVisualizationGeometry() {
+  if (!loopVisualization || !loopPreviewTrack) {
+    return;
+  }
+  const totalWidth = loopPreviewTrack.scrollWidth;
+  if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
+    return;
+  }
+  const horizontalPadding = 8;
+  loopVisualization.style.width = `${totalWidth + horizontalPadding}px`;
 }
 
 function renderLoopPreview() {
@@ -540,6 +553,7 @@ function renderLoopPreview() {
 
   initLoopSortable();
   syncVisualizationGapScaled();
+  syncVisualizationGeometry();
   updateActiveWindow();
 }
 

@@ -226,11 +226,11 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(76vw, 1180px);
+  width: max-content;
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
   height: auto;
   padding: 4px 4px 18px;
-  overflow-x: auto;
+  overflow-x: visible;
   overflow-y: visible;
   background: #f1f1f1;
 }
@@ -250,8 +250,8 @@ body {
 
 .loop-preview-item {
   height: 100%;
-  min-width: 42px;
-  border: 1px solid #c8c8c8;
+  min-width: 0;
+  border: 0;
   background: transparent;
   cursor: grab;
   transition: transform 150ms ease, opacity 150ms ease;
@@ -476,7 +476,4 @@ body {
     row-gap: 8px;
   }
 
-  .loop-visualization {
-    width: min(76vw, 1180px);
-  }
 }
