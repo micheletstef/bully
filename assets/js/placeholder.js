@@ -1093,6 +1093,7 @@ function buildPartitionedSnapshotHtml(config) {
     <style>
       :root {
         --loop-duration: 16s;
+        --loop-distance: 1024px;
         --loop-pad-tb: 0px;
         --loop-pad-lr: 0px;
         --loop-bg: #fff8a5;
@@ -1118,9 +1119,18 @@ function buildPartitionedSnapshotHtml(config) {
         overflow: hidden;
       }
 
+      .loop-stage {
+        position: absolute;
+        top: var(--loop-pad-tb);
+        bottom: var(--loop-pad-tb);
+        left: 0;
+        right: 0;
+        overflow: hidden;
+      }
+
       .partition-grid {
         position: absolute;
-        inset: var(--loop-pad-tb) 0;
+        inset: 0;
         display: grid;
         grid-template-columns: 1820fr 1020fr 3060fr;
         overflow: hidden;
@@ -1141,7 +1151,7 @@ function buildPartitionedSnapshotHtml(config) {
         display: flex;
         flex-direction: column;
         gap: var(--loop-row-gap);
-        padding: 0 var(--loop-pad-lr);
+        height: 100%;
         overflow: hidden;
       }
 
@@ -1159,6 +1169,7 @@ function buildPartitionedSnapshotHtml(config) {
         animation: loop-x var(--loop-duration) linear infinite;
         animation-delay: var(--loop-row-delay, 0s);
         animation-direction: var(--loop-row-direction, normal);
+        opacity: 0.98;
       }
 
       .loop-row-track.vertical-scroll {
@@ -1204,10 +1215,12 @@ function buildPartitionedSnapshotHtml(config) {
   </head>
   <body>
     <div class="canvas">
-      <div class="partition-grid">
-        <section class="partition"><div id="partitionLeft" class="loop-fill"></div></section>
-        <section class="partition"><div id="partitionCurve" class="loop-fill"></div></section>
-        <section class="partition"><div id="partitionRight" class="loop-fill"></div></section>
+      <div class="loop-stage">
+        <div class="partition-grid">
+          <section class="partition"><div id="partitionLeft" class="loop-fill"></div></section>
+          <section class="partition"><div id="partitionCurve" class="loop-fill"></div></section>
+          <section class="partition"><div id="partitionRight" class="loop-fill"></div></section>
+        </div>
       </div>
     </div>
     <script>
