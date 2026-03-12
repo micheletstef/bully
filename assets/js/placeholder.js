@@ -117,6 +117,15 @@ let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
 const preview3dImageCache = new Map();
+const preview3dThreeState = {
+  renderer: null,
+  scene: null,
+  camera: null,
+  mesh: null,
+  texture: null,
+  textureSource: "",
+  textureRequestToken: 0
+};
 const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
@@ -881,7 +890,7 @@ function apply3dDrag(clientX, clientY) {
   clampPreview3dCamera();
   syncViewControlsUI();
   if (previewViewMode === "3d") {
-    draw3dFrame();
+    update3dPreviewAnimation();
   }
 }
 
@@ -994,34 +1003,146 @@ function draw3dFrame() {
   ctx.restore();
 }
 
+function getThreeLib() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.THREE || null;
+}
+
+function ensureThreePreviewSetup() {
+  if (!billboard3dCanvas) {
+    return false;
+  }
+  const THREE = getThreeLib();
+  if (!THREE) {
+    return false;
+  }
+  if (preview3dThreeState.renderer && preview3dThreeState.scene && preview3dThreeState.camera && preview3dThreeState.mesh) {
+    return true;
+  }
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: billboard3dCanvas,
+    antialias: true,
+    alpha: true
+  });
+  renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio || 1)));
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
+  const geometry = new THREE.PlaneGeometry(BILLBOARD_DESIGN_WIDTH, BILLBOARD_DESIGN_HEIGHT, 1, 1);
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+
+  preview3dThreeState.renderer = renderer;
+  preview3dThreeState.scene = scene;
+  preview3dThreeState.camera = camera;
+  preview3dThreeState.mesh = mesh;
+  return true;
+}
+
+function loadThreeTextureFromSource(src) {
+  const THREE = getThreeLib();
+  if (!THREE || !preview3dThreeState.mesh || !src) {
+    return;
+  }
+  const token = ++preview3dThreeState.textureRequestToken;
+  const loader = new THREE.TextureLoader();
+  loader.load(
+    src,
+    (texture) => {
+      if (token !== preview3dThreeState.textureRequestToken) {
+        texture.dispose();
+        return;
+      }
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.repeat.set(1, 1);
+      texture.offset.set(0, 0);
+      if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
+      texture.needsUpdate = true;
+
+      if (preview3dThreeState.texture) {
+        preview3dThreeState.texture.dispose();
+      }
+      preview3dThreeState.texture = texture;
+      preview3dThreeState.textureSource = src;
+      preview3dThreeState.mesh.material.map = texture;
+      preview3dThreeState.mesh.material.needsUpdate = true;
+      update3dPreviewAnimation();
+    },
+    undefined,
+    () => {
+      // Ignore texture load failures for now.
+    }
+  );
+}
+
+function syncThreeTextureSource() {
+  const sources = current3dSources().filter((src) => !!src);
+  const source = sources[0] || "";
+  if (!source || source === preview3dThreeState.textureSource) {
+    return;
+  }
+  loadThreeTextureFromSource(source);
+}
+
+function renderThreeFrame() {
+  if (!ensureThreePreviewSetup()) {
+    return;
+  }
+  const { renderer, scene, camera, mesh, texture } = preview3dThreeState;
+  if (!renderer || !scene || !camera || !mesh || !billboard3dCanvas) {
+    return;
+  }
+
+  const cssWidth = Math.max(1, billboard3dCanvas.clientWidth || 1);
+  const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
+  renderer.setSize(cssWidth, cssHeight, false);
+  camera.aspect = cssWidth / cssHeight;
+  const perspectiveFactor = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+  camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
+
+  const radius = (BILLBOARD_DESIGN_WIDTH * 0.78) / perspectiveFactor;
+  const yaw = preview3dCamera.yaw;
+  const pitch = preview3dCamera.pitch;
+  const cosPitch = Math.cos(pitch);
+  camera.position.set(
+    Math.sin(yaw) * cosPitch * radius,
+    Math.sin(pitch) * radius * 0.9,
+    Math.cos(yaw) * cosPitch * radius
+  );
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+
+  if (texture) {
+    const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
+    texture.offset.x = progress;
+  }
+  renderer.render(scene, camera);
+}
+
 function update3dPreviewAnimation() {
-  draw3dFrame();
+  renderThreeFrame();
 }
 
 async function render3dPreview() {
   if (!billboardPreview3d || !billboard3dCanvas) {
     return;
   }
-  const ctx = get3dCanvasContext();
-  if (!ctx) {
+  if (!ensureThreePreviewSetup()) {
     return;
   }
-  const size = ensure3dCanvasSize(ctx);
-  const token = ++preview3dRenderToken;
-  const targetHeight = Math.min(
-    3200,
-    Math.max(520, Math.round(size.height * 0.94 * preview3dRenderSettings.textureQuality))
-  );
-  const surface = await build3dSurfaceStrip(targetHeight);
-  if (token !== preview3dRenderToken) {
-    return;
-  }
-  preview3dSurface = surface;
-  if (!preview3dSurface) {
-    ctx.clearRect(0, 0, size.width, size.height);
-    return;
-  }
-  draw3dFrame();
+  syncThreeTextureSource();
+  renderThreeFrame();
 }
 
 function applyPreviewViewMode(mode) {
