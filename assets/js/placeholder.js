@@ -705,6 +705,7 @@ function renderLoopPreview() {
     const image = document.createElement("img");
     image.src = item.src;
     image.alt = "";
+    image.draggable = false;
     tile.appendChild(image);
     loopPreviewTrack.appendChild(tile);
   });
@@ -760,6 +761,10 @@ async function initLoopSortable() {
       animation: 150,
       forceFallback: true,
       fallbackOnBody: true,
+      fallbackTolerance: 4,
+      draggable: ".loop-preview-item",
+      invertSwap: true,
+      swapThreshold: 0.65,
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",

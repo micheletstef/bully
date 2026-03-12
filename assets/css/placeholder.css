@@ -266,6 +266,7 @@ body {
   background: transparent;
   cursor: grab;
   transition: transform 150ms ease, opacity 150ms ease;
+  user-select: none;
 }
 
 .loop-preview-item.dragging {
@@ -286,6 +287,7 @@ body {
   border-color: #d30000;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
   cursor: grabbing;
+  z-index: 1000;
 }
 
 .loop-preview-item img {
@@ -294,6 +296,9 @@ body {
   max-width: none;
   object-fit: contain;
   display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .loop-active-window {
