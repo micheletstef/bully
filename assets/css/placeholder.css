@@ -22,7 +22,7 @@ body {
   inset: 0 auto 0 0;
   width: 300px;
   overflow: auto;
-  padding: 18px 14px 24px;
+  padding: 18px 18px 24px;
   background: transparent;
   z-index: 10;
 }
@@ -207,12 +207,12 @@ body {
 }
 
 .billboard-info {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  transform: translateX(-50%);
-  width: min(76vw, 1180px);
+  position: fixed;
+  top: 18px;
+  left: 318px;
+  width: min(620px, calc(100vw - 336px));
   display: block;
+  z-index: 8;
 }
 
 .spec-table {
@@ -242,6 +242,6 @@ body {
 
 @media (max-width: 1000px) {
   .billboard-info {
-    width: min(92vw, 1180px);
+    width: min(520px, calc(100vw - 336px));
   }
 }
