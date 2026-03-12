@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gridded loop</title>
+    <style>
+      :root {
+        --loop-duration: 16s;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body,
+      .canvas {
+        background: #fff8a5;
+      }
+
+      .canvas {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Courier New", Courier, monospace;
+        color: #1f1f1f;
+      }
+
+      .loop-fill {
+        position: absolute;
+        inset: 0;
+        background-image: url("../../assets/linear-loop-strip.png");
+        background-repeat: repeat;
+        background-size: auto 68px;
+        animation: loop-x var(--loop-duration) linear infinite;
+        opacity: 0.98;
+      }
+
+      .guide-vertical {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: rgba(17, 17, 17, 0.42);
+      }
+
+      .x-1820 {
+        left: 30.8475%;
+      }
+
+      .x-2840 {
+        left: 48.1356%;
+      }
+
+      @keyframes loop-x {
+        from {
+          background-position: 0 0;
+        }
+        to {
+          background-position: 1024px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div class="loop-fill"></div>
+      <div class="guide-vertical x-1820"></div>
+      <div class="guide-vertical x-2840"></div>
+    </div>
+    <script>
+      window.addEventListener("message", (event) => {
+        const payload = event.data;
+        if (!payload || payload.type !== "setLoopDuration") {
+          return;
+        }
+
+        const seconds = Number(payload.seconds);
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+          return;
+        }
+
+        document.documentElement.style.setProperty("--loop-duration", `${seconds}s`);
+      });
+    </script>
+  </body>
+</html>
