@@ -101,9 +101,9 @@ let activeSidebarKey = null;
 let activeDirectionName = null;
 let previewViewMode = "flat";
 let preview3dMetrics = {
-  left: { distance: 1 },
-  curve: { distance: 1 },
-  right: { distance: 1 }
+  left: { distance: 1, baseOffset: 0 },
+  curve: { distance: 1, baseOffset: 0 },
+  right: { distance: 1, baseOffset: 0 }
 };
 
 function getAppBasePath() {
@@ -556,6 +556,16 @@ function sourcesFor3dFace(partitionKey) {
   return loopArtworks.map((item) => normalize3dArtworkSource(item.src));
 }
 
+function faceStartRatio(partitionKey) {
+  if (partitionKey === "curve") {
+    return 1820 / 5900;
+  }
+  if (partitionKey === "right") {
+    return 2840 / 5900;
+  }
+  return 0;
+}
+
 async function render3dFace(trackEl, partitionKey) {
   if (!trackEl) {
     return;
@@ -563,7 +573,7 @@ async function render3dFace(trackEl, partitionKey) {
   trackEl.innerHTML = "";
   const sources = sourcesFor3dFace(partitionKey);
   if (!sources.length) {
-    preview3dMetrics[partitionKey] = { distance: 1 };
+    preview3dMetrics[partitionKey] = { distance: 1, baseOffset: 0 };
     return;
   }
 
@@ -627,7 +637,8 @@ async function render3dFace(trackEl, partitionKey) {
     const secondRect = secondStart.getBoundingClientRect();
     distance = Math.max(1, secondRect.left - firstRect.left);
   }
-  preview3dMetrics[partitionKey] = { distance };
+  const baseOffset = currentDirectionIsPartitioned() ? 0 : distance * faceStartRatio(partitionKey);
+  preview3dMetrics[partitionKey] = { distance, baseOffset };
 }
 
 function update3dPreviewAnimation() {
@@ -639,12 +650,13 @@ function update3dPreviewAnimation() {
   };
   PARTITION_KEYS.forEach((key) => {
     const track = trackMap[key];
-    const metrics = preview3dMetrics[key] || { distance: 1 };
+    const metrics = preview3dMetrics[key] || { distance: 1, baseOffset: 0 };
     if (!track) {
       return;
     }
     const distance = Math.max(1, Number(metrics.distance) || 1);
-    const offset = -1 * progress * distance;
+    const baseOffset = Math.max(0, Number(metrics.baseOffset) || 0);
+    const offset = -1 * progress * distance - baseOffset;
     track.style.transform = `translateX(${offset}px)`;
   });
 }
@@ -654,6 +666,7 @@ async function render3dPreview() {
     return;
   }
   const faceBackground = currentBackgroundColor();
+  billboardPreview3d.style.setProperty("--preview-3d-bg", faceBackground);
   billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
     face.style.background = faceBackground;
   });
@@ -2051,6 +2064,7 @@ function syncVisualizationBackground() {
   }
   loopVisualization.style.background = currentBackgroundColor();
   if (billboardPreview3d) {
+    billboardPreview3d.style.setProperty("--preview-3d-bg", currentBackgroundColor());
     billboardPreview3d.querySelectorAll(".corner-face").forEach((face) => {
       face.style.background = currentBackgroundColor();
     });

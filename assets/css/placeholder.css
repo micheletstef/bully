@@ -109,28 +109,17 @@ body {
   position: absolute;
   inset: 0;
   display: none;
-  background: linear-gradient(180deg, #ececec 0%, #d9d9d9 58%, #c2c2c2 100%);
+  background: var(--preview-3d-bg, #fff8a5);
   overflow: hidden;
-}
-
-.street-floor {
-  position: absolute;
-  left: -20%;
-  right: -20%;
-  bottom: -18%;
-  height: 48%;
-  background: linear-gradient(180deg, rgba(126, 126, 126, 0.58), rgba(80, 80, 80, 0.8));
-  transform: perspective(900px) rotateX(72deg);
-  transform-origin: top center;
 }
 
 .corner-scene {
   position: absolute;
-  left: 7%;
-  right: 7%;
-  top: 9%;
-  bottom: 15%;
-  perspective: 1500px;
+  left: 4%;
+  right: 4%;
+  top: 6%;
+  bottom: 8%;
+  perspective: 1700px;
   transform-style: preserve-3d;
 }
 
@@ -139,8 +128,8 @@ body {
   top: 0;
   height: 100%;
   overflow: hidden;
-  background: #fff8a5;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  background: transparent;
+  box-shadow: none;
 }
 
 .corner-face-track {
@@ -172,22 +161,22 @@ body {
   left: 0;
   width: calc(var(--billboard-left-ratio) * 100%);
   transform-origin: right center;
-  transform: translateX(7%) rotateY(38deg);
+  transform: translateX(8%) rotateY(62deg);
 }
 
 .corner-face-curve {
   left: calc(var(--billboard-left-ratio) * 100%);
   width: calc(var(--billboard-curve-ratio) * 100%);
-  border-radius: 0 14px 14px 0;
+  border-radius: 0 28px 28px 0;
   transform-origin: center center;
-  transform: translateX(5%) rotateY(9deg);
+  transform: translateX(6%) rotateY(31deg) scaleX(0.96);
 }
 
 .corner-face-right {
   left: calc((var(--billboard-left-ratio) + var(--billboard-curve-ratio)) * 100%);
   width: calc(var(--billboard-right-ratio) * 100%);
   transform-origin: left center;
-  transform: translateX(2%) rotateY(-28deg);
+  transform: translateX(4%) rotateY(-8deg);
 }
 
 .empty-state {
