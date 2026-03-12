@@ -50,6 +50,28 @@ async function discoverDirections() {
   return map;
 }
 
+async function loadDirectionsFromManifest() {
+  const response = await fetch("directions/manifest.json", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Cannot read directions/manifest.json");
+  }
+  const json = await response.json();
+
+  const map = {};
+  Object.entries(json).forEach(([section, items]) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      return;
+    }
+
+    map[section] = items.map((item) => ({
+      label: item,
+      path: `directions/${section}/${item}/index.html`
+    }));
+  });
+
+  return map;
+}
+
 function loadDirection(path) {
   billboardPreview.src = path;
   billboardPreview.style.display = "block";
@@ -82,11 +104,20 @@ function renderDirectory(directions) {
 
 async function init() {
   try {
-    const directions = await discoverDirections();
+    let directions;
+    try {
+      directions = await discoverDirections();
+    } catch (error) {
+      directions = await loadDirectionsFromManifest();
+    }
+
+    if (!Object.keys(directions).length) {
+      throw new Error("No directions found");
+    }
+
     renderDirectory(directions);
   } catch (error) {
-    emptyState.textContent =
-      "Unable to read /directions. Serve with directory listing enabled.";
+    emptyState.textContent = "No directions found. Check directions/manifest.json.";
   }
 }
 
