@@ -439,11 +439,11 @@ body {
 .output-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
 }
 
 .output-item {
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .output-remove-button {

@@ -671,6 +671,19 @@ function buildSnapshotHtml(config) {
       let playbackTimer = null;
       let primaryTrack = null;
 
+      function normalizeArtworkSource(path) {
+        if (/^(https?:|data:|blob:)/.test(path)) {
+          return path;
+        }
+        if (path.startsWith("../../") || path.startsWith("../")) {
+          return path;
+        }
+        if (path.startsWith("assets/")) {
+          return path;
+        }
+        return path;
+      }
+
       function waitForImage(img) {
         return new Promise((resolve) => {
           if (img.complete) {
@@ -685,7 +698,9 @@ function buildSnapshotHtml(config) {
       async function renderLoop() {
         loopFill.innerHTML = "";
         primaryTrack = null;
-        const sources = state.artworks.length ? state.artworks : [];
+        const sources = state.artworks.length
+          ? state.artworks.map(normalizeArtworkSource)
+          : ["assets/linear-loop-strip.png"];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
         const rows = [];
