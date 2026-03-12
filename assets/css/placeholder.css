@@ -436,6 +436,42 @@ body {
   text-decoration: underline;
 }
 
+.output-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.output-item {
+  flex: 1;
+}
+
+.output-remove-button {
+  border: 0;
+  background: transparent;
+  color: #7a7a7a;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.output-row:hover .output-remove-button,
+.output-row:focus-within .output-remove-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.output-remove-button:hover,
+.output-remove-button:focus {
+  color: #b00000;
+  outline: none;
+}
+
 #speedControl {
   width: 100%;
   margin: 0;

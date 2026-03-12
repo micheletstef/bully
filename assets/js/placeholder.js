@@ -794,6 +794,23 @@ function saveCurrentVersionSnapshot() {
   }
 }
 
+function removeOutputSnapshot(snapshot) {
+  const existing = readOutputs();
+  const filtered = existing.filter((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    if (snapshot && snapshot.id && item.id) {
+      return item.id !== snapshot.id;
+    }
+    return !(item.name === snapshot.name && item.createdAt === snapshot.createdAt);
+  });
+  saveOutputs(filtered);
+  if (knownDirections.length) {
+    renderDirectory(knownDirections);
+  }
+}
+
 function saveSpeed(seconds) {
   writeStorage(STORAGE_KEYS.speed, String(seconds));
 }
@@ -1335,15 +1352,32 @@ function renderDirectory(directions) {
     outputsSection.appendChild(empty);
   } else {
     outputs.forEach((snapshot) => {
+      const row = document.createElement("div");
+      row.className = "output-row";
+
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "direction-item";
+      button.className = "direction-item output-item";
       button.textContent = snapshot.name || snapshot.createdAt || "saved output";
       button.addEventListener("click", () => {
         loadOutputSnapshot(snapshot);
         setActiveDirection(button);
       });
-      outputsSection.appendChild(button);
+      row.appendChild(button);
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "output-remove-button";
+      removeButton.setAttribute("aria-label", "Delete output");
+      removeButton.title = "Delete output";
+      removeButton.textContent = "×";
+      removeButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeOutputSnapshot(snapshot);
+      });
+      row.appendChild(removeButton);
+
+      outputsSection.appendChild(row);
     });
   }
 
