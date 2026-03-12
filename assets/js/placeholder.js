@@ -759,7 +759,8 @@ function projectBillboardVertex(x, y, z) {
 
   return {
     x: x1 * perspective,
-    y: -z2 * perspective
+    y: -z2 * perspective,
+    depth: y2
   };
 }
 
@@ -937,13 +938,23 @@ function draw3dFrame() {
   ctx.imageSmoothingQuality = "high";
   const spine = buildTopViewSpine();
   const extrusionHeight = BILLBOARD_DESIGN_HEIGHT;
-  const topProjectedRaw = spine.points.map((point) => ({
-    ...projectBillboardVertex(point.x, point.y, 0),
-    s: point.s
-  }));
-  const bottomProjectedRaw = spine.points.map((point) =>
-    projectBillboardVertex(point.x, point.y, -extrusionHeight)
-  );
+  const topProjectedRaw = spine.points.map((point) => {
+    const projected = projectBillboardVertex(point.x, point.y, 0);
+    return {
+      x: projected.x,
+      y: projected.y,
+      depth: projected.depth,
+      s: point.s
+    };
+  });
+  const bottomProjectedRaw = spine.points.map((point) => {
+    const projected = projectBillboardVertex(point.x, point.y, -extrusionHeight);
+    return {
+      x: projected.x,
+      y: projected.y,
+      depth: projected.depth
+    };
+  });
 
   const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
   [...topProjectedRaw, ...bottomProjectedRaw].forEach((point) => {
@@ -963,36 +974,23 @@ function draw3dFrame() {
   const topPoints = topProjectedRaw.map((point) => ({
     x: point.x * fitScale + offsetX,
     y: point.y * fitScale + offsetY,
+    depth: point.depth,
     s: point.s
   }));
   const bottomPoints = bottomProjectedRaw.map((point) => ({
     x: point.x * fitScale + offsetX,
-    y: point.y * fitScale + offsetY
+    y: point.y * fitScale + offsetY,
+    depth: point.depth
   }));
-  const shapeBg = currentBackgroundColor();
   const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
   const baseOffset = progress * preview3dSurface.sequenceWidth;
-
-  ctx.beginPath();
-  topPoints.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-  });
-  for (let i = bottomPoints.length - 1; i >= 0; i -= 1) {
-    ctx.lineTo(bottomPoints[i].x, bottomPoints[i].y);
-  }
-  ctx.closePath();
-  ctx.fillStyle = shapeBg;
-  ctx.fill();
 
   const strip = preview3dSurface.canvas;
   const stripHeight = preview3dSurface.stripHeight;
   const sequenceWidth = preview3dSurface.sequenceWidth;
   const totalLength = Math.max(1, spine.totalLength);
 
+  const segments = [];
   for (let i = 0; i < topPoints.length - 1; i += 1) {
     const p0 = topPoints[i];
     const p1 = topPoints[i + 1];
@@ -1007,6 +1005,24 @@ function draw3dFrame() {
     const sw = Math.max(1, (segmentRatioEnd - segmentRatioStart) * sequenceWidth);
     const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
     const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
+    const avgDepth = (p0.depth + p1.depth + p2.depth + p3.depth) / 4;
+
+    segments.push({ p0, p1, p2, p3, sx, sw, dw, dh, avgDepth });
+  }
+
+  // Draw far-to-near to prevent the curved plane from visually clipping into itself.
+  segments.sort((a, b) => a.avgDepth - b.avgDepth);
+  segments.forEach(({ p0, p1, p2, p3, sx, sw, dw, dh }) => {
+    const area =
+      Math.abs(
+        (p0.x * p1.y - p1.x * p0.y)
+          + (p1.x * p2.y - p2.x * p1.y)
+          + (p2.x * p3.y - p3.x * p2.y)
+          + (p3.x * p0.y - p0.x * p3.y)
+      ) * 0.5;
+    if (!Number.isFinite(area) || area < 0.25) {
+      return;
+    }
 
     ctx.save();
     ctx.beginPath();
@@ -1026,7 +1042,7 @@ function draw3dFrame() {
     );
     ctx.drawImage(strip, sx, 0, sw, stripHeight, 0, 0, dw, dh);
     ctx.restore();
-  }
+  });
 }
 
 function update3dPreviewAnimation() {
