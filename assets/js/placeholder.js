@@ -1010,12 +1010,35 @@ function getThreeLib() {
   return window.THREE || null;
 }
 
+function draw3dFallbackMessage(message) {
+  if (!billboard3dCanvas) {
+    return;
+  }
+  const ctx = billboard3dCanvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+  const cssWidth = Math.max(1, billboard3dCanvas.clientWidth || 1);
+  const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  billboard3dCanvas.width = Math.round(cssWidth * dpr);
+  billboard3dCanvas.height = Math.round(cssHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '12px "Courier New", Courier, monospace';
+  ctx.fillText(message, 14, 22);
+}
+
 function ensureThreePreviewSetup() {
   if (!billboard3dCanvas) {
     return false;
   }
   const THREE = getThreeLib();
   if (!THREE) {
+    console.warn("THREE is not available on window.");
     return false;
   }
   if (preview3dThreeState.renderer && preview3dThreeState.scene && preview3dThreeState.camera && preview3dThreeState.mesh) {
@@ -1136,6 +1159,10 @@ function renderThreeFrame() {
 }
 
 function update3dPreviewAnimation() {
+  if (!ensureThreePreviewSetup()) {
+    draw3dFallbackMessage("3D unavailable: THREE failed to initialize");
+    return;
+  }
   renderThreeFrame();
 }
 
@@ -1144,6 +1171,7 @@ async function render3dPreview() {
     return;
   }
   if (!ensureThreePreviewSetup()) {
+    draw3dFallbackMessage("3D unavailable: THREE failed to initialize");
     return;
   }
   renderThreeFrame();
@@ -3174,8 +3202,12 @@ async function init() {
   restoreLoopLayoutSettings();
   restorePreview3dSettings();
   previewViewMode = normalizePreviewViewMode(
-    readStorage(STORAGE_KEYS.previewViewMode) || (previewViewModeControl ? previewViewModeControl.value : "flat")
+    readStorage(STORAGE_KEYS.previewViewMode) || (previewViewModeControl ? previewViewModeControl.value : "3d")
   );
+  if (!readStorage(STORAGE_KEYS.previewViewMode)) {
+    previewViewMode = "3d";
+    savePreviewViewMode(previewViewMode);
+  }
   loopArtworks = restoreArtworks();
   partitionArtworks = restorePartitionArtworks();
 
