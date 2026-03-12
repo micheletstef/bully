@@ -209,8 +209,9 @@ body {
 .billboard-info {
   position: fixed;
   top: 18px;
-  left: 318px;
-  width: min(620px, calc(100vw - 336px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(76vw, 1180px);
   display: block;
   z-index: 8;
 }
@@ -242,6 +243,6 @@ body {
 
 @media (max-width: 1000px) {
   .billboard-info {
-    width: min(520px, calc(100vw - 336px));
+    width: min(76vw, 1180px);
   }
 }
