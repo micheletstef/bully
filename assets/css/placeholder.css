@@ -292,8 +292,8 @@ body {
 
 .loop-active-window {
   position: absolute;
-  top: calc(4px + var(--preview-pad-tb, 0px));
-  height: calc(100% - 8px - (var(--preview-pad-tb, 0px) * 2));
+  top: 0;
+  height: 100%;
   left: 0;
   width: 20px;
   border: 1px solid #d30000;

@@ -743,7 +743,7 @@ function updateActiveWindow() {
     return;
   }
 
-  const frameHeight = Math.max(1, loopVisualization.clientHeight - 8);
+  const frameHeight = Math.max(1, loopVisualization.clientHeight);
   const billboardAspect = 5900 / 3480;
   const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
@@ -784,7 +784,7 @@ function updateActiveWindow() {
     );
     const editorRect = loopVisualization.getBoundingClientRect();
     const absoluteLeft = editorRect.left + clampedCenterX;
-    const frameTop = editorRect.top + 4 + Number.parseFloat(getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb") || "0");
+    const frameTop = editorRect.top;
     const absoluteTop = frameTop + frameHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;
