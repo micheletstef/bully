@@ -680,6 +680,8 @@ async function build3dSurfaceStrip(targetHeight) {
   }
   stripCtx.imageSmoothingEnabled = true;
   stripCtx.imageSmoothingQuality = "high";
+  stripCtx.fillStyle = currentBackgroundColor();
+  stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
 
   const drawSequence = (startX) => {
     let cursor = startX + padLRPx;
@@ -1165,7 +1167,45 @@ async function syncThreeLoopTexture() {
     return;
   }
 
-  const texture = new THREE.CanvasTexture(surface.canvas);
+  const sequenceWidth = Math.max(1, surface.sequenceWidth);
+  const sequenceHeight = Math.max(1, surface.stripHeight);
+  const billboardAspect = BILLBOARD_DESIGN_WIDTH / BILLBOARD_DESIGN_HEIGHT;
+  const sequenceAspect = sequenceWidth / sequenceHeight;
+  let framedSequenceWidth = sequenceWidth;
+  let framedSequenceHeight = sequenceHeight;
+  if (sequenceAspect > billboardAspect) {
+    framedSequenceHeight = Math.max(sequenceHeight, Math.round(sequenceWidth / billboardAspect));
+  } else if (sequenceAspect < billboardAspect) {
+    framedSequenceWidth = Math.max(sequenceWidth, Math.round(sequenceHeight * billboardAspect));
+  }
+
+  const framedCanvas = document.createElement("canvas");
+  framedCanvas.width = framedSequenceWidth * 2;
+  framedCanvas.height = framedSequenceHeight;
+  const framedCtx = framedCanvas.getContext("2d");
+  if (!framedCtx) {
+    return;
+  }
+  framedCtx.imageSmoothingEnabled = true;
+  framedCtx.imageSmoothingQuality = "high";
+  framedCtx.fillStyle = currentBackgroundColor();
+  framedCtx.fillRect(0, 0, framedCanvas.width, framedCanvas.height);
+  const padX = Math.round((framedSequenceWidth - sequenceWidth) / 2);
+  const padY = Math.round((framedSequenceHeight - sequenceHeight) / 2);
+  framedCtx.drawImage(surface.canvas, 0, 0, sequenceWidth, sequenceHeight, padX, padY, sequenceWidth, sequenceHeight);
+  framedCtx.drawImage(
+    surface.canvas,
+    sequenceWidth,
+    0,
+    sequenceWidth,
+    sequenceHeight,
+    framedSequenceWidth + padX,
+    padY,
+    sequenceWidth,
+    sequenceHeight
+  );
+
+  const texture = new THREE.CanvasTexture(framedCanvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.repeat.set(0.5, 1);
