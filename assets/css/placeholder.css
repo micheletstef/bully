@@ -244,11 +244,10 @@ body {
 .loop-preview-track {
   position: absolute;
   top: calc(4px + var(--preview-pad-tb, 0px));
-  bottom: calc(4px + var(--preview-pad-tb, 0px));
+  height: var(--preview-track-height, 46px);
   left: 4px;
   display: flex;
   width: fit-content;
-  height: auto;
   gap: var(--preview-gap, 0px);
   z-index: 1;
 }
@@ -301,7 +300,7 @@ body {
 .loop-active-window {
   position: absolute;
   top: 0;
-  height: 100%;
+  height: var(--preview-track-height, 46px);
   left: 0;
   width: 20px;
   border: 1px solid #d30000;

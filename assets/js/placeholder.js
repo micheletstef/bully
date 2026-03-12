@@ -577,7 +577,10 @@ function syncSpeedReadout() {
   if (!speedValue) {
     return;
   }
-  speedValue.textContent = `${currentSpeedSeconds()}s`;
+  const seconds = Number.isFinite(loopDurationSeconds) && loopDurationSeconds > 0
+    ? loopDurationSeconds
+    : currentSpeedSeconds();
+  speedValue.textContent = `${seconds.toFixed(1)}s`;
 }
 
 function sendLoopConfigToPreview() {
@@ -609,20 +612,25 @@ function syncVisualizationBackground() {
   loopVisualization.style.background = currentBackgroundColor();
 }
 
+function getPreviewScale() {
+  if (!loopVisualization) {
+    return 1;
+  }
+  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
+  const stageHeight = Math.max(1, loopStageHeight);
+  const totalSourceHeight = stageHeight + Math.max(0, loopPadTopBottom) * 2;
+  if (!Number.isFinite(totalSourceHeight) || totalSourceHeight <= 0) {
+    return 1;
+  }
+  return previewHeight / totalSourceHeight;
+}
+
 function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeightTotal = Math.max(1, loopVisualization.clientHeight - 8);
-  const previewPadTB = Number.parseFloat(
-    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb")
-  );
-  const effectiveTrackHeight = Math.max(
-    1,
-    previewHeightTotal - (Number.isFinite(previewPadTB) ? previewPadTB * 2 : 0)
-  );
-  const sourceHeight = Math.max(1, loopStageHeight);
-  const scaledGapRaw = (Math.max(0, loopAssetGap) * effectiveTrackHeight) / sourceHeight;
+  const scale = getPreviewScale();
+  const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
   const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
   syncVisualizationGeometry();
@@ -633,15 +641,20 @@ function syncVisualizationPaddingScaled() {
     return;
   }
   const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
-  const sourceHeight = Math.max(1, loopStageHeight);
-  const scale = previewHeight / sourceHeight;
+  const scale = getPreviewScale();
   const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
   const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
-  const maxPadTB = Math.max(0, (previewHeight - MIN_PREVIEW_TRACK_HEIGHT) / 2);
+  const scaledTrackHeightRaw = Math.max(1, loopStageHeight) * scale;
+  const scaledTrackHeight = Math.max(
+    MIN_PREVIEW_TRACK_HEIGHT,
+    Math.round(scaledTrackHeightRaw * 100) / 100
+  );
+  const maxPadTB = Math.max(0, (previewHeight - scaledTrackHeight) / 2);
   const scaledPadTB = Math.round(Math.min(maxPadTB, scaledPadTBRaw) * 100) / 100;
   const scaledPadLR = Math.round(scaledPadLRRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
+  loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
 }
 
 function syncVisualizationGeometry() {
@@ -780,7 +793,12 @@ function updateActiveWindow() {
     return;
   }
 
-  const frameHeight = Math.max(1, loopVisualization.clientHeight);
+  const computedTrackHeight = Number.parseFloat(
+    getComputedStyle(loopVisualization).getPropertyValue("--preview-track-height")
+  );
+  const frameHeight = Number.isFinite(computedTrackHeight)
+    ? Math.max(1, computedTrackHeight)
+    : Math.max(1, loopPreviewTrack.clientHeight);
   const billboardAspect = 5900 / 3480;
   const activeWidth = Math.max(16, frameHeight * billboardAspect);
   const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
@@ -789,6 +807,17 @@ function updateActiveWindow() {
   const mainWidth = Math.min(activeWidth, Math.max(0, sequenceWidth - x));
   const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
+  const previewPadTB = Number.parseFloat(
+    getComputedStyle(loopVisualization).getPropertyValue("--preview-pad-tb")
+  );
+  const frameTopOffset = 4 + (Number.isFinite(previewPadTB) ? previewPadTB : 0);
+
+  loopActiveWindow.style.top = `${frameTopOffset}px`;
+  loopActiveWindow.style.height = `${frameHeight}px`;
+  if (loopActiveWindowSecondary) {
+    loopActiveWindowSecondary.style.top = `${frameTopOffset}px`;
+    loopActiveWindowSecondary.style.height = `${frameHeight}px`;
+  }
 
   if (mainWidth > 0) {
     loopActiveWindow.style.display = "block";
@@ -821,8 +850,7 @@ function updateActiveWindow() {
     );
     const editorRect = loopVisualization.getBoundingClientRect();
     const absoluteLeft = editorRect.left + clampedCenterX;
-    const frameTop = editorRect.top;
-    const absoluteTop = frameTop + frameHeight + 2;
+    const absoluteTop = editorRect.top + frameTopOffset + frameHeight + 2;
     loopElapsedTime.style.left = `${absoluteLeft}px`;
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
@@ -907,6 +935,7 @@ async function init() {
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
+      loopDurationSeconds = currentSpeedSeconds();
       syncSpeedReadout();
       saveSpeed(currentSpeedSeconds());
       sendLoopConfigToPreview();
@@ -1042,6 +1071,14 @@ async function init() {
     loopPadLeftRight = currentPadLeftRight();
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
+    syncSpeedReadout();
+    updateActiveWindow();
+  });
+
+  window.addEventListener("resize", () => {
+    syncVisualizationPaddingScaled();
+    syncVisualizationGapScaled();
+    syncVisualizationGeometry();
     updateActiveWindow();
   });
 
@@ -1062,6 +1099,7 @@ async function init() {
   loopPadLeftRight = currentPadLeftRight();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
+  syncVisualizationGeometry();
 }
 
 init();
