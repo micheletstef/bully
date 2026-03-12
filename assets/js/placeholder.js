@@ -11,6 +11,8 @@ const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
 const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
+const saveVersionButton = document.getElementById("saveVersionButton");
+const saveVersionStatus = document.getElementById("saveVersionStatus");
 let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
@@ -27,7 +29,8 @@ const STORAGE_KEYS = {
   rowGap: "billboard.loopRowGap",
   reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
-  artworks: "billboard.loopArtworks"
+  artworks: "billboard.loopArtworks",
+  outputs: "billboard.savedOutputs"
 };
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 let loopArtworks = [...DEFAULT_ARTWORKS];
@@ -461,6 +464,319 @@ function writeStorage(key, value) {
   } catch (error) {
     // Ignore storage failures.
   }
+}
+
+function formatTimestampForName(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+function getCurrentDirectionName() {
+  const activeButton = directoryPanel.querySelector(".direction-item.active");
+  if (activeButton && activeButton.dataset.directionName) {
+    return activeButton.dataset.directionName;
+  }
+  return restoreSelectedDirection() || "linear loop";
+}
+
+function getCurrentLoopConfig() {
+  return {
+    seconds: currentSpeedSeconds(),
+    artworks: loopArtworks.map((item) => item.src),
+    padTopBottom: currentPadTopBottom(),
+    padLeftRight: currentPadLeftRight(),
+    backgroundColor: currentBackgroundColor(),
+    assetGap: currentAssetGap(),
+    rowCount: currentRowCount(),
+    rowOffset: currentRowOffset(),
+    rowGap: currentRowGap(),
+    reverseOddRows: currentReverseOddRows()
+  };
+}
+
+function escapeJsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
+function buildSnapshotHtml(config) {
+  const safeState = escapeJsonForScript(config);
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>saved output</title>
+    <style>
+      :root {
+        --loop-duration: 16s;
+        --loop-distance: 1024px;
+        --loop-pad-tb: 0px;
+        --loop-pad-lr: 0px;
+        --loop-bg: #fff8a5;
+        --loop-gap: 0px;
+        --loop-row-gap: 0px;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body,
+      .canvas {
+        background: var(--loop-bg);
+      }
+
+      .canvas {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .loop-stage {
+        position: absolute;
+        top: var(--loop-pad-tb);
+        bottom: var(--loop-pad-tb);
+        left: 0;
+        right: 0;
+        overflow: hidden;
+      }
+
+      .loop-fill {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--loop-row-gap);
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .loop-row {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .loop-row-track {
+        display: flex;
+        gap: var(--loop-gap);
+        width: max-content;
+        height: 100%;
+        animation: loop-x var(--loop-duration) linear infinite;
+        animation-delay: var(--loop-row-delay, 0s);
+        animation-direction: var(--loop-row-direction, normal);
+        opacity: 0.98;
+      }
+
+      @keyframes loop-x {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      .loop-artwork {
+        height: 100%;
+        width: auto;
+        flex: 0 0 auto;
+      }
+
+      .loop-spacer {
+        height: 100%;
+        flex: 0 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div id="loopStage" class="loop-stage">
+        <div id="loopFill" class="loop-fill"></div>
+      </div>
+    </div>
+    <script>
+      const loopFill = document.getElementById("loopFill");
+      const loopStage = document.getElementById("loopStage");
+      const state = ${safeState};
+
+      function waitForImage(img) {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }
+
+      async function renderLoop() {
+        loopFill.innerHTML = "";
+        const sources = state.artworks.length ? state.artworks : [];
+        const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
+        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const rows = [];
+        const allImages = [];
+        let firstSequenceNodes = [];
+        let firstSequenceStartNode = null;
+        let secondSequenceStartNode = null;
+
+        function appendSequence(track, collectNodes) {
+          const nodes = [];
+          let startNode = null;
+
+          if (sidePadding > 0) {
+            const spacerStart = document.createElement("div");
+            spacerStart.className = "loop-spacer";
+            spacerStart.style.width = sidePadding + "px";
+            track.appendChild(spacerStart);
+            nodes.push(spacerStart);
+            startNode = spacerStart;
+          }
+
+          sources.forEach((src) => {
+            const image = document.createElement("img");
+            image.className = "loop-artwork";
+            image.src = src;
+            image.alt = "";
+            track.appendChild(image);
+            allImages.push(image);
+            nodes.push(image);
+            if (!startNode) {
+              startNode = image;
+            }
+          });
+
+          if (sidePadding > 0) {
+            const spacerEnd = document.createElement("div");
+            spacerEnd.className = "loop-spacer";
+            spacerEnd.style.width = sidePadding + "px";
+            track.appendChild(spacerEnd);
+            nodes.push(spacerEnd);
+          }
+
+          if (collectNodes) {
+            firstSequenceNodes = nodes;
+            firstSequenceStartNode = startNode;
+          }
+
+          return startNode;
+        }
+
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          const row = document.createElement("div");
+          row.className = "loop-row";
+          const track = document.createElement("div");
+          track.className = "loop-row-track";
+          row.appendChild(track);
+          loopFill.appendChild(row);
+          rows.push(track);
+
+          appendSequence(track, rowIndex === 0);
+          const secondStart = appendSequence(track, false);
+          if (rowIndex === 0) {
+            secondSequenceStartNode = secondStart;
+          }
+        }
+
+        await Promise.all(allImages.map(waitForImage));
+
+        const gapWidth = Math.max(0, Number(state.assetGap) || 0);
+        let loopDistance = 0;
+        if (firstSequenceStartNode && secondSequenceStartNode) {
+          const firstRect = firstSequenceStartNode.getBoundingClientRect();
+          const secondRect = secondSequenceStartNode.getBoundingClientRect();
+          loopDistance = secondRect.left - firstRect.left;
+        }
+        if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
+          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
+            + Math.max(0, firstSequenceNodes.length - 1) * gapWidth;
+        }
+        const safeDistance = loopDistance > 0 ? loopDistance : 1;
+        state.loopDistance = safeDistance;
+
+        const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
+        rows.forEach((track, rowIndex) => {
+          const delay = -1 * offsetSecondsPerRow * rowIndex;
+          track.style.setProperty("--loop-row-delay", delay + "s");
+          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
+          track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
+        });
+
+        document.documentElement.style.setProperty("--loop-distance", safeDistance + "px");
+        document.documentElement.style.setProperty("--loop-duration", state.seconds + "s");
+        document.documentElement.style.setProperty("--loop-pad-tb", state.padTopBottom + "px");
+        document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
+        document.documentElement.style.setProperty("--loop-gap", gapWidth + "px");
+        document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+      }
+
+      renderLoop();
+    <\/script>
+  </body>
+</html>`;
+}
+
+function readOutputs() {
+  const rawValue = readStorage(STORAGE_KEYS.outputs);
+  if (!rawValue) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(rawValue);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveOutputs(outputs) {
+  writeStorage(STORAGE_KEYS.outputs, JSON.stringify(outputs));
+}
+
+function setSaveVersionStatus(message, isError) {
+  if (!saveVersionStatus) {
+    return;
+  }
+  saveVersionStatus.textContent = message;
+  saveVersionStatus.style.color = isError ? "#8a0000" : "#2f5f2f";
+}
+
+function saveCurrentVersionSnapshot() {
+  const directionName = getCurrentDirectionName();
+  if (!directionName) {
+    setSaveVersionStatus("Select a direction before saving.", true);
+    return;
+  }
+
+  const now = new Date();
+  const timestampName = formatTimestampForName(now);
+  const config = getCurrentLoopConfig();
+  const snapshot = {
+    id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: timestampName,
+    createdAt: now.toISOString(),
+    directionName,
+    config,
+    html: buildSnapshotHtml(config)
+  };
+
+  const existing = readOutputs();
+  existing.unshift(snapshot);
+  saveOutputs(existing);
+  setSaveVersionStatus(`Saved ${timestampName}.`);
 }
 
 function saveSpeed(seconds) {
@@ -974,6 +1290,7 @@ function renderDirectory(directions) {
     button.type = "button";
     button.className = "direction-item";
     button.textContent = name;
+    button.dataset.directionName = name;
     button.addEventListener("click", () => {
       loadDirection(directionPath(name));
       setActiveDirection(button);
@@ -1093,6 +1410,12 @@ async function init() {
     reverseOddRowsControl.addEventListener("change", () => {
       saveReverseOddRows(currentReverseOddRows());
       sendLoopConfigToPreview();
+    });
+  }
+
+  if (saveVersionButton) {
+    saveVersionButton.addEventListener("click", () => {
+      saveCurrentVersionSnapshot();
     });
   }
 
