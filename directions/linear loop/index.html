@@ -12,6 +12,7 @@
         --loop-pad-lr: 0px;
         --loop-bg: #fff8a5;
         --loop-gap: 0px;
+        --loop-row-gap: 0px;
       }
 
       html,
@@ -48,6 +49,7 @@
         inset: 0;
         display: flex;
         flex-direction: column;
+        gap: var(--loop-row-gap);
         height: 100%;
         overflow: hidden;
       }
@@ -109,6 +111,7 @@
         assetGap: 0,
         rowCount: 1,
         rowOffset: 0,
+        rowGap: 0,
         reverseOddRows: false
       };
       let playbackTimer = null;
@@ -233,8 +236,7 @@
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", `${delay}s`);
-          const isOddRowHuman = rowIndex % 2 === 0;
-          const reverse = !!state.reverseOddRows && isOddRowHuman;
+          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
           track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
         });
 
@@ -245,6 +247,7 @@
         document.documentElement.style.setProperty("--loop-pad-tb", `${state.padTopBottom}px`);
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${gapWidth}px`);
+        document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);
         emitPlayback();
       }
 
@@ -331,6 +334,11 @@
         const rowOffset = Number(payload.rowOffset);
         if (Number.isFinite(rowOffset) && rowOffset >= 0) {
           state.rowOffset = rowOffset;
+        }
+
+        const rowGap = Number(payload.rowGap);
+        if (Number.isFinite(rowGap) && rowGap >= 0) {
+          state.rowGap = rowGap;
         }
 
         state.reverseOddRows = !!payload.reverseOddRows;

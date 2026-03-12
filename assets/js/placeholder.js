@@ -9,9 +9,10 @@ const bgColorControl = document.getElementById("bgColorControl");
 const assetGapControl = document.getElementById("assetGapControl");
 const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
+const rowGapControl = document.getElementById("rowGapControl");
 const reverseOddRowsControl = document.getElementById("reverseOddRowsControl");
-const artworkUpload = document.getElementById("artworkUpload");
-const loopPreviewTrack = document.getElementById("loopPreviewTrack");
+const loopPreviewGrid = document.getElementById("loopPreviewGrid");
+let loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
 const loopActiveWindowSecondary = document.getElementById("loopActiveWindowSecondary");
@@ -24,6 +25,7 @@ const STORAGE_KEYS = {
   assetGap: "billboard.loopAssetGap",
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
+  rowGap: "billboard.loopRowGap",
   reverseOddRows: "billboard.loopReverseOddRows",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
@@ -43,6 +45,11 @@ let loopStageHeight = 1;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
+let loopRowCount = 1;
+let loopRowOffset = 0;
+let loopRowGap = 0;
+let loopReverseOddRows = false;
+let loopPlaybackDistance = 1;
 
 function normalizeHref(href) {
   if (!href) {
@@ -364,6 +371,14 @@ function currentRowOffset() {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function currentRowGap() {
+  if (!rowGapControl) {
+    return 0;
+  }
+  const parsed = Number(rowGapControl.value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
 function currentReverseOddRows() {
   if (!reverseOddRowsControl) {
     return false;
@@ -413,6 +428,10 @@ function saveRowCount(value) {
 
 function saveRowOffset(value) {
   writeStorage(STORAGE_KEYS.rowOffset, String(value));
+}
+
+function saveRowGap(value) {
+  writeStorage(STORAGE_KEYS.rowGap, String(value));
 }
 
 function saveReverseOddRows(value) {
@@ -508,6 +527,18 @@ function restoreLoopLayoutSettings() {
     }
   }
 
+  if (rowGapControl) {
+    const raw = readStorage(STORAGE_KEYS.rowGap);
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const min = Number(rowGapControl.min || 0);
+        const max = Number(rowGapControl.max || 1200);
+        rowGapControl.value = String(Math.min(max, Math.max(min, parsed)));
+      }
+    }
+  }
+
   if (reverseOddRowsControl) {
     const raw = readStorage(STORAGE_KEYS.reverseOddRows);
     reverseOddRowsControl.checked = raw === "1" || raw === "true";
@@ -568,6 +599,7 @@ function sendLoopConfigToPreview() {
     assetGap: currentAssetGap(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
+    rowGap: currentRowGap(),
     reverseOddRows: currentReverseOddRows()
   };
   billboardPreview.contentWindow.postMessage(payload, "*");
@@ -593,6 +625,17 @@ function syncVisualizationGapScaled() {
   syncVisualizationGeometry();
 }
 
+function syncVisualizationRowGapScaled() {
+  if (!loopVisualization) {
+    return;
+  }
+  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
+  const sourceHeight = Math.max(1, loopStageHeight);
+  const scaledRaw = (Math.max(0, loopRowGap) * previewHeight) / sourceHeight;
+  const scaled = Math.round(scaledRaw * 100) / 100;
+  loopVisualization.style.setProperty("--preview-row-gap", `${scaled}px`);
+}
+
 function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
@@ -609,10 +652,10 @@ function syncVisualizationPaddingScaled() {
 }
 
 function syncVisualizationGeometry() {
-  if (!loopVisualization || !loopPreviewTrack) {
+  if (!loopVisualization || !loopPreviewGrid || !loopPreviewTrack) {
     return;
   }
-  const totalWidth = loopPreviewTrack.scrollWidth;
+  const totalWidth = loopPreviewGrid.scrollWidth;
   if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
     return;
   }
@@ -621,27 +664,51 @@ function syncVisualizationGeometry() {
 }
 
 function renderLoopPreview() {
-  if (!loopPreviewTrack) {
+  if (!loopPreviewTrack || !loopPreviewGrid) {
     return;
   }
 
-  loopPreviewTrack.innerHTML = "";
-  loopArtworks.forEach((item, index) => {
-    const tile = document.createElement("div");
-    tile.className = "loop-preview-item";
-    tile.dataset.index = String(index);
-    tile.dataset.artworkId = item.id;
+  const rowCount = Math.max(1, loopRowCount || 1);
+  loopPreviewGrid.innerHTML = "";
 
-    const image = document.createElement("img");
-    image.src = item.src;
-    image.alt = "";
-    tile.appendChild(image);
+  function buildRowTrack(targetTrack, rowIndex) {
+    targetTrack.innerHTML = "";
+    loopArtworks.forEach((item, itemIndex) => {
+      const tile = document.createElement("div");
+      tile.className = "loop-preview-item";
+      tile.dataset.index = String(itemIndex);
+      tile.dataset.artworkId = item.id;
 
-    loopPreviewTrack.appendChild(tile);
-  });
+      const image = document.createElement("img");
+      image.src = item.src;
+      image.alt = "";
+      tile.appendChild(image);
+      targetTrack.appendChild(tile);
+    });
+  }
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = document.createElement("div");
+    row.className = "loop-preview-row";
+    const track = document.createElement("div");
+    track.className = "loop-preview-track";
+    if (rowIndex === 0) {
+      track.id = "loopPreviewTrack";
+    }
+    buildRowTrack(track, rowIndex);
+    row.appendChild(track);
+    loopPreviewGrid.appendChild(row);
+  }
+
+  loopPreviewTrack = document.getElementById("loopPreviewTrack");
+  if (loopPreviewSortable && typeof loopPreviewSortable.destroy === "function") {
+    loopPreviewSortable.destroy();
+  }
+  loopPreviewSortable = null;
 
   initLoopSortable();
   syncVisualizationPaddingScaled();
+  syncVisualizationRowGapScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
   updateActiveWindow();
@@ -799,14 +866,6 @@ function removeArtwork(index) {
   sendLoopConfigToPreview();
 }
 
-function addArtworkFromInput() {
-  if (!artworkUpload || !artworkUpload.files || !artworkUpload.files[0]) {
-    return;
-  }
-  addArtworkFiles(artworkUpload.files);
-  artworkUpload.value = "";
-}
-
 function renderDirectory(directions) {
   directoryPanel.innerHTML = "";
 
@@ -870,6 +929,10 @@ async function init() {
   }
 
   syncSpeedReadout();
+  loopRowCount = currentRowCount();
+  loopRowOffset = currentRowOffset();
+  loopRowGap = currentRowGap();
+  loopReverseOddRows = currentReverseOddRows();
   renderLoopPreview();
 
   if (speedControl) {
@@ -920,6 +983,8 @@ async function init() {
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
       saveRowCount(currentRowCount());
+      loopRowCount = currentRowCount();
+      renderLoopPreview();
       sendLoopConfigToPreview();
     });
   }
@@ -927,6 +992,18 @@ async function init() {
   if (rowOffsetControl) {
     rowOffsetControl.addEventListener("input", () => {
       saveRowOffset(currentRowOffset());
+      loopRowOffset = currentRowOffset();
+      renderLoopPreview();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (rowGapControl) {
+    rowGapControl.addEventListener("input", () => {
+      saveRowGap(currentRowGap());
+      loopRowGap = currentRowGap();
+      syncVisualizationRowGapScaled();
+      syncVisualizationGeometry();
       sendLoopConfigToPreview();
     });
   }
@@ -934,12 +1011,10 @@ async function init() {
   if (reverseOddRowsControl) {
     reverseOddRowsControl.addEventListener("change", () => {
       saveReverseOddRows(currentReverseOddRows());
+      loopReverseOddRows = currentReverseOddRows();
+      renderLoopPreview();
       sendLoopConfigToPreview();
     });
-  }
-
-  if (artworkUpload) {
-    artworkUpload.addEventListener("change", addArtworkFromInput);
   }
 
   if (loopVisualization) {
