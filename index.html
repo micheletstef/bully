@@ -202,51 +202,43 @@
         </section>
       </main>
     </div>
-    <div class="view-controls-dock">
-      <button id="openViewControlsButton" type="button" class="action-button">view controls</button>
-    </div>
-    <div id="viewControlsModal" class="view-controls-modal" hidden>
-      <div class="view-controls-panel" role="dialog" aria-modal="true" aria-labelledby="viewControlsTitle">
-        <div class="view-controls-header">
-          <h3 id="viewControlsTitle" class="settings-title">view controls</h3>
-          <button id="closeViewControlsButton" type="button" class="view-controls-close" aria-label="Close view controls">
-            x
-          </button>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">view mode</span>
-          <select id="previewViewModeControl">
-            <option value="flat">flat</option>
-            <option value="3d">3d street</option>
-          </select>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">yaw</span>
-          <input id="cameraYawControl" type="range" min="-3.14" max="3.14" step="0.01" value="-0.78" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">pitch</span>
-          <input id="cameraPitchControl" type="range" min="-1.2" max="1.45" step="0.01" value="0.96" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">perspective</span>
-          <input id="cameraPerspectiveControl" type="range" min="0.35" max="2.5" step="0.01" value="1" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">frame fit</span>
-          <input id="cameraFitControl" type="range" min="0.55" max="0.98" step="0.01" value="0.84" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">drag sensitivity</span>
-          <input id="cameraDragSensitivityControl" type="range" min="0.4" max="2.6" step="0.05" value="1" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">texture quality</span>
-          <input id="cameraTextureQualityControl" type="range" min="1" max="3" step="0.25" value="1.75" />
-        </div>
-        <div class="settings-row settings-row-top">
-          <button id="resetViewControlsButton" type="button" class="action-button">reset camera</button>
-        </div>
+    <div class="view-controls-panel view-controls-panel-fixed" aria-labelledby="viewControlsTitle">
+      <div class="view-controls-header">
+        <h3 id="viewControlsTitle" class="settings-title">view controls</h3>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">view mode</span>
+        <select id="previewViewModeControl">
+          <option value="flat">flat</option>
+          <option value="3d">3d street</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">yaw</span>
+        <input id="cameraYawControl" type="range" min="-3.14" max="3.14" step="0.01" value="-0.78" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">pitch</span>
+        <input id="cameraPitchControl" type="range" min="-1.2" max="1.45" step="0.01" value="0.96" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">perspective</span>
+        <input id="cameraPerspectiveControl" type="range" min="0.35" max="2.5" step="0.01" value="1" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">frame fit</span>
+        <input id="cameraFitControl" type="range" min="0.55" max="0.98" step="0.01" value="0.84" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">drag sensitivity</span>
+        <input id="cameraDragSensitivityControl" type="range" min="0.4" max="2.6" step="0.05" value="1" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">texture quality</span>
+        <input id="cameraTextureQualityControl" type="range" min="1" max="3" step="0.25" value="1.75" />
+      </div>
+      <div class="settings-row settings-row-top">
+        <button id="resetViewControlsButton" type="button" class="action-button">reset camera</button>
       </div>
     </div>
     <script type="module" src="assets/js/three-loader.js"></script>

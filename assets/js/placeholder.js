@@ -7,9 +7,6 @@ const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
 const previewViewModeControl = document.getElementById("previewViewModeControl");
-const openViewControlsButton = document.getElementById("openViewControlsButton");
-const closeViewControlsButton = document.getElementById("closeViewControlsButton");
-const viewControlsModal = document.getElementById("viewControlsModal");
 const cameraYawControl = document.getElementById("cameraYawControl");
 const cameraPitchControl = document.getElementById("cameraPitchControl");
 const cameraPerspectiveControl = document.getElementById("cameraPerspectiveControl");
@@ -126,7 +123,6 @@ const preview3dThreeState = {
   texture: null,
   textureSource: "",
   textureRequestToken: 0,
-  textureScrollSpan: 1,
   textureScrollBaseX: 0,
   textureOffsetY: 0
 };
@@ -274,7 +270,7 @@ function fileExtension(name) {
 
 function isSupportedArtworkFile(file) {
   const extension = fileExtension(file.name);
-  return ["svg", "png", "jpg", "jpeg", "jpt", "pdf"].includes(extension);
+  return ["svg", "png", "jpg", "jpeg", "jpt", "gif", "pdf"].includes(extension);
 }
 
 function readFileAsDataUrl(file) {
@@ -445,6 +441,10 @@ async function processArtworkFile(file) {
   }
   if (extension === "pdf") {
     return convertPdfToDataUrl(file);
+  }
+  if (extension === "gif") {
+    // Preserve GIF animation; raster conversion would flatten to a single frame.
+    return readFileAsDataUrl(file);
   }
   return rasterFileToDataUrl(file);
 }
@@ -841,40 +841,6 @@ function restorePreview3dSettings() {
   clampPreview3dCamera();
 }
 
-function setViewControlsOpen(isOpen) {
-  if (!viewControlsModal) {
-    return;
-  }
-  viewControlsModal.hidden = !isOpen;
-}
-
-function setupViewControlsModal() {
-  if (!viewControlsModal) {
-    return;
-  }
-  if (openViewControlsButton) {
-    openViewControlsButton.addEventListener("click", () => {
-      syncViewControlsUI();
-      setViewControlsOpen(true);
-    });
-  }
-  if (closeViewControlsButton) {
-    closeViewControlsButton.addEventListener("click", () => {
-      setViewControlsOpen(false);
-    });
-  }
-  viewControlsModal.addEventListener("click", (event) => {
-    if (event.target === viewControlsModal) {
-      setViewControlsOpen(false);
-    }
-  });
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && viewControlsModal && !viewControlsModal.hidden) {
-      setViewControlsOpen(false);
-    }
-  });
-}
-
 function clear3dDragState() {
   preview3dDragState = null;
   if (billboard3dCanvas) {
@@ -1133,7 +1099,6 @@ function loadThreeTextureFromSource(src) {
       }
       preview3dThreeState.texture = texture;
       preview3dThreeState.textureSource = src;
-      preview3dThreeState.textureScrollSpan = 1;
       preview3dThreeState.textureScrollBaseX = 0;
       preview3dThreeState.textureOffsetY = 0;
       preview3dThreeState.mesh.material.map = texture;
@@ -1203,7 +1168,6 @@ async function syncThreeLoopTexture() {
   }
   preview3dThreeState.texture = texture;
   preview3dThreeState.textureSource = `loop:${current3dSources().join("|")}:${current3dOrientation()}`;
-  preview3dThreeState.textureScrollSpan = spanX;
   preview3dThreeState.textureScrollBaseX = baseX;
   preview3dThreeState.textureOffsetY = offsetY;
   preview3dThreeState.mesh.material.map = texture;
@@ -1239,7 +1203,7 @@ function renderThreeFrame() {
   camera.updateProjectionMatrix();
   if (texture) {
     const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * preview3dThreeState.textureScrollSpan;
+    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
     texture.offset.y = preview3dThreeState.textureOffsetY;
   }
   renderer.render(scene, camera);
@@ -3324,7 +3288,6 @@ async function init() {
   renderPartitionEditors();
   syncDirectionModeUI();
   applyPreviewViewMode(previewViewMode);
-  setupViewControlsModal();
   syncViewControlsUI();
 
   if (speedControl) {
