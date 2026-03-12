@@ -379,23 +379,36 @@ async function processArtworkFile(file) {
   return rasterFileToDataUrl(file);
 }
 
-async function addArtworkFiles(files) {
+async function addArtworkFiles(files, partitionKey = null) {
   const validFiles = [...files].filter((file) => isSupportedArtworkFile(file));
   if (!validFiles.length) {
     return;
   }
 
+  const normalizedPartitionKey = normalizePartitionKey(partitionKey);
+  const shouldTargetPartition = normalizedPartitionKey && currentDirectionIsPartitioned();
+
   for (const file of validFiles) {
     try {
       const src = await processArtworkFile(file);
-      loopArtworks.push(createArtworkItem(src, file.name || "upload"));
+      const newItem = createArtworkItem(src, file.name || "upload");
+      if (shouldTargetPartition) {
+        partitionArtworks[normalizedPartitionKey].push(newItem);
+      } else {
+        loopArtworks.push(newItem);
+      }
     } catch (error) {
       // Ignore single-file failures and continue with others.
     }
   }
 
-  saveArtworks(loopArtworks);
-  renderLoopPreview();
+  if (shouldTargetPartition) {
+    savePartitionArtworks(partitionArtworks);
+    renderPartitionArtworkLists();
+  } else {
+    saveArtworks(loopArtworks);
+    renderLoopPreview();
+  }
   sendLoopConfigToPreview();
 }
 
@@ -437,12 +450,42 @@ async function loadDirectionsFromManifest() {
   return [];
 }
 
-function loadDirection(path) {
+function syncDirectionModeUI() {
+  const partitioned = currentDirectionIsPartitioned();
+  if (appShell) {
+    appShell.classList.toggle("partitioned-mode", partitioned);
+  }
+  if (partitionedUploads) {
+    partitionedUploads.style.display = partitioned ? "flex" : "none";
+  }
+  if (settingsTitle) {
+    const base = activeDirectionName || "linear loop";
+    settingsTitle.textContent = `${base} settings`;
+  }
+  if (partitioned) {
+    if (loopActiveWindow) {
+      loopActiveWindow.style.display = "none";
+    }
+    if (loopActiveWindowSecondary) {
+      loopActiveWindowSecondary.style.display = "none";
+    }
+    if (loopElapsedTime) {
+      loopElapsedTime.style.display = "none";
+    }
+    renderPartitionArtworkLists();
+  } else {
+    renderLoopPreview();
+  }
+}
+
+function loadDirection(path, directionName = null) {
+  activeDirectionName = directionName || null;
   billboardPreview.removeAttribute("srcdoc");
   billboardPreview.src = path;
   billboardPreview.style.display = "block";
   emptyState.style.display = "none";
   setSettingsPanelVisibility(true);
+  syncDirectionModeUI();
 }
 
 function loadOutputSnapshot(snapshot) {
@@ -462,6 +505,13 @@ function loadOutputSnapshot(snapshot) {
   billboardPreview.srcdoc = renderedHtml;
   billboardPreview.style.display = "block";
   emptyState.style.display = "none";
+  activeDirectionName =
+    snapshot && typeof snapshot.directionName === "string" && snapshot.directionName.trim()
+      ? snapshot.directionName.trim()
+      : normalizedConfig && normalizedConfig.directionMode === "partitioned"
+        ? "partitioned"
+        : "linear loop";
+  syncDirectionModeUI();
   setSettingsPanelVisibility(false);
 }
 
@@ -578,6 +628,9 @@ function formatTimestampForName(date) {
 }
 
 function getCurrentDirectionName() {
+  if (activeDirectionName) {
+    return activeDirectionName;
+  }
   const activeButton = directoryPanel.querySelector(".direction-item.active");
   if (activeButton && activeButton.dataset.directionName) {
     return activeButton.dataset.directionName;
@@ -586,9 +639,8 @@ function getCurrentDirectionName() {
 }
 
 function getCurrentLoopConfig() {
-  return {
+  const config = {
     seconds: currentSpeedSeconds(),
-    artworks: loopArtworks.map((item) => item.src),
     padTopBottom: currentPadTopBottom(),
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
@@ -596,8 +648,20 @@ function getCurrentLoopConfig() {
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
     rowGap: currentRowGap(),
-    reverseOddRows: currentReverseOddRows()
+    reverseOddRows: currentReverseOddRows(),
+    directionMode: currentDirectionIsPartitioned() ? "partitioned" : "linear"
   };
+
+  if (currentDirectionIsPartitioned()) {
+    config.artworksByPartition = {
+      left: (partitionArtworks.left || []).map((item) => item.src),
+      curve: (partitionArtworks.curve || []).map((item) => item.src),
+      right: (partitionArtworks.right || []).map((item) => item.src)
+    };
+  } else {
+    config.artworks = loopArtworks.map((item) => item.src);
+  }
+  return config;
 }
 
 function escapeJsonForScript(value) {
@@ -608,6 +672,9 @@ function escapeJsonForScript(value) {
 }
 
 function buildSnapshotHtml(config) {
+  if (config && (config.directionMode === "partitioned" || config.artworksByPartition)) {
+    return buildPartitionedSnapshotHtml(config);
+  }
   const safeState = escapeJsonForScript(config);
   return `<!doctype html>
 <html lang="en">
@@ -895,6 +962,270 @@ function buildSnapshotHtml(config) {
 </html>`;
 }
 
+function buildPartitionedSnapshotHtml(config) {
+  const safeState = escapeJsonForScript(config);
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>saved output</title>
+    <style>
+      :root {
+        --loop-duration: 16s;
+        --loop-pad-tb: 0px;
+        --loop-pad-lr: 0px;
+        --loop-bg: #fff8a5;
+        --loop-gap: 0px;
+        --loop-row-gap: 0px;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body,
+      .canvas {
+        background: var(--loop-bg);
+      }
+
+      .canvas {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .partition-grid {
+        position: absolute;
+        inset: var(--loop-pad-tb) 0;
+        display: grid;
+        grid-template-columns: 1820fr 1020fr 3060fr;
+        overflow: hidden;
+      }
+
+      .partition {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .partition:not(:last-child) {
+        box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.14);
+      }
+
+      .loop-fill {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--loop-row-gap);
+        padding: 0 var(--loop-pad-lr);
+        overflow: hidden;
+      }
+
+      .loop-row {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .loop-row-track {
+        display: flex;
+        gap: var(--loop-gap);
+        width: max-content;
+        height: 100%;
+        animation: loop-x var(--loop-duration) linear infinite;
+        animation-delay: var(--loop-row-delay, 0s);
+        animation-direction: var(--loop-row-direction, normal);
+      }
+
+      @keyframes loop-x {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      .loop-artwork {
+        height: 100%;
+        width: auto;
+        flex: 0 0 auto;
+      }
+
+      .loop-spacer {
+        height: 100%;
+        flex: 0 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div class="partition-grid">
+        <section class="partition"><div id="partitionLeft" class="loop-fill"></div></section>
+        <section class="partition"><div id="partitionCurve" class="loop-fill"></div></section>
+        <section class="partition"><div id="partitionRight" class="loop-fill"></div></section>
+      </div>
+    </div>
+    <script>
+      const partitionContainers = {
+        left: document.getElementById("partitionLeft"),
+        curve: document.getElementById("partitionCurve"),
+        right: document.getElementById("partitionRight")
+      };
+      const PARTITION_KEYS = ["left", "curve", "right"];
+      const DEFAULT_SOURCE = "assets/linear-loop-strip.png";
+      const state = ${safeState};
+
+      function normalizeArtworkSource(path) {
+        if (/^(https?:|data:|blob:)/.test(path)) {
+          return path;
+        }
+        if (path.startsWith("../../") || path.startsWith("../")) {
+          return path;
+        }
+        return path;
+      }
+
+      function waitForImage(img) {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }
+
+      async function renderPartition(container, sources) {
+        container.innerHTML = "";
+        const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
+        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const rows = [];
+        const allImages = [];
+        let firstSequenceNodes = [];
+        let firstSequenceStartNode = null;
+        let secondSequenceStartNode = null;
+
+        function appendSequence(track, collectNodes) {
+          const nodes = [];
+          let startNode = null;
+
+          if (sidePadding > 0) {
+            const spacerStart = document.createElement("div");
+            spacerStart.className = "loop-spacer";
+            spacerStart.style.width = sidePadding + "px";
+            track.appendChild(spacerStart);
+            nodes.push(spacerStart);
+            startNode = spacerStart;
+          }
+
+          sources.forEach((src) => {
+            const image = document.createElement("img");
+            image.className = "loop-artwork";
+            image.src = src;
+            image.alt = "";
+            track.appendChild(image);
+            allImages.push(image);
+            nodes.push(image);
+            if (!startNode) {
+              startNode = image;
+            }
+          });
+
+          if (sidePadding > 0) {
+            const spacerEnd = document.createElement("div");
+            spacerEnd.className = "loop-spacer";
+            spacerEnd.style.width = sidePadding + "px";
+            track.appendChild(spacerEnd);
+            nodes.push(spacerEnd);
+          }
+
+          if (collectNodes) {
+            firstSequenceNodes = nodes;
+            firstSequenceStartNode = startNode;
+          }
+
+          return startNode;
+        }
+
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          const row = document.createElement("div");
+          row.className = "loop-row";
+          const track = document.createElement("div");
+          track.className = "loop-row-track";
+          row.appendChild(track);
+          container.appendChild(row);
+          rows.push(track);
+
+          appendSequence(track, rowIndex === 0);
+          const secondStart = appendSequence(track, false);
+          if (rowIndex === 0) {
+            secondSequenceStartNode = secondStart;
+          }
+        }
+
+        await Promise.all(allImages.map(waitForImage));
+
+        const gapWidth = Math.max(0, Number(state.assetGap) || 0);
+        let loopDistance = 0;
+        if (firstSequenceStartNode && secondSequenceStartNode) {
+          const firstRect = firstSequenceStartNode.getBoundingClientRect();
+          const secondRect = secondSequenceStartNode.getBoundingClientRect();
+          loopDistance = secondRect.left - firstRect.left;
+        }
+        if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
+          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
+            + Math.max(0, firstSequenceNodes.length - 1) * gapWidth;
+        }
+        const safeDistance = loopDistance > 0 ? loopDistance : 1;
+
+        const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
+        rows.forEach((track, rowIndex) => {
+          const delay = -1 * offsetSecondsPerRow * rowIndex;
+          track.style.setProperty("--loop-row-delay", delay + "s");
+          track.style.setProperty("--loop-distance", safeDistance + "px");
+          const reverse = !!state.reverseOddRows && rowIndex % 2 === 1;
+          track.style.setProperty("--loop-row-direction", reverse ? "reverse" : "normal");
+        });
+      }
+
+      async function render() {
+        const safeBackground = /^#[0-9a-f]{6}$/i.test(state.backgroundColor || "")
+          ? state.backgroundColor
+          : "#fff8a5";
+        document.documentElement.style.setProperty("--loop-duration", (Number(state.seconds) || 16) + "s");
+        document.documentElement.style.setProperty("--loop-pad-tb", Math.max(0, Number(state.padTopBottom) || 0) + "px");
+        document.documentElement.style.setProperty("--loop-pad-lr", Math.max(0, Number(state.padLeftRight) || 0) + "px");
+        document.documentElement.style.setProperty("--loop-bg", safeBackground);
+        document.documentElement.style.setProperty("--loop-gap", Math.max(0, Number(state.assetGap) || 0) + "px");
+        document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+
+        const partitions = state.artworksByPartition && typeof state.artworksByPartition === "object"
+          ? state.artworksByPartition
+          : {};
+
+        for (const key of PARTITION_KEYS) {
+          const container = partitionContainers[key];
+          if (!container) {
+            continue;
+          }
+          const raw = Array.isArray(partitions[key]) ? partitions[key] : [];
+          const sources = raw.length ? raw.map(normalizeArtworkSource) : [DEFAULT_SOURCE];
+          await renderPartition(container, sources);
+        }
+      }
+
+      render();
+    <\/script>
+  </body>
+</html>`;
+}
+
 function coerceSnapshotLoopConfig(candidate) {
   if (!candidate || typeof candidate !== "object") {
     return null;
@@ -908,6 +1239,29 @@ function coerceSnapshotLoopConfig(candidate) {
       .map((item) => normalizeSnapshotArtworkSource(item))
       .filter((item) => item.length > 0)
     : [];
+  const artworksByPartition =
+    candidate.artworksByPartition && typeof candidate.artworksByPartition === "object"
+      ? {
+          left: Array.isArray(candidate.artworksByPartition.left)
+            ? candidate.artworksByPartition.left
+              .map((item) => String(item).trim())
+              .map((item) => normalizeSnapshotArtworkSource(item))
+              .filter((item) => item.length > 0)
+            : [],
+          curve: Array.isArray(candidate.artworksByPartition.curve)
+            ? candidate.artworksByPartition.curve
+              .map((item) => String(item).trim())
+              .map((item) => normalizeSnapshotArtworkSource(item))
+              .filter((item) => item.length > 0)
+            : [],
+          right: Array.isArray(candidate.artworksByPartition.right)
+            ? candidate.artworksByPartition.right
+              .map((item) => String(item).trim())
+              .map((item) => normalizeSnapshotArtworkSource(item))
+              .filter((item) => item.length > 0)
+            : []
+        }
+      : null;
 
   const padTopBottomRaw = Number(candidate.padTopBottom);
   const padLeftRightRaw = Number(candidate.padLeftRight);
@@ -923,6 +1277,7 @@ function coerceSnapshotLoopConfig(candidate) {
   return {
     seconds,
     artworks,
+    artworksByPartition,
     padTopBottom: Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0 ? padTopBottomRaw : 0,
     padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
     backgroundColor,
@@ -930,7 +1285,9 @@ function coerceSnapshotLoopConfig(candidate) {
     rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
     rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
     rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
-    reverseOddRows: !!candidate.reverseOddRows
+    reverseOddRows: !!candidate.reverseOddRows,
+    directionMode:
+      candidate.directionMode === "partitioned" || artworksByPartition ? "partitioned" : "linear"
   };
 }
 
@@ -1282,7 +1639,6 @@ function sendLoopConfigToPreview() {
   const payload = {
     type: "setLoopConfig",
     seconds,
-    artworks: loopArtworks.map((item) => item.src),
     padTopBottom: currentPadTopBottom(),
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
@@ -1292,6 +1648,15 @@ function sendLoopConfigToPreview() {
     rowGap: currentRowGap(),
     reverseOddRows: currentReverseOddRows()
   };
+  if (currentDirectionIsPartitioned()) {
+    payload.artworksByPartition = {
+      left: (partitionArtworks.left || []).map((item) => item.src),
+      curve: (partitionArtworks.curve || []).map((item) => item.src),
+      right: (partitionArtworks.right || []).map((item) => item.src)
+    };
+  } else {
+    payload.artworks = loopArtworks.map((item) => item.src);
+  }
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
 }
@@ -1412,6 +1777,79 @@ function renderLoopPreview() {
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
   updateActiveWindow();
+}
+
+function removePartitionArtwork(partitionKey, index) {
+  const key = normalizePartitionKey(partitionKey);
+  if (!key) {
+    return;
+  }
+  const items = partitionArtworks[key];
+  if (!Array.isArray(items)) {
+    return;
+  }
+  items.splice(index, 1);
+  savePartitionArtworks(partitionArtworks);
+  renderPartitionArtworkLists();
+  sendLoopConfigToPreview();
+}
+
+function renderPartitionList(listEl, partitionKey) {
+  if (!listEl) {
+    return;
+  }
+  const key = normalizePartitionKey(partitionKey);
+  if (!key) {
+    listEl.innerHTML = "";
+    return;
+  }
+  const items = partitionArtworks[key] || [];
+  listEl.innerHTML = "";
+
+  if (!items.length) {
+    const hint = document.createElement("div");
+    hint.className = "settings-hint";
+    hint.textContent = "(none)";
+    listEl.appendChild(hint);
+    return;
+  }
+
+  items.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "artwork-item";
+
+    const thumb = document.createElement("img");
+    thumb.className = "artwork-thumb";
+    thumb.src = item.src;
+    thumb.alt = "";
+    row.appendChild(thumb);
+
+    const name = document.createElement("span");
+    name.className = "artwork-index";
+    name.textContent = item.name || `asset ${index + 1}`;
+    row.appendChild(name);
+
+    const suffix = document.createElement("span");
+    suffix.className = "artwork-suffix";
+    suffix.textContent = artworkLastFive(item.name || item.src || "");
+    row.appendChild(suffix);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "artwork-remove";
+    removeButton.textContent = "remove";
+    removeButton.addEventListener("click", () => {
+      removePartitionArtwork(key, index);
+    });
+    row.appendChild(removeButton);
+    listEl.appendChild(row);
+  });
+}
+
+function renderPartitionArtworkLists() {
+  renderPartitionList(partitionListLeft, "left");
+  renderPartitionList(partitionListCurve, "curve");
+  renderPartitionList(partitionListRight, "right");
 }
 
 function artworkLastFive(path) {
@@ -1609,7 +2047,7 @@ function renderDirectory(directions) {
     button.textContent = name;
     button.dataset.directionName = name;
     button.addEventListener("click", () => {
-      loadDirection(directionPath(name));
+      loadDirection(directionPath(name), name);
       setActiveSidebarItem(button, `direction:${name}`);
       saveSelectedDirection(name);
     });
@@ -1684,13 +2122,13 @@ function renderDirectory(directions) {
   }
 
   if (initialButton && initialName) {
-    loadDirection(directionPath(initialName));
+    loadDirection(directionPath(initialName), initialName);
     setActiveSidebarItem(initialButton, `direction:${initialName}`);
     return;
   }
 
   if (firstDirectionButton && directions[0]) {
-    loadDirection(directionPath(directions[0]));
+    loadDirection(directionPath(directions[0]), directions[0]);
     setActiveSidebarItem(firstDirectionButton, `direction:${directions[0]}`);
   }
 }
@@ -1699,6 +2137,7 @@ async function init() {
   restoreSpeed();
   restoreLoopLayoutSettings();
   loopArtworks = restoreArtworks();
+  partitionArtworks = restorePartitionArtworks();
 
   try {
     let directions = [];
@@ -1722,6 +2161,8 @@ async function init() {
   syncSpeedReadout();
   loopRowGap = currentRowGap();
   renderLoopPreview();
+  renderPartitionArtworkLists();
+  syncDirectionModeUI();
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
@@ -1804,12 +2245,42 @@ async function init() {
     });
   }
 
+  if (partitionUploadLeft) {
+    partitionUploadLeft.addEventListener("change", async () => {
+      if (partitionUploadLeft.files && partitionUploadLeft.files.length) {
+        await addArtworkFiles(partitionUploadLeft.files, "left");
+        partitionUploadLeft.value = "";
+      }
+    });
+  }
+
+  if (partitionUploadCurve) {
+    partitionUploadCurve.addEventListener("change", async () => {
+      if (partitionUploadCurve.files && partitionUploadCurve.files.length) {
+        await addArtworkFiles(partitionUploadCurve.files, "curve");
+        partitionUploadCurve.value = "";
+      }
+    });
+  }
+
+  if (partitionUploadRight) {
+    partitionUploadRight.addEventListener("change", async () => {
+      if (partitionUploadRight.files && partitionUploadRight.files.length) {
+        await addArtworkFiles(partitionUploadRight.files, "right");
+        partitionUploadRight.value = "";
+      }
+    });
+  }
+
   if (loopVisualization) {
     loopVisualization.addEventListener("pointermove", (event) => {
       latestPointer = { x: event.clientX, y: event.clientY };
     });
 
     loopVisualization.addEventListener("dragover", (event) => {
+      if (currentDirectionIsPartitioned()) {
+        return;
+      }
       event.preventDefault();
       latestPointer = { x: event.clientX, y: event.clientY };
       loopVisualization.classList.add("drag-over");
@@ -1820,6 +2291,9 @@ async function init() {
     });
 
     loopVisualization.addEventListener("drop", (event) => {
+      if (currentDirectionIsPartitioned()) {
+        return;
+      }
       event.preventDefault();
       loopVisualization.classList.remove("drag-over");
       if (!event.dataTransfer || !event.dataTransfer.files) {
