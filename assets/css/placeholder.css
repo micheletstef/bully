@@ -228,7 +228,8 @@ body {
   transform: translateX(-50%);
   width: min(76vw, 1180px);
   top: calc(50% + (min(76vw, 1180px) * 3480 / 5900 / 2) + 44px);
-  height: 46px;
+  height: auto;
+  padding: 2px;
   overflow-x: auto;
   overflow-y: hidden;
   background: #f1f1f1;
@@ -241,23 +242,39 @@ body {
 .loop-preview-track {
   display: flex;
   width: fit-content;
-  height: 100%;
+  height: 26px;
   gap: 2px;
-  padding: 2px;
   position: relative;
   z-index: 1;
 }
 
 .loop-preview-item {
-  height: calc(100% - 4px);
+  height: 100%;
   min-width: 42px;
   border: 1px solid #c8c8c8;
   background: #fff;
   cursor: grab;
+  transition: transform 150ms ease, opacity 150ms ease;
 }
 
 .loop-preview-item.dragging {
   opacity: 0.45;
+}
+
+.sortable-chosen {
+  opacity: 0.75;
+}
+
+.sortable-ghost {
+  opacity: 0.2;
+  border-color: #d30000;
+}
+
+.sortable-drag {
+  opacity: 0.9;
+  border-color: #d30000;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  cursor: grabbing;
 }
 
 .loop-preview-item img {
@@ -273,6 +290,19 @@ body {
   left: 0;
   width: 20px;
   border: 1px solid #d30000;
+  pointer-events: none;
+  z-index: 3;
+  display: none;
+}
+
+.loop-elapsed-time {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #aa0000;
+  white-space: nowrap;
   pointer-events: none;
   z-index: 3;
   display: none;

@@ -11,6 +11,7 @@ const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
 const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
+const loopElapsedTime = document.getElementById("loopElapsedTime");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
   padTB: "billboard.loopPadTopBottom",
@@ -19,14 +20,17 @@ const STORAGE_KEYS = {
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
 };
-const DEFAULT_ARTWORKS = [
-  { src: "assets/linear-loop-strip.png", name: "linear-loop-strip.png" }
-];
+const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 let loopArtworks = [...DEFAULT_ARTWORKS];
 let draggingArtworkIndex = null;
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
 let loopPlaybackViewportRatio = 0.25;
+let sortableModulePromise = null;
+let loopPreviewSortable = null;
+let latestPointer = { x: null, y: null };
+let loopElapsedSeconds = 0;
+let loopDurationSeconds = 16;
 
 function normalizeHref(href) {
   if (!href) {
@@ -61,6 +65,21 @@ function directionPath(name) {
   return `directions/${encodeURIComponent(name)}/index.html`;
 }
 
+function generateArtworkId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `art-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function createArtworkItem(src, name) {
+  return {
+    id: generateArtworkId(),
+    src,
+    name: name || artworkFileName(src)
+  };
+}
+
 function artworkFileName(path) {
   const clean = String(path).split("?")[0].split("#")[0];
   const parts = clean.split("/");
@@ -69,7 +88,7 @@ function artworkFileName(path) {
 
 function normalizeArtworkItem(item) {
   if (typeof item === "string") {
-    return { src: item, name: artworkFileName(item) };
+    return createArtworkItem(item, artworkFileName(item));
   }
   if (!item || typeof item !== "object") {
     return null;
@@ -82,7 +101,11 @@ function normalizeArtworkItem(item) {
     typeof item.name === "string" && item.name.trim()
       ? item.name.trim()
       : artworkFileName(src);
-  return { src, name };
+  return {
+    id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateArtworkId(),
+    src,
+    name
+  };
 }
 
 function fileExtension(name) {
@@ -169,6 +192,13 @@ async function getPdfJsModule() {
   return pdfJsModulePromise;
 }
 
+async function getSortableModule() {
+  if (!sortableModulePromise) {
+    sortableModulePromise = import("https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/+esm");
+  }
+  return sortableModulePromise;
+}
+
 async function convertPdfToDataUrl(file) {
   const pdfjsLib = await getPdfJsModule();
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -209,7 +239,7 @@ async function addArtworkFiles(files) {
   for (const file of validFiles) {
     try {
       const src = await processArtworkFile(file);
-      loopArtworks.push({ src, name: file.name || "upload" });
+      loopArtworks.push(createArtworkItem(src, file.name || "upload"));
     } catch (error) {
       // Ignore single-file failures and continue with others.
     }
@@ -450,40 +480,18 @@ function renderLoopPreview() {
   loopArtworks.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
-    tile.draggable = true;
     tile.dataset.index = String(index);
+    tile.dataset.artworkId = item.id;
 
     const image = document.createElement("img");
     image.src = item.src;
     image.alt = "";
     tile.appendChild(image);
 
-    tile.addEventListener("dragstart", () => {
-      draggingArtworkIndex = index;
-      tile.classList.add("dragging");
-    });
-
-    tile.addEventListener("dragend", () => {
-      draggingArtworkIndex = null;
-      tile.classList.remove("dragging");
-    });
-
-    tile.addEventListener("dragover", (event) => {
-      event.preventDefault();
-    });
-
-    tile.addEventListener("drop", (event) => {
-      event.preventDefault();
-      const targetIndex = Number(tile.dataset.index);
-      if (!Number.isInteger(targetIndex)) {
-        return;
-      }
-      moveArtwork(draggingArtworkIndex, targetIndex);
-    });
-
     loopPreviewTrack.appendChild(tile);
   });
 
+  initLoopSortable();
   updateActiveWindow();
 }
 
@@ -492,33 +500,89 @@ function artworkLastFive(path) {
   return name.slice(-5);
 }
 
-function moveArtwork(fromIndex, toIndex) {
-  if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
+function reorderArtworksByIds(idOrder) {
+  const byId = new Map(loopArtworks.map((item) => [item.id, item]));
+  const reordered = idOrder.map((id) => byId.get(id)).filter((item) => item);
+  if (reordered.length !== loopArtworks.length) {
     return;
   }
-  if (fromIndex < 0 || toIndex < 0 || fromIndex >= loopArtworks.length || toIndex >= loopArtworks.length) {
-    return;
-  }
-  if (fromIndex === toIndex) {
-    return;
-  }
-
-  const [moved] = loopArtworks.splice(fromIndex, 1);
-  loopArtworks.splice(toIndex, 0, moved);
+  loopArtworks = reordered;
   saveArtworks(loopArtworks);
   renderArtworkList();
-  renderLoopPreview();
   sendLoopConfigToPreview();
 }
 
+function pointerInsideVisualization(x, y) {
+  if (!loopVisualization || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return true;
+  }
+  const rect = loopVisualization.getBoundingClientRect();
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+async function initLoopSortable() {
+  if (!loopPreviewTrack || loopPreviewSortable) {
+    return;
+  }
+
+  try {
+    const mod = await getSortableModule();
+    const Sortable = mod.default || mod.Sortable || mod;
+    loopPreviewSortable = Sortable.create(loopPreviewTrack, {
+      animation: 150,
+      forceFallback: true,
+      fallbackOnBody: true,
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      dragClass: "sortable-drag",
+      onStart: (evt) => {
+        draggingArtworkIndex = evt.oldIndex;
+      },
+      onChange: () => {
+        updateActiveWindow();
+      },
+      onEnd: (evt) => {
+        const idOrder = [...loopPreviewTrack.querySelectorAll(".loop-preview-item")]
+          .map((node) => node.dataset.artworkId)
+          .filter((id) => !!id);
+        reorderArtworksByIds(idOrder);
+
+        const px =
+          evt.originalEvent && Number.isFinite(evt.originalEvent.clientX)
+            ? evt.originalEvent.clientX
+            : latestPointer.x;
+        const py =
+          evt.originalEvent && Number.isFinite(evt.originalEvent.clientY)
+            ? evt.originalEvent.clientY
+            : latestPointer.y;
+
+        if (!pointerInsideVisualization(px, py) && evt.item && evt.item.dataset.artworkId) {
+          const removeIndex = loopArtworks.findIndex((item) => item.id === evt.item.dataset.artworkId);
+          if (removeIndex >= 0) {
+            removeArtwork(removeIndex);
+          }
+        }
+
+        draggingArtworkIndex = null;
+        renderLoopPreview();
+      }
+    });
+  } catch (error) {
+    // Keep basic preview if Sortable fails to load.
+  }
+}
+
 function updateActiveWindow() {
-  if (!loopActiveWindow || !loopPreviewTrack) {
+  if (!loopActiveWindow || !loopPreviewTrack || !loopVisualization) {
     return;
   }
 
   const sequenceWidth = loopPreviewTrack.scrollWidth;
   if (!Number.isFinite(sequenceWidth) || sequenceWidth <= 0) {
     loopActiveWindow.style.display = "none";
+    if (loopElapsedTime) {
+      loopElapsedTime.style.display = "none";
+    }
     return;
   }
 
@@ -526,10 +590,18 @@ function updateActiveWindow() {
   const activeWidth = Math.max(16, sequenceWidth * ratio);
   const maxX = Math.max(0, sequenceWidth - activeWidth);
   const x = maxX * Math.min(1, Math.max(0, loopPlaybackProgress || 0));
+  const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
+  const drawX = baseX + x;
 
   loopActiveWindow.style.display = "block";
   loopActiveWindow.style.width = `${activeWidth}px`;
-  loopActiveWindow.style.transform = `translateX(${x}px)`;
+  loopActiveWindow.style.transform = `translateX(${drawX}px)`;
+
+  if (loopElapsedTime) {
+    loopElapsedTime.style.display = "block";
+    loopElapsedTime.textContent = `${loopElapsedSeconds.toFixed(1)}s / ${loopDurationSeconds.toFixed(1)}s`;
+    loopElapsedTime.style.transform = `translateX(${drawX + activeWidth / 2}px) translateX(-50%)`;
+  }
 }
 
 function removeArtwork(index) {
@@ -689,8 +761,13 @@ async function init() {
   }
 
   if (loopVisualization) {
+    loopVisualization.addEventListener("pointermove", (event) => {
+      latestPointer = { x: event.clientX, y: event.clientY };
+    });
+
     loopVisualization.addEventListener("dragover", (event) => {
       event.preventDefault();
+      latestPointer = { x: event.clientX, y: event.clientY };
       loopVisualization.classList.add("drag-over");
     });
 
@@ -719,6 +796,8 @@ async function init() {
 
     const progress = Number(payload.progress);
     const viewportRatio = Number(payload.viewportRatio);
+    const elapsedSeconds = Number(payload.elapsedSeconds);
+    const durationSeconds = Number(payload.durationSeconds);
 
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
@@ -726,12 +805,21 @@ async function init() {
     if (Number.isFinite(viewportRatio)) {
       loopPlaybackViewportRatio = viewportRatio;
     }
+    if (Number.isFinite(elapsedSeconds)) {
+      loopElapsedSeconds = elapsedSeconds;
+    }
+    if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      loopDurationSeconds = durationSeconds;
+    }
 
     updateActiveWindow();
   });
 
   billboardPreview.addEventListener("load", () => {
     loopActiveWindow.style.display = "none";
+    if (loopElapsedTime) {
+      loopElapsedTime.style.display = "none";
+    }
     sendLoopConfigToPreview();
   });
 }

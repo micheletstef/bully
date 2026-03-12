@@ -85,6 +85,7 @@
         loopDistance: 1024
       };
       let playbackRaf = null;
+      let animationStartMs = performance.now();
 
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
@@ -137,17 +138,20 @@
         );
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
+        animationStartMs = performance.now();
 
         document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
         document.documentElement.style.setProperty("--loop-pad-tb", `${state.padTopBottom}px`);
         document.documentElement.style.setProperty("--loop-pad-lr", `${state.padLeftRight}px`);
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
+        emitPlayback();
       }
 
       function emitPlayback() {
         const durationMs = Math.max(1, state.seconds * 1000);
-        const progress = (performance.now() % durationMs) / durationMs;
+        const elapsedMs = (performance.now() - animationStartMs) % durationMs;
+        const progress = elapsedMs / durationMs;
         const viewportWidth = loopStage ? loopStage.clientWidth : 0;
         const viewportRatio =
           state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportWidth / state.loopDistance)) : 0.25;
@@ -156,7 +160,9 @@
           {
             type: "loopPlayback",
             progress,
-            viewportRatio
+            viewportRatio,
+            elapsedSeconds: elapsedMs / 1000,
+            durationSeconds: durationMs / 1000
           },
           "*"
         );
