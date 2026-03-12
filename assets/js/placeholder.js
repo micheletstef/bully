@@ -125,7 +125,8 @@ const preview3dThreeState = {
   mesh: null,
   texture: null,
   textureSource: "",
-  textureRequestToken: 0
+  textureRequestToken: 0,
+  textureScrollSpan: 1
 };
 let hasWarnedMissingThree = false;
 const preview3dCamera = {
@@ -1087,7 +1088,7 @@ function ensureThreePreviewSetup() {
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
   const geometry = new THREE.PlaneGeometry(BILLBOARD_DESIGN_WIDTH, BILLBOARD_DESIGN_HEIGHT, 1, 1);
   const material = new THREE.MeshBasicMaterial({
-    color: 0xf7e977,
+    color: 0xffffff,
     side: THREE.DoubleSide
   });
   const mesh = new THREE.Mesh(geometry, material);
@@ -1128,6 +1129,7 @@ function loadThreeTextureFromSource(src) {
       }
       preview3dThreeState.texture = texture;
       preview3dThreeState.textureSource = src;
+      preview3dThreeState.textureScrollSpan = 1;
       preview3dThreeState.mesh.material.map = texture;
       preview3dThreeState.mesh.material.needsUpdate = true;
       update3dPreviewAnimation();
@@ -1146,6 +1148,41 @@ function syncThreeTextureSource() {
     return;
   }
   loadThreeTextureFromSource(source);
+}
+
+async function syncThreeLoopTexture() {
+  const THREE = getThreeLib();
+  if (!THREE || !preview3dThreeState.mesh) {
+    return;
+  }
+  const token = ++preview3dThreeState.textureRequestToken;
+  const targetHeight = Math.min(
+    3200,
+    Math.max(520, Math.round(1024 * preview3dRenderSettings.textureQuality))
+  );
+  const surface = await build3dSurfaceStrip(targetHeight);
+  if (token !== preview3dThreeState.textureRequestToken || !surface) {
+    return;
+  }
+
+  const texture = new THREE.CanvasTexture(surface.canvas);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.repeat.set(0.5, 1);
+  texture.offset.set(0, 0);
+  if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
+    texture.colorSpace = THREE.SRGBColorSpace;
+  }
+  texture.needsUpdate = true;
+
+  if (preview3dThreeState.texture) {
+    preview3dThreeState.texture.dispose();
+  }
+  preview3dThreeState.texture = texture;
+  preview3dThreeState.textureSource = `loop:${current3dSources().join("|")}:${current3dOrientation()}`;
+  preview3dThreeState.textureScrollSpan = 0.5;
+  preview3dThreeState.mesh.material.map = texture;
+  preview3dThreeState.mesh.material.needsUpdate = true;
 }
 
 function renderThreeFrame() {
@@ -1177,7 +1214,7 @@ function renderThreeFrame() {
   camera.updateProjectionMatrix();
   if (texture) {
     const progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-    texture.offset.x = progress;
+    texture.offset.x = progress * preview3dThreeState.textureScrollSpan;
   }
   renderer.render(scene, camera);
 }
@@ -1198,6 +1235,7 @@ async function render3dPreview() {
     draw3dFallbackMessage("3D unavailable: THREE failed to initialize");
     return;
   }
+  await syncThreeLoopTexture();
   renderThreeFrame();
 }
 
