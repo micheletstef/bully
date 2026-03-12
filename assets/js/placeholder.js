@@ -4,17 +4,20 @@ const emptyState = document.getElementById("emptyState");
 const speedControl = document.getElementById("speedControl");
 const speedValue = document.getElementById("speedValue");
 const artworkList = document.getElementById("artworkList");
-const artworkInput = document.getElementById("artworkInput");
-const addArtworkButton = document.getElementById("addArtworkButton");
+const artworkUpload = document.getElementById("artworkUpload");
 const loopPreviewTrack = document.getElementById("loopPreviewTrack");
+const loopVisualization = document.getElementById("loopVisualization");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks"
 };
-const DEFAULT_ARTWORKS = ["assets/linear-loop-strip.png"];
+const DEFAULT_ARTWORKS = [
+  { src: "assets/linear-loop-strip.png", name: "linear-loop-strip.png" }
+];
 let loopArtworks = [...DEFAULT_ARTWORKS];
 let draggingArtworkIndex = null;
+let pdfJsModulePromise = null;
 
 function normalizeHref(href) {
   if (!href) {
@@ -47,6 +50,116 @@ async function getDirectoryNames(path) {
 
 function directionPath(name) {
   return `directions/${encodeURIComponent(name)}/index.html`;
+}
+
+function artworkFileName(path) {
+  const clean = String(path).split("?")[0].split("#")[0];
+  const parts = clean.split("/");
+  return parts[parts.length - 1] || clean;
+}
+
+function normalizeArtworkItem(item) {
+  if (typeof item === "string") {
+    return { src: item, name: artworkFileName(item) };
+  }
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const src = typeof item.src === "string" ? item.src.trim() : "";
+  if (!src) {
+    return null;
+  }
+  const name =
+    typeof item.name === "string" && item.name.trim()
+      ? item.name.trim()
+      : artworkFileName(src);
+  return { src, name };
+}
+
+function fileExtension(name) {
+  const lowered = String(name || "").toLowerCase();
+  const dotIndex = lowered.lastIndexOf(".");
+  if (dotIndex < 0) {
+    return "";
+  }
+  return lowered.slice(dotIndex + 1);
+}
+
+function isSupportedArtworkFile(file) {
+  const extension = fileExtension(file.name);
+  return ["svg", "png", "jpg", "jpeg", "jpt", "pdf"].includes(extension);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) {
+        reject(new Error("Unable to read file"));
+        return;
+      }
+      resolve(result);
+    });
+    reader.addEventListener("error", () => reject(new Error("Unable to read file")));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getPdfJsModule() {
+  if (!pdfJsModulePromise) {
+    pdfJsModulePromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs");
+  }
+  return pdfJsModulePromise;
+}
+
+async function convertPdfToDataUrl(file) {
+  const pdfjsLib = await getPdfJsModule();
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs";
+
+  const buffer = await file.arrayBuffer();
+  const documentTask = pdfjsLib.getDocument({ data: buffer });
+  const pdf = await documentTask.promise;
+  const firstPage = await pdf.getPage(1);
+  const viewport = firstPage.getViewport({ scale: 1.5 });
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+
+  await firstPage.render({ canvasContext: context, viewport }).promise;
+  return canvas.toDataURL("image/png");
+}
+
+async function processArtworkFile(file) {
+  const extension = fileExtension(file.name);
+  if (extension === "pdf") {
+    return convertPdfToDataUrl(file);
+  }
+  return readFileAsDataUrl(file);
+}
+
+async function addArtworkFiles(files) {
+  const validFiles = [...files].filter((file) => isSupportedArtworkFile(file));
+  if (!validFiles.length) {
+    return;
+  }
+
+  for (const file of validFiles) {
+    try {
+      const src = await processArtworkFile(file);
+      loopArtworks.push({ src, name: file.name || "upload" });
+    } catch (error) {
+      // Ignore single-file failures and continue with others.
+    }
+  }
+
+  saveArtworks(loopArtworks);
+  renderArtworkList();
+  renderLoopPreview();
+  sendLoopConfigToPreview();
 }
 
 async function canLoadDirection(name) {
@@ -171,8 +284,8 @@ function restoreArtworks() {
       return [...DEFAULT_ARTWORKS];
     }
     const cleaned = parsed
-      .map((item) => String(item).trim())
-      .filter((item) => item.length > 0);
+      .map((item) => normalizeArtworkItem(item))
+      .filter((item) => item !== null);
     return cleaned.length ? cleaned : [...DEFAULT_ARTWORKS];
   } catch (error) {
     return [...DEFAULT_ARTWORKS];
@@ -194,7 +307,7 @@ function sendLoopConfigToPreview() {
   const payload = {
     type: "setLoopConfig",
     seconds,
-    artworks: loopArtworks
+    artworks: loopArtworks.map((item) => item.src)
   };
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -206,14 +319,14 @@ function renderLoopPreview() {
   }
 
   loopPreviewTrack.innerHTML = "";
-  loopArtworks.forEach((src, index) => {
+  loopArtworks.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
     tile.draggable = true;
     tile.dataset.index = String(index);
 
     const image = document.createElement("img");
-    image.src = src;
+    image.src = item.src;
     image.alt = "";
     tile.appendChild(image);
 
@@ -244,14 +357,8 @@ function renderLoopPreview() {
   });
 }
 
-function artworkFileName(path) {
-  const clean = String(path).split("?")[0].split("#")[0];
-  const parts = clean.split("/");
-  return parts[parts.length - 1] || clean;
-}
-
 function artworkLastFive(path) {
-  const name = artworkFileName(path);
+  const name = String(path || "");
   return name.slice(-5);
 }
 
@@ -292,24 +399,24 @@ function renderArtworkList() {
 
   artworkList.innerHTML = "";
 
-  loopArtworks.forEach((src, index) => {
+  loopArtworks.forEach((item, index) => {
     const row = document.createElement("div");
     row.className = "artwork-item";
 
     const thumb = document.createElement("img");
     thumb.className = "artwork-thumb";
-    thumb.src = src;
+    thumb.src = item.src;
     thumb.alt = "";
     row.appendChild(thumb);
 
     const name = document.createElement("span");
     name.className = "artwork-index";
-    name.textContent = `${index + 1}. ${artworkFileName(src)}`;
+    name.textContent = `${index + 1}. ${item.name}`;
     row.appendChild(name);
 
     const suffix = document.createElement("span");
     suffix.className = "artwork-suffix";
-    suffix.textContent = artworkLastFive(src);
+    suffix.textContent = artworkLastFive(item.name);
     row.appendChild(suffix);
 
     const removeButton = document.createElement("button");
@@ -324,19 +431,11 @@ function renderArtworkList() {
 }
 
 function addArtworkFromInput() {
-  if (!artworkInput) {
+  if (!artworkUpload || !artworkUpload.files || !artworkUpload.files[0]) {
     return;
   }
-  const value = artworkInput.value.trim();
-  if (!value) {
-    return;
-  }
-  loopArtworks.push(value);
-  artworkInput.value = "";
-  saveArtworks(loopArtworks);
-  renderArtworkList();
-  renderLoopPreview();
-  sendLoopConfigToPreview();
+  addArtworkFiles(artworkUpload.files);
+  artworkUpload.value = "";
 }
 
 function renderDirectory(directions) {
@@ -412,16 +511,27 @@ async function init() {
     });
   }
 
-  if (addArtworkButton) {
-    addArtworkButton.addEventListener("click", addArtworkFromInput);
+  if (artworkUpload) {
+    artworkUpload.addEventListener("change", addArtworkFromInput);
   }
 
-  if (artworkInput) {
-    artworkInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        addArtworkFromInput();
+  if (loopVisualization) {
+    loopVisualization.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      loopVisualization.classList.add("drag-over");
+    });
+
+    loopVisualization.addEventListener("dragleave", () => {
+      loopVisualization.classList.remove("drag-over");
+    });
+
+    loopVisualization.addEventListener("drop", (event) => {
+      event.preventDefault();
+      loopVisualization.classList.remove("drag-over");
+      if (!event.dataTransfer || !event.dataTransfer.files) {
+        return;
       }
+      addArtworkFiles(event.dataTransfer.files);
     });
   }
 

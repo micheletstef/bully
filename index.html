@@ -31,7 +31,7 @@
           </div>
         </div>
 
-        <div class="loop-visualization" aria-label="Current loop visualization">
+        <div id="loopVisualization" class="loop-visualization" aria-label="Current loop visualization">
           <div id="loopPreviewTrack" class="loop-preview-track"></div>
         </div>
 
@@ -116,12 +116,7 @@
                   <span class="settings-label">add artwork</span>
                 </div>
                 <div class="add-artwork-row">
-                  <input
-                    id="artworkInput"
-                    type="text"
-                    placeholder="assets/another-artwork.png"
-                  />
-                  <button id="addArtworkButton" type="button">add</button>
+                  <input id="artworkUpload" type="file" accept=".svg,.png,.jpg,.jpeg,.jpt,.pdf,image/svg+xml,image/png,image/jpeg,image/jpt,application/pdf" />
                 </div>
               </section>
             </div>

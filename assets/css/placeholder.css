@@ -234,6 +234,10 @@ body {
   background: #f1f1f1;
 }
 
+.loop-visualization.drag-over {
+  background: #e6e6e6;
+}
+
 .loop-preview-track {
   display: flex;
   width: fit-content;
@@ -388,19 +392,18 @@ body {
 }
 
 .add-artwork-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 1px solid #b3b3b3;
-  padding: 1px 4px;
+  width: 100%;
   font-family: "Courier New", Courier, monospace;
   font-size: 11px;
 }
 
-.add-artwork-row button {
+.add-artwork-row input::file-selector-button {
   border: 1px solid #b3b3b3;
   background: #fff;
   font-family: "Courier New", Courier, monospace;
   font-size: 11px;
+  margin-right: 8px;
+  padding: 1px 6px;
   cursor: pointer;
 }
 
