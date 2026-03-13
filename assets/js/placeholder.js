@@ -2968,6 +2968,12 @@ function buildPartitionedSnapshotHtml(config) {
         right: document.getElementById("partitionRight")
       };
       const PARTITION_KEYS = ["left", "curve", "right"];
+      const PARTITION_WIDTHS = {
+        left: 1820,
+        curve: 1020,
+        right: 3060
+      };
+      const PARTITION_TOTAL_WIDTH = 5900;
       const DEFAULT_SOURCE = "assets/linear-loop-strip.png";
       const state = ${safeState};
 
@@ -2999,6 +3005,34 @@ function buildPartitionedSnapshotHtml(config) {
         return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
       }
 
+      async function resolvePartitionWidth(container, partitionKey) {
+        const measure = () =>
+          Math.max(
+            0,
+            Number(container.clientWidth) || 0,
+            Number(container.getBoundingClientRect().width) || 0
+          );
+
+        let width = measure();
+        if (width > 1) {
+          return width;
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        width = measure();
+        if (width > 1) {
+          return width;
+        }
+
+        const viewportWidth = Math.max(
+          1,
+          Number(document.documentElement.clientWidth) || 0,
+          Number(window.innerWidth) || 0
+        );
+        const partitionDesignWidth = Math.max(1, Number(PARTITION_WIDTHS[partitionKey]) || PARTITION_TOTAL_WIDTH);
+        return (partitionDesignWidth / PARTITION_TOTAL_WIDTH) * viewportWidth;
+      }
+
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
@@ -3006,7 +3040,7 @@ function buildPartitionedSnapshotHtml(config) {
         const sidePadding = verticalFlow
           ? Math.max(0, Number(state.padTopBottom) || 0)
           : Math.max(0, Number(state.padLeftRight) || 0);
-        const partitionWidth = Math.max(1, container.clientWidth || container.getBoundingClientRect().width || 1);
+        const partitionWidth = Math.max(1, await resolvePartitionWidth(container, partitionKey));
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -3851,6 +3885,28 @@ function removePartitionArtwork(partitionKey, index) {
   sendLoopConfigToPreview();
 }
 
+function removePartitionArtworkById(partitionKey, artworkId) {
+  const key = normalizePartitionKey(partitionKey);
+  const id = String(artworkId || "");
+  if (!key || !id) {
+    return false;
+  }
+  const items = partitionArtworks[key];
+  if (!Array.isArray(items) || !items.length) {
+    return false;
+  }
+  const index = items.findIndex((item) => item && item.id === id);
+  if (index < 0) {
+    return false;
+  }
+  items.splice(index, 1);
+  savePartitionArtworks(partitionArtworks);
+  renderPartitionEditor(key);
+  render3dPreview();
+  sendLoopConfigToPreview();
+  return true;
+}
+
 async function initPartitionSortable(partitionKey, trackEl) {
   const key = normalizePartitionKey(partitionKey);
   if (!key || !trackEl) {
@@ -3872,7 +3928,21 @@ async function initPartitionSortable(partitionKey, trackEl) {
       onChange: () => {
         updatePartitionActiveWindows();
       },
-      onEnd: () => {
+      onEnd: (evt) => {
+        const draggedId = evt && evt.item && evt.item.dataset ? evt.item.dataset.artworkId : "";
+        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+        const hasPointer =
+          originalEvent &&
+          Number.isFinite(originalEvent.clientX) &&
+          Number.isFinite(originalEvent.clientY);
+        if (draggedId && hasPointer) {
+          const dropTarget = document.elementFromPoint(originalEvent.clientX, originalEvent.clientY);
+          const droppedTrack = dropTarget ? dropTarget.closest(".partition-preview-track") : null;
+          if (!droppedTrack) {
+            removePartitionArtworkById(key, draggedId);
+            return;
+          }
+        }
         const idOrder = [...trackEl.querySelectorAll(".partition-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
