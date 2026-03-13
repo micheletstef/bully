@@ -991,7 +991,7 @@ function clampPreview3dCamera() {
   preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
   preview3dRenderSettings.projectionBrightness = Math.min(
     5,
-    Math.max(0.8, preview3dRenderSettings.projectionBrightness)
+    Math.max(0, preview3dRenderSettings.projectionBrightness)
   );
 }
 
@@ -1422,7 +1422,7 @@ function tuneProjectionMaterial(material) {
   if (!material) {
     return;
   }
-  const brightness = Math.max(0.8, Math.min(5, Number(preview3dRenderSettings.projectionBrightness) || 3.4));
+  const brightness = Math.max(0, Math.min(5, Number(preview3dRenderSettings.projectionBrightness) || 3.4));
   if (material.color && typeof material.color.setHex === "function") {
     material.color.setHex(0xffffff);
   }
@@ -4443,8 +4443,9 @@ async function init() {
 
   if (projectionBrightnessControl) {
     projectionBrightnessControl.addEventListener("input", () => {
+      const parsed = Number(projectionBrightnessControl.value);
       preview3dRenderSettings.projectionBrightness =
-        Number(projectionBrightnessControl.value) || preview3dRenderSettings.projectionBrightness;
+        Number.isFinite(parsed) ? parsed : preview3dRenderSettings.projectionBrightness;
       clampPreview3dCamera();
       persistPreview3dSettings();
       syncViewControlsUI();
