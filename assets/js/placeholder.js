@@ -68,6 +68,7 @@ const STORAGE_KEYS = {
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
+  cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks"
@@ -167,20 +168,23 @@ let preview3dPlaybackSyncState = {
   durationSeconds: 1,
   syncedAtMs: 0
 };
-const preview3dCamera = {
-  yaw: -0.78,
-  pitch: 0.96,
-  perspective: 1,
-  zoom: 1,
+const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v1";
+const PREVIEW3D_CAMERA_DEFAULTS = {
+  yaw: 0,
+  pitch: 0,
+  perspective: 1.1,
+  zoom: 0.42,
   targetX: 0,
   targetY: 0,
   targetZ: 0
 };
-const preview3dRenderSettings = {
+const PREVIEW3D_RENDER_DEFAULTS = {
   fit: 0.84,
   dragSensitivity: 1,
   textureQuality: 1.75
 };
+const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
+const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dDragState = null;
 
 function getAppBasePath() {
@@ -1030,6 +1034,12 @@ function setPreviewViewModeControlValue(value) {
   }
 }
 
+function applyDefaultPreview3dCameraState() {
+  Object.assign(preview3dCamera, PREVIEW3D_CAMERA_DEFAULTS);
+  Object.assign(preview3dRenderSettings, PREVIEW3D_RENDER_DEFAULTS);
+  clampPreview3dCamera();
+}
+
 function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraYaw, String(preview3dCamera.yaw));
   writeStorage(STORAGE_KEYS.cameraPitch, String(preview3dCamera.pitch));
@@ -1041,24 +1051,34 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
+  writeStorage(STORAGE_KEYS.cameraPresetVersion, PREVIEW3D_CAMERA_PRESET_VERSION);
 }
 
 function restorePreview3dSettings() {
-  preview3dCamera.yaw = readStoredNumber(STORAGE_KEYS.cameraYaw, preview3dCamera.yaw);
-  preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, preview3dCamera.pitch);
-  preview3dCamera.perspective = readStoredNumber(STORAGE_KEYS.cameraPerspective, preview3dCamera.perspective);
-  preview3dCamera.zoom = readStoredNumber(STORAGE_KEYS.cameraZoom, preview3dCamera.zoom);
-  preview3dCamera.targetX = readStoredNumber(STORAGE_KEYS.cameraTargetX, preview3dCamera.targetX);
-  preview3dCamera.targetY = readStoredNumber(STORAGE_KEYS.cameraTargetY, preview3dCamera.targetY);
-  preview3dCamera.targetZ = readStoredNumber(STORAGE_KEYS.cameraTargetZ, preview3dCamera.targetZ);
-  preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, preview3dRenderSettings.fit);
+  const presetVersion = readStorage(STORAGE_KEYS.cameraPresetVersion);
+  if (presetVersion !== PREVIEW3D_CAMERA_PRESET_VERSION) {
+    applyDefaultPreview3dCameraState();
+    persistPreview3dSettings();
+    return;
+  }
+  preview3dCamera.yaw = readStoredNumber(STORAGE_KEYS.cameraYaw, PREVIEW3D_CAMERA_DEFAULTS.yaw);
+  preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, PREVIEW3D_CAMERA_DEFAULTS.pitch);
+  preview3dCamera.perspective = readStoredNumber(
+    STORAGE_KEYS.cameraPerspective,
+    PREVIEW3D_CAMERA_DEFAULTS.perspective
+  );
+  preview3dCamera.zoom = readStoredNumber(STORAGE_KEYS.cameraZoom, PREVIEW3D_CAMERA_DEFAULTS.zoom);
+  preview3dCamera.targetX = readStoredNumber(STORAGE_KEYS.cameraTargetX, PREVIEW3D_CAMERA_DEFAULTS.targetX);
+  preview3dCamera.targetY = readStoredNumber(STORAGE_KEYS.cameraTargetY, PREVIEW3D_CAMERA_DEFAULTS.targetY);
+  preview3dCamera.targetZ = readStoredNumber(STORAGE_KEYS.cameraTargetZ, PREVIEW3D_CAMERA_DEFAULTS.targetZ);
+  preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, PREVIEW3D_RENDER_DEFAULTS.fit);
   preview3dRenderSettings.dragSensitivity = readStoredNumber(
     STORAGE_KEYS.cameraDragSensitivity,
-    preview3dRenderSettings.dragSensitivity
+    PREVIEW3D_RENDER_DEFAULTS.dragSensitivity
   );
   preview3dRenderSettings.textureQuality = readStoredNumber(
     STORAGE_KEYS.cameraTextureQuality,
-    preview3dRenderSettings.textureQuality
+    PREVIEW3D_RENDER_DEFAULTS.textureQuality
   );
   clampPreview3dCamera();
 }
@@ -3899,17 +3919,7 @@ async function init() {
 
   if (resetViewControlsButton) {
     resetViewControlsButton.addEventListener("click", () => {
-      preview3dCamera.yaw = -0.78;
-      preview3dCamera.pitch = 0.96;
-      preview3dCamera.perspective = 1;
-      preview3dCamera.zoom = 1;
-      preview3dCamera.targetX = 0;
-      preview3dCamera.targetY = 0;
-      preview3dCamera.targetZ = 0;
-      preview3dRenderSettings.fit = 0.84;
-      preview3dRenderSettings.dragSensitivity = 1;
-      preview3dRenderSettings.textureQuality = 1.75;
-      clampPreview3dCamera();
+      applyDefaultPreview3dCameraState();
       persistPreview3dSettings();
       syncViewControlsUI();
       render3dPreview();
