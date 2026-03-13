@@ -14,10 +14,9 @@ const cameraZoomControl = document.getElementById("cameraZoomControl");
 const cameraTargetXControl = document.getElementById("cameraTargetXControl");
 const cameraTargetYControl = document.getElementById("cameraTargetYControl");
 const cameraTargetZControl = document.getElementById("cameraTargetZControl");
-const cameraFitControl = document.getElementById("cameraFitControl");
-const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
-const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
 const projectionBrightnessControl = document.getElementById("projectionBrightnessControl");
+const projectionShadowControl = document.getElementById("projectionShadowControl");
+const projectionGlareControl = document.getElementById("projectionGlareControl");
 const resetViewControlsButton = document.getElementById("resetViewControlsButton");
 const blenderCameraRow = document.getElementById("blenderCameraRow");
 const blenderCameraControl = document.getElementById("blenderCameraControl");
@@ -69,10 +68,9 @@ const STORAGE_KEYS = {
   cameraTargetX: "billboard.preview3dCameraTargetX",
   cameraTargetY: "billboard.preview3dCameraTargetY",
   cameraTargetZ: "billboard.preview3dCameraTargetZ",
-  cameraFit: "billboard.preview3dCameraFit",
-  cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
-  cameraTextureQuality: "billboard.preview3dTextureQuality",
   projectionBrightness: "billboard.preview3dProjectionBrightness",
+  projectionShadow: "billboard.preview3dProjectionShadow",
+  projectionGlare: "billboard.preview3dProjectionGlare",
   cameraViewPreset: "billboard.preview3dCameraViewPreset",
   cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
   direction: "billboard.selectedDirection",
@@ -221,11 +219,13 @@ const PREVIEW3D_CAMERA_PRESETS = {
   }
 };
 const PREVIEW3D_RENDER_DEFAULTS = {
-  fit: 0.72,
-  dragSensitivity: 1,
-  textureQuality: 1.75,
-  projectionBrightness: 3.4
+  projectionBrightness: 3.4,
+  projectionShadow: 0.7,
+  projectionGlare: 0.9
 };
+const PREVIEW3D_FIXED_FRAME_FIT = 0.72;
+const PREVIEW3D_FIXED_DRAG_SENSITIVITY = 1;
+const PREVIEW3D_FIXED_TEXTURE_QUALITY = 1.75;
 const ENABLE_3D_ARTWORK_PROJECTION = true;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
@@ -986,13 +986,12 @@ function clampPreview3dCamera() {
   preview3dCamera.targetX = Math.min(3500, Math.max(-3500, preview3dCamera.targetX));
   preview3dCamera.targetY = Math.min(6000, Math.max(-6000, preview3dCamera.targetY));
   preview3dCamera.targetZ = Math.min(4500, Math.max(-4500, preview3dCamera.targetZ));
-  preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
-  preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
-  preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
   preview3dRenderSettings.projectionBrightness = Math.min(
     5,
     Math.max(0, preview3dRenderSettings.projectionBrightness)
   );
+  preview3dRenderSettings.projectionShadow = Math.min(2, Math.max(0, preview3dRenderSettings.projectionShadow));
+  preview3dRenderSettings.projectionGlare = Math.min(2, Math.max(0, preview3dRenderSettings.projectionGlare));
 }
 
 function syncViewControlsUI() {
@@ -1017,17 +1016,14 @@ function syncViewControlsUI() {
   if (cameraTargetZControl) {
     cameraTargetZControl.value = String(preview3dCamera.targetZ);
   }
-  if (cameraFitControl) {
-    cameraFitControl.value = String(preview3dRenderSettings.fit);
-  }
-  if (cameraDragSensitivityControl) {
-    cameraDragSensitivityControl.value = String(preview3dRenderSettings.dragSensitivity);
-  }
-  if (cameraTextureQualityControl) {
-    cameraTextureQualityControl.value = String(preview3dRenderSettings.textureQuality);
-  }
   if (projectionBrightnessControl) {
     projectionBrightnessControl.value = String(preview3dRenderSettings.projectionBrightness);
+  }
+  if (projectionShadowControl) {
+    projectionShadowControl.value = String(preview3dRenderSettings.projectionShadow);
+  }
+  if (projectionGlareControl) {
+    projectionGlareControl.value = String(preview3dRenderSettings.projectionGlare);
   }
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
@@ -1057,10 +1053,9 @@ function syncViewControlReadouts() {
   setViewControlReadout("cameraTargetXValue", preview3dCamera.targetX, 0);
   setViewControlReadout("cameraTargetYValue", preview3dCamera.targetY, 0);
   setViewControlReadout("cameraTargetZValue", preview3dCamera.targetZ, 0);
-  setViewControlReadout("cameraFitValue", preview3dRenderSettings.fit, 2);
-  setViewControlReadout("cameraDragSensitivityValue", preview3dRenderSettings.dragSensitivity, 2);
-  setViewControlReadout("cameraTextureQualityValue", preview3dRenderSettings.textureQuality, 2);
   setViewControlReadout("projectionBrightnessValue", preview3dRenderSettings.projectionBrightness, 2);
+  setViewControlReadout("projectionShadowValue", preview3dRenderSettings.projectionShadow, 2);
+  setViewControlReadout("projectionGlareValue", preview3dRenderSettings.projectionGlare, 2);
 }
 
 function syncViewModeToggleStates() {
@@ -1138,10 +1133,9 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraTargetX, String(preview3dCamera.targetX));
   writeStorage(STORAGE_KEYS.cameraTargetY, String(preview3dCamera.targetY));
   writeStorage(STORAGE_KEYS.cameraTargetZ, String(preview3dCamera.targetZ));
-  writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
-  writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
-  writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
   writeStorage(STORAGE_KEYS.projectionBrightness, String(preview3dRenderSettings.projectionBrightness));
+  writeStorage(STORAGE_KEYS.projectionShadow, String(preview3dRenderSettings.projectionShadow));
+  writeStorage(STORAGE_KEYS.projectionGlare, String(preview3dRenderSettings.projectionGlare));
   writeStorage(STORAGE_KEYS.cameraViewPreset, normalizePreview3dCameraPreset(preview3dCameraPreset));
   writeStorage(STORAGE_KEYS.cameraPresetVersion, PREVIEW3D_CAMERA_PRESET_VERSION);
 }
@@ -1152,6 +1146,14 @@ function restorePreview3dSettings() {
   preview3dRenderSettings.projectionBrightness = readStoredNumber(
     STORAGE_KEYS.projectionBrightness,
     PREVIEW3D_RENDER_DEFAULTS.projectionBrightness
+  );
+  preview3dRenderSettings.projectionShadow = readStoredNumber(
+    STORAGE_KEYS.projectionShadow,
+    PREVIEW3D_RENDER_DEFAULTS.projectionShadow
+  );
+  preview3dRenderSettings.projectionGlare = readStoredNumber(
+    STORAGE_KEYS.projectionGlare,
+    PREVIEW3D_RENDER_DEFAULTS.projectionGlare
   );
   clampPreview3dCamera();
   persistPreview3dSettings();
@@ -1175,14 +1177,17 @@ function restorePreview3dSettings() {
   preview3dCamera.targetX = readStoredNumber(STORAGE_KEYS.cameraTargetX, PREVIEW3D_CAMERA_DEFAULTS.targetX);
   preview3dCamera.targetY = readStoredNumber(STORAGE_KEYS.cameraTargetY, PREVIEW3D_CAMERA_DEFAULTS.targetY);
   preview3dCamera.targetZ = readStoredNumber(STORAGE_KEYS.cameraTargetZ, PREVIEW3D_CAMERA_DEFAULTS.targetZ);
-  preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, PREVIEW3D_RENDER_DEFAULTS.fit);
-  preview3dRenderSettings.dragSensitivity = readStoredNumber(
-    STORAGE_KEYS.cameraDragSensitivity,
-    PREVIEW3D_RENDER_DEFAULTS.dragSensitivity
+  preview3dRenderSettings.projectionBrightness = readStoredNumber(
+    STORAGE_KEYS.projectionBrightness,
+    PREVIEW3D_RENDER_DEFAULTS.projectionBrightness
   );
-  preview3dRenderSettings.textureQuality = readStoredNumber(
-    STORAGE_KEYS.cameraTextureQuality,
-    PREVIEW3D_RENDER_DEFAULTS.textureQuality
+  preview3dRenderSettings.projectionShadow = readStoredNumber(
+    STORAGE_KEYS.projectionShadow,
+    PREVIEW3D_RENDER_DEFAULTS.projectionShadow
+  );
+  preview3dRenderSettings.projectionGlare = readStoredNumber(
+    STORAGE_KEYS.projectionGlare,
+    PREVIEW3D_RENDER_DEFAULTS.projectionGlare
   );
   clampPreview3dCamera();
 }
@@ -1205,17 +1210,17 @@ function apply3dDrag(clientX, clientY) {
   preview3dDragState.lastY = clientY;
 
   if (preview3dDragState.dragMode === "perspective") {
-    preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003 * preview3dRenderSettings.dragSensitivity;
+    preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003 * PREVIEW3D_FIXED_DRAG_SENSITIVITY;
   } else if (preview3dDragState.dragMode === "pan") {
     const canvasHeight = Math.max(1, billboard3dCanvas ? billboard3dCanvas.clientHeight || 1 : 1);
     const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
     const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
     const panScale = (radius / canvasHeight) * 2.2;
-    preview3dCamera.targetX -= dx * panScale * preview3dRenderSettings.dragSensitivity;
-    preview3dCamera.targetY += dy * panScale * preview3dRenderSettings.dragSensitivity;
+    preview3dCamera.targetX -= dx * panScale * PREVIEW3D_FIXED_DRAG_SENSITIVITY;
+    preview3dCamera.targetY += dy * panScale * PREVIEW3D_FIXED_DRAG_SENSITIVITY;
   } else {
-    preview3dCamera.yaw += dx * 0.005 * preview3dRenderSettings.dragSensitivity;
-    preview3dCamera.pitch -= dy * 0.004 * preview3dRenderSettings.dragSensitivity;
+    preview3dCamera.yaw += dx * 0.005 * PREVIEW3D_FIXED_DRAG_SENSITIVITY;
+    preview3dCamera.pitch -= dy * 0.004 * PREVIEW3D_FIXED_DRAG_SENSITIVITY;
   }
   clampPreview3dCamera();
   syncViewControlsUI();
@@ -1315,7 +1320,7 @@ function draw3dFrame() {
 
   const projectedWidth = Math.max(1, bounds.maxX - bounds.minX);
   const projectedHeight = Math.max(1, bounds.maxY - bounds.minY);
-  const fit = preview3dRenderSettings.fit;
+  const fit = PREVIEW3D_FIXED_FRAME_FIT;
   const fitScale = Math.min((width * fit) / projectedWidth, (height * fit) / projectedHeight);
   const offsetX = (width - projectedWidth * fitScale) / 2 - bounds.minX * fitScale;
   const offsetY = (height - projectedHeight * fitScale) / 2 - bounds.minY * fitScale;
@@ -1423,18 +1428,21 @@ function tuneProjectionMaterial(material) {
     return;
   }
   const brightness = Math.max(0, Math.min(5, Number(preview3dRenderSettings.projectionBrightness) || 3.4));
-  if (material.color && typeof material.color.setHex === "function") {
-    material.color.setHex(0xffffff);
+  const shadow = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionShadow) || 0.7));
+  const glare = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionGlare) || 0.9));
+  const baseTone = Math.max(0.22, 1 - shadow * 0.34);
+  if (material.color && typeof material.color.setRGB === "function") {
+    material.color.setRGB(baseTone, baseTone, baseTone);
   }
   if ("roughness" in material) {
-    material.roughness = 0.5;
+    material.roughness = Math.max(0.05, Math.min(0.95, 0.62 + shadow * 0.18 - glare * 0.4));
   }
   if ("metalness" in material) {
-    material.metalness = 0;
+    material.metalness = Math.max(0, Math.min(0.45, glare * 0.22));
   }
   if (material.emissive && typeof material.emissive.setHex === "function") {
     material.emissive.setHex(0xffffff);
-    material.emissiveIntensity = brightness;
+    material.emissiveIntensity = Math.max(0, brightness * (1 - shadow * 0.15));
   }
   if ("emissiveMap" in material) {
     material.emissiveMap = material.map || null;
@@ -1881,7 +1889,7 @@ async function syncThreeLoopTexture() {
   const token = ++preview3dThreeState.textureRequestToken;
   const targetHeight = Math.min(
     3200,
-    Math.max(520, Math.round(1024 * preview3dRenderSettings.textureQuality))
+    Math.max(520, Math.round(1024 * PREVIEW3D_FIXED_TEXTURE_QUALITY))
   );
   const scale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
   const viewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * scale));
@@ -2961,8 +2969,11 @@ function buildPartitionedSnapshotHtml(config) {
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
-        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const sidePadding = verticalFlow
+          ? Math.max(0, Number(state.padTopBottom) || 0)
+          : Math.max(0, Number(state.padLeftRight) || 0);
+        const partitionWidth = Math.max(1, container.clientWidth || container.getBoundingClientRect().width || 1);
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -2987,6 +2998,9 @@ function buildPartitionedSnapshotHtml(config) {
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            if (verticalFlow) {
+              image.style.height = partitionWidth + "px";
+            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
@@ -3623,11 +3637,23 @@ function syncPartitionEditorVisuals() {
   partitionEditors.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
   partitionEditors.style.setProperty("--partition-preview-bg", currentBackgroundColor());
 
-  [partitionTrackLeft, partitionTrackCurve, partitionTrackRight].forEach((trackEl) => {
+  PARTITION_KEYS.forEach((partitionKey) => {
+    const trackEl = partitionTrackElement(partitionKey);
     if (!trackEl) {
       return;
     }
-    const spacerWidth = scaledPadLR;
+    const orientation = currentPartitionArtworkOrientations()[partitionKey];
+    const range = BILLBOARD_PARTITION_RANGES[partitionKey];
+    const partitionDesignWidth = Array.isArray(range) ? Math.max(1, Number(range[1]) - Number(range[0])) : stageHeight;
+    const scaledPartitionWidth = Math.max(8, Math.round(partitionDesignWidth * scale * 100) / 100);
+    const verticalFlow = orientation === "vertical";
+    const trackArtHeight = verticalFlow ? scaledPartitionWidth : scaledArtHeight;
+    const trackPadTB = verticalFlow ? scaledPadLR : scaledPadTB;
+    const trackPadLR = verticalFlow ? scaledPadTB : scaledPadLR;
+    const spacerWidth = trackPadLR;
+    trackEl.style.setProperty("--partition-preview-art-height", `${trackArtHeight}px`);
+    trackEl.style.setProperty("--partition-preview-pad-tb", `${trackPadTB}px`);
+    trackEl.style.setProperty("--partition-preview-pad-lr", `${trackPadLR}px`);
     trackEl.querySelectorAll(".partition-preview-spacer").forEach((spacer) => {
       spacer.style.width = `${spacerWidth}px`;
     });
@@ -4410,42 +4436,41 @@ async function init() {
     });
   }
 
-  if (cameraFitControl) {
-    cameraFitControl.addEventListener("input", () => {
-      preview3dRenderSettings.fit = Number(cameraFitControl.value) || preview3dRenderSettings.fit;
-      clampPreview3dCamera();
-      persistPreview3dSettings();
-      syncViewControlsUI();
-      update3dPreviewAnimation();
-    });
-  }
-
-  if (cameraDragSensitivityControl) {
-    cameraDragSensitivityControl.addEventListener("input", () => {
-      preview3dRenderSettings.dragSensitivity =
-        Number(cameraDragSensitivityControl.value) || preview3dRenderSettings.dragSensitivity;
-      clampPreview3dCamera();
-      persistPreview3dSettings();
-      syncViewControlsUI();
-    });
-  }
-
-  if (cameraTextureQualityControl) {
-    cameraTextureQualityControl.addEventListener("input", () => {
-      preview3dRenderSettings.textureQuality =
-        Number(cameraTextureQualityControl.value) || preview3dRenderSettings.textureQuality;
-      clampPreview3dCamera();
-      persistPreview3dSettings();
-      syncViewControlsUI();
-      render3dPreview();
-    });
-  }
-
   if (projectionBrightnessControl) {
     projectionBrightnessControl.addEventListener("input", () => {
       const parsed = Number(projectionBrightnessControl.value);
       preview3dRenderSettings.projectionBrightness =
         Number.isFinite(parsed) ? parsed : preview3dRenderSettings.projectionBrightness;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      if (preview3dThreeState.mesh && preview3dThreeState.mesh.material && ENABLE_3D_ARTWORK_PROJECTION) {
+        tuneProjectionMaterial(preview3dThreeState.mesh.material);
+      }
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (projectionShadowControl) {
+    projectionShadowControl.addEventListener("input", () => {
+      const parsed = Number(projectionShadowControl.value);
+      preview3dRenderSettings.projectionShadow =
+        Number.isFinite(parsed) ? parsed : preview3dRenderSettings.projectionShadow;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      if (preview3dThreeState.mesh && preview3dThreeState.mesh.material && ENABLE_3D_ARTWORK_PROJECTION) {
+        tuneProjectionMaterial(preview3dThreeState.mesh.material);
+      }
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (projectionGlareControl) {
+    projectionGlareControl.addEventListener("input", () => {
+      const parsed = Number(projectionGlareControl.value);
+      preview3dRenderSettings.projectionGlare =
+        Number.isFinite(parsed) ? parsed : preview3dRenderSettings.projectionGlare;
       clampPreview3dCamera();
       persistPreview3dSettings();
       syncViewControlsUI();
