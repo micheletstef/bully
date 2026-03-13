@@ -170,18 +170,18 @@ let preview3dPlaybackSyncState = {
   durationSeconds: 1,
   syncedAtMs: 0
 };
-const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v2";
+const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v3";
 const PREVIEW3D_CAMERA_DEFAULTS = {
   yaw: -0.78,
   pitch: 0.96,
   perspective: 1,
   zoom: 1,
   targetX: 0,
-  targetY: 0,
+  targetY: 3046,
   targetZ: 0
 };
 const PREVIEW3D_RENDER_DEFAULTS = {
-  fit: 0.84,
+  fit: 0.72,
   dragSensitivity: 1,
   textureQuality: 1.75
 };
@@ -1666,7 +1666,8 @@ function renderThreeFrame() {
     modelCamera.getWorldQuaternion(worldQuaternion);
     camera.position.copy(worldPosition);
     camera.quaternion.copy(worldQuaternion);
-    camera.fov = modelCamera.fov;
+    const fitFactor = Math.max(0.55, Math.min(0.98, preview3dRenderSettings.fit || 0.72));
+    camera.fov = modelCamera.fov / fitFactor;
     camera.near = modelCamera.near;
     camera.far = modelCamera.far;
   } else {
