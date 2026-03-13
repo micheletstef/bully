@@ -152,6 +152,8 @@ const preview3dThreeState = {
     curve: null,
     right: null
   },
+  modelCamera: null,
+  useModelCamera: false,
   textureSource: "",
   textureRequestToken: 0,
   textureScrollBaseX: 0,
@@ -183,6 +185,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
   dragSensitivity: 1,
   textureQuality: 1.75
 };
+const ENABLE_3D_ARTWORK_PROJECTION = false;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dDragState = null;
@@ -1302,6 +1305,27 @@ function chooseBillboardMeshFromModel(root, THREE) {
   return candidates.length ? candidates[0].node : null;
 }
 
+function findPreferredModelCamera(root) {
+  if (!root) {
+    return null;
+  }
+  let fallbackCamera = null;
+  let preferredCamera = null;
+  root.traverse((node) => {
+    if (!node || !node.isCamera) {
+      return;
+    }
+    if (!fallbackCamera) {
+      fallbackCamera = node;
+    }
+    const name = String(node.name || "").toLowerCase();
+    if (name === "1_angle" || name.includes("1_angle")) {
+      preferredCamera = node;
+    }
+  });
+  return preferredCamera || fallbackCamera;
+}
+
 function tryLoadBillboardModel() {
   if (preview3dThreeState.modelLoadAttempted) {
     return;
@@ -1326,44 +1350,40 @@ function tryLoadBillboardModel() {
         // Keep procedural fallback if a valid UV-mapped screen mesh is not found.
         return;
       }
+      const modelCamera = findPreferredModelCamera(root);
       const box = new THREE.Box3();
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
-      root.position.set(0, 0, 0);
-      root.rotation.set(0, 0, 0);
-      root.scale.set(1, 1, 1);
-      box.setFromObject(selectedMesh);
-      box.getSize(size);
-      const sourceWidth = Math.max(1, size.x);
-      const sourceHeight = Math.max(1, size.y, size.z);
-      const sourceRatio = sourceWidth / sourceHeight;
-      if (!Number.isFinite(sourceRatio) || sourceRatio < 0.35 || sourceRatio > 6.5) {
-        return;
-      }
-      const scaleFactor = Math.min(BILLBOARD_DESIGN_WIDTH / sourceWidth, BILLBOARD_DESIGN_HEIGHT / sourceHeight);
-      root.scale.multiplyScalar(scaleFactor);
-      box.setFromObject(selectedMesh);
-      box.getSize(size);
-      if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z)) {
-        return;
-      }
-      box.getCenter(center);
-      root.position.sub(center);
-      preview3dThreeState.scene.add(root);
-      root.traverse((node) => {
-        if (node && node.isMesh && node !== selectedMesh) {
-          node.visible = false;
+      if (!modelCamera) {
+        root.position.set(0, 0, 0);
+        root.rotation.set(0, 0, 0);
+        root.scale.set(1, 1, 1);
+        box.setFromObject(selectedMesh);
+        box.getSize(size);
+        const sourceWidth = Math.max(1, size.x);
+        const sourceHeight = Math.max(1, size.y, size.z);
+        const sourceRatio = sourceWidth / sourceHeight;
+        if (!Number.isFinite(sourceRatio) || sourceRatio < 0.35 || sourceRatio > 6.5) {
+          return;
         }
-      });
+        const scaleFactor = Math.min(BILLBOARD_DESIGN_WIDTH / sourceWidth, BILLBOARD_DESIGN_HEIGHT / sourceHeight);
+        root.scale.multiplyScalar(scaleFactor);
+        box.setFromObject(selectedMesh);
+        box.getSize(size);
+        if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z)) {
+          return;
+        }
+        box.getCenter(center);
+        root.position.sub(center);
+      }
+      preview3dThreeState.scene.add(root);
+      preview3dThreeState.modelCamera = modelCamera;
+      preview3dThreeState.useModelCamera = !!modelCamera;
       if (preview3dThreeState.mesh && preview3dThreeState.mesh.parent) {
         preview3dThreeState.mesh.parent.remove(preview3dThreeState.mesh);
       }
       selectedMesh.visible = true;
-      selectedMesh.material = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        side: THREE.DoubleSide
-      });
-      if (preview3dThreeState.texture) {
+      if (preview3dThreeState.texture && ENABLE_3D_ARTWORK_PROJECTION) {
         selectedMesh.material.map = preview3dThreeState.texture;
         selectedMesh.material.needsUpdate = true;
       }
@@ -1438,6 +1458,11 @@ function ensureThreePreviewSetup() {
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+  scene.add(ambientLight);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  keyLight.position.set(2200, 3200, 2800);
+  scene.add(keyLight);
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
   const geometry = createCurvedBillboardGeometry(THREE);
   const material = new THREE.MeshBasicMaterial({
@@ -1535,6 +1560,9 @@ function syncThreeTextureSource() {
 }
 
 async function syncThreeLoopTexture() {
+  if (!ENABLE_3D_ARTWORK_PROJECTION) {
+    return;
+  }
   const THREE = getThreeLib();
   if (!THREE || !preview3dThreeState.mesh) {
     return;
@@ -1610,21 +1638,31 @@ function renderThreeFrame() {
   const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
   renderer.setSize(cssWidth, cssHeight, false);
   camera.aspect = cssWidth / cssHeight;
-  const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
-  camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
-
-  // Keep the billboard close and let perspective mainly control lens feel (FOV),
-  // not camera distance. This avoids the "too far away" look at low perspective.
-  const radius = 2200 * preview3dCamera.zoom;
-  const yaw = preview3dCamera.yaw;
-  const pitch = preview3dCamera.pitch;
-  const cosPitch = Math.cos(pitch);
-  camera.position.set(
-    Math.sin(yaw) * cosPitch * radius,
-    Math.sin(pitch) * radius * 0.9,
-    Math.cos(yaw) * cosPitch * radius
-  );
-  camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, preview3dCamera.targetZ);
+  const modelCamera = preview3dThreeState.useModelCamera ? preview3dThreeState.modelCamera : null;
+  if (modelCamera && modelCamera.isPerspectiveCamera) {
+    const worldPosition = new modelCamera.position.constructor();
+    const worldQuaternion = new modelCamera.quaternion.constructor();
+    modelCamera.getWorldPosition(worldPosition);
+    modelCamera.getWorldQuaternion(worldQuaternion);
+    camera.position.copy(worldPosition);
+    camera.quaternion.copy(worldQuaternion);
+    camera.fov = modelCamera.fov;
+    camera.near = modelCamera.near;
+    camera.far = modelCamera.far;
+  } else {
+    const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
+    camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
+    const radius = 2200 * preview3dCamera.zoom;
+    const yaw = preview3dCamera.yaw;
+    const pitch = preview3dCamera.pitch;
+    const cosPitch = Math.cos(pitch);
+    camera.position.set(
+      Math.sin(yaw) * cosPitch * radius,
+      Math.sin(pitch) * radius * 0.9,
+      Math.cos(yaw) * cosPitch * radius
+    );
+    camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, preview3dCamera.targetZ);
+  }
   camera.updateProjectionMatrix();
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
   if (
