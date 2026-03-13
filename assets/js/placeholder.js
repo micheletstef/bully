@@ -1027,8 +1027,15 @@ function apply3dDrag(clientX, clientY) {
   preview3dDragState.lastX = clientX;
   preview3dDragState.lastY = clientY;
 
-  if (preview3dDragState.adjustPerspective) {
+  if (preview3dDragState.dragMode === "perspective") {
     preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003 * preview3dRenderSettings.dragSensitivity;
+  } else if (preview3dDragState.dragMode === "pan") {
+    const canvasHeight = Math.max(1, billboard3dCanvas ? billboard3dCanvas.clientHeight || 1 : 1);
+    const perspectiveFactor = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+    const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
+    const panScale = (radius / canvasHeight) * 2.2;
+    preview3dCamera.targetX -= dx * panScale * preview3dRenderSettings.dragSensitivity;
+    preview3dCamera.targetY += dy * panScale * preview3dRenderSettings.dragSensitivity;
   } else {
     preview3dCamera.yaw += dx * 0.005 * preview3dRenderSettings.dragSensitivity;
     preview3dCamera.pitch -= dy * 0.004 * preview3dRenderSettings.dragSensitivity;
@@ -1052,10 +1059,11 @@ function setup3dCanvasInteraction() {
     if (event.button !== 0 && event.button !== 2) {
       return;
     }
+    const dragMode = event.shiftKey ? "pan" : event.button === 2 ? "perspective" : "orbit";
     preview3dDragState = {
       lastX: event.clientX,
       lastY: event.clientY,
-      adjustPerspective: event.button === 2 || event.shiftKey
+      dragMode
     };
     billboard3dCanvas.style.cursor = "grabbing";
     try {
