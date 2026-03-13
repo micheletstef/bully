@@ -3909,6 +3909,33 @@ function removePartitionArtworkById(partitionKey, artworkId) {
   return true;
 }
 
+function updateLatestPointerFromEvent(eventLike) {
+  if (!eventLike || typeof eventLike !== "object") {
+    return;
+  }
+  const sourceEvent =
+    eventLike.touches && eventLike.touches.length
+      ? eventLike.touches[0]
+      : eventLike.changedTouches && eventLike.changedTouches.length
+        ? eventLike.changedTouches[0]
+        : eventLike;
+  const x = Number(sourceEvent.clientX);
+  const y = Number(sourceEvent.clientY);
+  if (Number.isFinite(x) && Number.isFinite(y)) {
+    latestPointer.x = x;
+    latestPointer.y = y;
+  }
+}
+
+function pointerFromSortableEvent(evt) {
+  const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+  updateLatestPointerFromEvent(originalEvent);
+  if (Number.isFinite(latestPointer.x) && Number.isFinite(latestPointer.y)) {
+    return { x: latestPointer.x, y: latestPointer.y };
+  }
+  return null;
+}
+
 async function initPartitionSortable(partitionKey, trackEl) {
   const key = normalizePartitionKey(partitionKey);
   if (!key || !trackEl) {
@@ -3927,18 +3954,23 @@ async function initPartitionSortable(partitionKey, trackEl) {
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
+      onStart: (evt) => {
+        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+        updateLatestPointerFromEvent(originalEvent);
+      },
+      onMove: (evt) => {
+        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+        updateLatestPointerFromEvent(originalEvent);
+        return true;
+      },
       onChange: () => {
         updatePartitionActiveWindows();
       },
       onEnd: (evt) => {
         const draggedId = evt && evt.item && evt.item.dataset ? evt.item.dataset.artworkId : "";
-        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
-        const hasPointer =
-          originalEvent &&
-          Number.isFinite(originalEvent.clientX) &&
-          Number.isFinite(originalEvent.clientY);
-        if (draggedId && hasPointer) {
-          const dropTarget = document.elementFromPoint(originalEvent.clientX, originalEvent.clientY);
+        const pointer = pointerFromSortableEvent(evt);
+        if (draggedId && pointer) {
+          const dropTarget = document.elementFromPoint(pointer.x, pointer.y);
           const droppedTrack = dropTarget ? dropTarget.closest(".partition-preview-track") : null;
           if (!droppedTrack) {
             removePartitionArtworkById(key, draggedId);
@@ -4669,6 +4701,20 @@ async function init() {
   bindPartitionTrackDrop(partitionTrackLeft, "left");
   bindPartitionTrackDrop(partitionTrackCurve, "curve");
   bindPartitionTrackDrop(partitionTrackRight, "right");
+
+  document.addEventListener("dragover", (event) => {
+    updateLatestPointerFromEvent(event);
+  });
+  document.addEventListener("drop", (event) => {
+    updateLatestPointerFromEvent(event);
+  });
+  document.addEventListener(
+    "mousemove",
+    (event) => {
+      updateLatestPointerFromEvent(event);
+    },
+    { passive: true }
+  );
 
   if (loopVisualization) {
     loopVisualization.addEventListener("dragover", (event) => {
