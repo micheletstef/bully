@@ -1269,6 +1269,8 @@ function chooseBillboardMeshFromModel(root, THREE) {
   if (!root || !THREE) {
     return null;
   }
+  const hasUv = (node) =>
+    !!(node && node.geometry && node.geometry.attributes && node.geometry.attributes.uv);
   const box = new THREE.Box3();
   const size = new THREE.Vector3();
   const candidates = [];
@@ -1276,14 +1278,25 @@ function chooseBillboardMeshFromModel(root, THREE) {
     if (!node || !node.isMesh) {
       return;
     }
+    if (!hasUv(node)) {
+      return;
+    }
     box.setFromObject(node);
     box.getSize(size);
     const width = Math.max(0, size.x);
     const height = Math.max(0, size.y, size.z);
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    const ratio = width / height;
+    if (!Number.isFinite(ratio) || ratio < 0.35 || ratio > 6.5) {
+      return;
+    }
     const areaScore = width * height;
     const name = String(node.name || "").toLowerCase();
+    const exactScreenScore = name === "screen" ? 2000000000 : 0;
     const hintScore = BILLBOARD_MODEL_MESH_HINTS.some((hint) => name.includes(hint)) ? 1000000000 : 0;
-    candidates.push({ node, score: hintScore + areaScore });
+    candidates.push({ node, score: exactScreenScore + hintScore + areaScore });
   });
   candidates.sort((a, b) => b.score - a.score);
   return candidates.length ? candidates[0].node : null;
@@ -1310,6 +1323,7 @@ function tryLoadBillboardModel() {
       const root = gltf.scene;
       const selectedMesh = chooseBillboardMeshFromModel(root, THREE);
       if (!selectedMesh) {
+        // Keep procedural fallback if a valid UV-mapped screen mesh is not found.
         return;
       }
       const box = new THREE.Box3();
@@ -1322,9 +1336,17 @@ function tryLoadBillboardModel() {
       box.getSize(size);
       const sourceWidth = Math.max(1, size.x);
       const sourceHeight = Math.max(1, size.y, size.z);
+      const sourceRatio = sourceWidth / sourceHeight;
+      if (!Number.isFinite(sourceRatio) || sourceRatio < 0.35 || sourceRatio > 6.5) {
+        return;
+      }
       const scaleFactor = Math.min(BILLBOARD_DESIGN_WIDTH / sourceWidth, BILLBOARD_DESIGN_HEIGHT / sourceHeight);
       root.scale.multiplyScalar(scaleFactor);
       box.setFromObject(selectedMesh);
+      box.getSize(size);
+      if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z)) {
+        return;
+      }
       box.getCenter(center);
       root.position.sub(center);
       preview3dThreeState.scene.add(root);
@@ -1341,6 +1363,10 @@ function tryLoadBillboardModel() {
         color: 0xffffff,
         side: THREE.DoubleSide
       });
+      if (preview3dThreeState.texture) {
+        selectedMesh.material.map = preview3dThreeState.texture;
+        selectedMesh.material.needsUpdate = true;
+      }
       preview3dThreeState.mesh = selectedMesh;
       PARTITION_KEYS.forEach((partitionKey) => {
         const part = preview3dThreeState.partitionMeshes[partitionKey];
