@@ -101,10 +101,10 @@
 
       @keyframes loop-y {
         from {
-          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: rotate(90deg) translateX(calc(-1 * var(--loop-distance))) translateY(-100%);
         }
         to {
-          transform: rotate(-90deg) translateX(0);
+          transform: rotate(90deg) translateX(0) translateY(-100%);
         }
       }
 
@@ -149,6 +149,12 @@
       };
       const DEFAULT_SOURCE = "../../assets/linear-loop-strip.png";
       const PARTITION_KEYS = ["left", "curve", "right"];
+      const PARTITION_WIDTHS = {
+        left: 1820,
+        curve: 1020,
+        right: 3060
+      };
+      const PARTITION_TOTAL_WIDTH = 5900;
       const state = {
         seconds: 16,
         artworksByPartition: {
@@ -211,11 +217,41 @@
         return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
       }
 
+      async function resolvePartitionWidth(container, partitionKey) {
+        const measure = () =>
+          Math.max(
+            0,
+            Number(container.clientWidth) || 0,
+            Number(container.getBoundingClientRect().width) || 0
+          );
+        let width = measure();
+        if (width > 1) {
+          return width;
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        width = measure();
+        if (width > 1) {
+          return width;
+        }
+        const viewportWidth = Math.max(
+          1,
+          Number(document.documentElement.clientWidth) || 0,
+          Number(window.innerWidth) || 0
+        );
+        const partitionDesignWidth = Math.max(1, Number(PARTITION_WIDTHS[partitionKey]) || PARTITION_TOTAL_WIDTH);
+        return (partitionDesignWidth / PARTITION_TOTAL_WIDTH) * viewportWidth;
+      }
+
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
-        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const verticalSidePadding = Math.max(0, Number(state.padTopBottom) || 0);
+        const sidePadding = verticalFlow
+          ? verticalSidePadding
+          : Math.max(0, Number(state.padLeftRight) || 0);
+        const partitionWidth = Math.max(1, await resolvePartitionWidth(container, partitionKey));
+        const verticalArtworkHeight = Math.max(1, partitionWidth - verticalSidePadding * 2);
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -240,6 +276,9 @@
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            if (verticalFlow) {
+              image.style.height = `${verticalArtworkHeight}px`;
+            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
