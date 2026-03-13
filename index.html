@@ -116,7 +116,7 @@
               <h3 id="settingsTitle" class="settings-title">linear loop settings</h3>
 
               <section class="settings-group">
-                <div class="settings-row">
+                <div class="settings-row settings-row-speed">
                   <span class="settings-label">speed</span>
                   <input
                     id="speedControl"
@@ -126,18 +126,20 @@
                     step="1"
                     value="16"
                   />
+                  <span id="speedValue" class="settings-inline-value">16s</span>
                 </div>
-                <div class="settings-row">
-                  <span class="settings-label">full artwork traverse</span>
-                  <span id="speedValue">16s</span>
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">top/bottom</span>
-                  <input id="padTBControl" type="number" min="0" max="1200" step="1" value="0" />
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">left/right</span>
-                  <input id="padLRControl" type="number" min="0" max="2400" step="1" value="0" />
+                <div class="settings-row settings-row-compact-pairs">
+                  <span class="settings-label">padding</span>
+                  <div class="settings-inline-controls">
+                    <label class="settings-inline-field" for="padTBControl">
+                      <span>tb</span>
+                      <input id="padTBControl" class="input-compact" type="number" min="0" max="1200" step="1" value="0" />
+                    </label>
+                    <label class="settings-inline-field" for="padLRControl">
+                      <span>lr</span>
+                      <input id="padLRControl" class="input-compact" type="number" min="0" max="2400" step="1" value="0" />
+                    </label>
+                  </div>
                 </div>
                 <div class="settings-row">
                   <span class="settings-label">bg color</span>
@@ -149,45 +151,58 @@
                 </div>
                 <div id="linearOrientationRow" class="settings-row">
                   <span class="settings-label">artwork orientation</span>
-                  <select id="artworkOrientationControl">
-                    <option value="horizontal">horizontal</option>
-                    <option value="vertical">vertical</option>
-                  </select>
+                  <div class="orientation-toggle" role="radiogroup" aria-label="Artwork orientation">
+                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="artworkOrientationControl" data-value="horizontal">hor</button>
+                    <span>/</span>
+                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="artworkOrientationControl" data-value="vertical">vert</button>
+                  </div>
+                  <input id="artworkOrientationControl" type="hidden" value="horizontal" />
                 </div>
                 <div id="partitionOrientationRows">
                   <div class="settings-row">
                     <span class="settings-label">facing 7th orientation</span>
-                    <select id="partitionOrientationLeftControl">
-                      <option value="horizontal">horizontal</option>
-                      <option value="vertical">vertical</option>
-                    </select>
+                    <div class="orientation-toggle" role="radiogroup" aria-label="Facing 7th orientation">
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationLeftControl" data-value="horizontal">hor</button>
+                      <span>/</span>
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationLeftControl" data-value="vertical">vert</button>
+                    </div>
+                    <input id="partitionOrientationLeftControl" type="hidden" value="horizontal" />
                   </div>
                   <div class="settings-row">
                     <span class="settings-label">curve orientation</span>
-                    <select id="partitionOrientationCurveControl">
-                      <option value="horizontal">horizontal</option>
-                      <option value="vertical">vertical</option>
-                    </select>
+                    <div class="orientation-toggle" role="radiogroup" aria-label="Curve orientation">
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationCurveControl" data-value="horizontal">hor</button>
+                      <span>/</span>
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationCurveControl" data-value="vertical">vert</button>
+                    </div>
+                    <input id="partitionOrientationCurveControl" type="hidden" value="horizontal" />
                   </div>
                   <div class="settings-row">
                     <span class="settings-label">facing 47th orientation</span>
-                    <select id="partitionOrientationRightControl">
-                      <option value="horizontal">horizontal</option>
-                      <option value="vertical">vertical</option>
-                    </select>
+                    <div class="orientation-toggle" role="radiogroup" aria-label="Facing 47th orientation">
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationRightControl" data-value="horizontal">hor</button>
+                      <span>/</span>
+                      <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationRightControl" data-value="vertical">vert</button>
+                    </div>
+                    <input id="partitionOrientationRightControl" type="hidden" value="horizontal" />
                   </div>
                 </div>
-                <div class="settings-row">
+                <div class="settings-row settings-row-compact-pairs">
                   <span class="settings-label">rows</span>
-                  <input id="rowCountControl" type="number" min="1" max="12" step="1" value="1" />
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">row offset</span>
-                  <input id="rowOffsetControl" type="number" min="0" max="6000" step="1" value="0" />
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">row gap</span>
-                  <input id="rowGapControl" type="number" min="0" max="1200" step="1" value="0" />
+                  <div class="settings-inline-controls">
+                    <label class="settings-inline-field" for="rowCountControl">
+                      <span>count</span>
+                      <input id="rowCountControl" class="input-compact" type="number" min="1" max="12" step="1" value="1" />
+                    </label>
+                    <label class="settings-inline-field" for="rowOffsetControl">
+                      <span>off</span>
+                      <input id="rowOffsetControl" class="input-compact" type="number" min="0" max="6000" step="1" value="0" />
+                    </label>
+                    <label class="settings-inline-field" for="rowGapControl">
+                      <span>gap</span>
+                      <input id="rowGapControl" class="input-compact" type="number" min="0" max="1200" step="1" value="0" />
+                    </label>
+                  </div>
                 </div>
               </section>
               <section class="settings-group">
@@ -224,6 +239,18 @@
       <div class="settings-row">
         <span class="settings-label">perspective</span>
         <input id="cameraPerspectiveControl" type="range" min="0.35" max="2.5" step="0.01" value="1" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">screen scale</span>
+        <input id="cameraZoomControl" type="range" min="0.35" max="4.5" step="0.01" value="1" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">screen x</span>
+        <input id="cameraTargetXControl" type="range" min="-3500" max="3500" step="1" value="0" />
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">screen y</span>
+        <input id="cameraTargetYControl" type="range" min="-2500" max="2500" step="1" value="0" />
       </div>
       <div class="settings-row">
         <span class="settings-label">frame fit</span>

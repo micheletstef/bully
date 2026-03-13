@@ -10,6 +10,9 @@ const previewViewModeControl = document.getElementById("previewViewModeControl")
 const cameraYawControl = document.getElementById("cameraYawControl");
 const cameraPitchControl = document.getElementById("cameraPitchControl");
 const cameraPerspectiveControl = document.getElementById("cameraPerspectiveControl");
+const cameraZoomControl = document.getElementById("cameraZoomControl");
+const cameraTargetXControl = document.getElementById("cameraTargetXControl");
+const cameraTargetYControl = document.getElementById("cameraTargetYControl");
 const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
@@ -24,6 +27,7 @@ const partitionOrientationRightControl = document.getElementById("partitionOrien
 const rowCountControl = document.getElementById("rowCountControl");
 const rowOffsetControl = document.getElementById("rowOffsetControl");
 const rowGapControl = document.getElementById("rowGapControl");
+const orientationChoiceButtons = [...document.querySelectorAll(".orientation-choice")];
 const saveVersionButton = document.getElementById("saveVersionButton");
 const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
@@ -56,6 +60,8 @@ const STORAGE_KEYS = {
   cameraPitch: "billboard.preview3dCameraPitch",
   cameraPerspective: "billboard.preview3dCameraPerspective",
   cameraZoom: "billboard.preview3dCameraZoom",
+  cameraTargetX: "billboard.preview3dCameraTargetX",
+  cameraTargetY: "billboard.preview3dCameraTargetY",
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
@@ -162,7 +168,9 @@ const preview3dCamera = {
   yaw: -0.78,
   pitch: 0.96,
   perspective: 1,
-  zoom: 1
+  zoom: 1,
+  targetX: 0,
+  targetY: 0
 };
 const preview3dRenderSettings = {
   fit: 0.84,
@@ -922,6 +930,8 @@ function clampPreview3dCamera() {
   preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
   preview3dCamera.zoom = Math.min(4.5, Math.max(0.35, preview3dCamera.zoom));
+  preview3dCamera.targetX = Math.min(3500, Math.max(-3500, preview3dCamera.targetX));
+  preview3dCamera.targetY = Math.min(2500, Math.max(-2500, preview3dCamera.targetY));
   preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
   preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
   preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
@@ -936,6 +946,15 @@ function syncViewControlsUI() {
   }
   if (cameraPerspectiveControl) {
     cameraPerspectiveControl.value = String(preview3dCamera.perspective);
+  }
+  if (cameraZoomControl) {
+    cameraZoomControl.value = String(preview3dCamera.zoom);
+  }
+  if (cameraTargetXControl) {
+    cameraTargetXControl.value = String(preview3dCamera.targetX);
+  }
+  if (cameraTargetYControl) {
+    cameraTargetYControl.value = String(preview3dCamera.targetY);
   }
   if (cameraFitControl) {
     cameraFitControl.value = String(preview3dRenderSettings.fit);
@@ -956,6 +975,8 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraPitch, String(preview3dCamera.pitch));
   writeStorage(STORAGE_KEYS.cameraPerspective, String(preview3dCamera.perspective));
   writeStorage(STORAGE_KEYS.cameraZoom, String(preview3dCamera.zoom));
+  writeStorage(STORAGE_KEYS.cameraTargetX, String(preview3dCamera.targetX));
+  writeStorage(STORAGE_KEYS.cameraTargetY, String(preview3dCamera.targetY));
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
@@ -966,6 +987,8 @@ function restorePreview3dSettings() {
   preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, preview3dCamera.pitch);
   preview3dCamera.perspective = readStoredNumber(STORAGE_KEYS.cameraPerspective, preview3dCamera.perspective);
   preview3dCamera.zoom = readStoredNumber(STORAGE_KEYS.cameraZoom, preview3dCamera.zoom);
+  preview3dCamera.targetX = readStoredNumber(STORAGE_KEYS.cameraTargetX, preview3dCamera.targetX);
+  preview3dCamera.targetY = readStoredNumber(STORAGE_KEYS.cameraTargetY, preview3dCamera.targetY);
   preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, preview3dRenderSettings.fit);
   preview3dRenderSettings.dragSensitivity = readStoredNumber(
     STORAGE_KEYS.cameraDragSensitivity,
@@ -1060,6 +1083,7 @@ function setup3dCanvasInteraction() {
       preview3dCamera.zoom *= factor;
       clampPreview3dCamera();
       persistPreview3dSettings();
+      syncViewControlsUI();
       update3dPreviewAnimation();
       event.preventDefault();
     },
@@ -1482,7 +1506,7 @@ function renderThreeFrame() {
     Math.sin(pitch) * radius * 0.9,
     Math.cos(yaw) * cosPitch * radius
   );
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, 0);
   camera.updateProjectionMatrix();
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
   if (
@@ -1696,6 +1720,32 @@ function currentPartitionArtworkOrientations() {
       partitionOrientationRightControl ? partitionOrientationRightControl.value : "horizontal"
     )
   };
+}
+
+function syncOrientationToggleStates() {
+  orientationChoiceButtons.forEach((button) => {
+    const targetId = button.dataset.orientationTarget || "";
+    const value = normalizeArtworkOrientation(button.dataset.value);
+    const control = targetId ? document.getElementById(targetId) : null;
+    const activeValue = normalizeArtworkOrientation(control ? control.value : "horizontal");
+    const isActive = activeValue === value;
+    button.classList.toggle("inactive", !isActive);
+    button.setAttribute("aria-checked", isActive ? "true" : "false");
+  });
+}
+
+function setOrientationControlValue(control, value) {
+  if (!control) {
+    return;
+  }
+  const nextValue = normalizeArtworkOrientation(value);
+  const changed = control.value !== nextValue;
+  control.value = nextValue;
+  if (changed) {
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  } else {
+    syncOrientationToggleStates();
+  }
 }
 
 function currentRowCount() {
@@ -2819,7 +2869,7 @@ function restoreLoopLayoutSettings() {
       }
     }
   }
-
+  syncOrientationToggleStates();
 }
 
 function saveSelectedDirection(name) {
@@ -3695,6 +3745,36 @@ async function init() {
     });
   }
 
+  if (cameraZoomControl) {
+    cameraZoomControl.addEventListener("input", () => {
+      preview3dCamera.zoom = Number(cameraZoomControl.value) || 1;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraTargetXControl) {
+    cameraTargetXControl.addEventListener("input", () => {
+      preview3dCamera.targetX = Number(cameraTargetXControl.value) || 0;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
+  if (cameraTargetYControl) {
+    cameraTargetYControl.addEventListener("input", () => {
+      preview3dCamera.targetY = Number(cameraTargetYControl.value) || 0;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
   if (cameraFitControl) {
     cameraFitControl.addEventListener("input", () => {
       preview3dRenderSettings.fit = Number(cameraFitControl.value) || preview3dRenderSettings.fit;
@@ -3732,6 +3812,8 @@ async function init() {
       preview3dCamera.pitch = 0.96;
       preview3dCamera.perspective = 1;
       preview3dCamera.zoom = 1;
+      preview3dCamera.targetX = 0;
+      preview3dCamera.targetY = 0;
       preview3dRenderSettings.fit = 0.84;
       preview3dRenderSettings.dragSensitivity = 1;
       preview3dRenderSettings.textureQuality = 1.75;
@@ -3755,6 +3837,7 @@ async function init() {
 
   if (artworkOrientationControl) {
     artworkOrientationControl.addEventListener("change", () => {
+      syncOrientationToggleStates();
       saveArtworkOrientation(currentArtworkOrientation());
       render3dPreview();
       sendLoopConfigToPreview();
@@ -3765,11 +3848,26 @@ async function init() {
     .filter((control) => !!control)
     .forEach((control) => {
       control.addEventListener("change", () => {
+        syncOrientationToggleStates();
         savePartitionArtworkOrientations(currentPartitionArtworkOrientations());
         render3dPreview();
         sendLoopConfigToPreview();
       });
     });
+
+  if (orientationChoiceButtons.length) {
+    orientationChoiceButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const targetId = button.dataset.orientationTarget || "";
+        const control = targetId ? document.getElementById(targetId) : null;
+        if (!control) {
+          return;
+        }
+        setOrientationControlValue(control, button.dataset.value);
+      });
+    });
+    syncOrientationToggleStates();
+  }
 
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
