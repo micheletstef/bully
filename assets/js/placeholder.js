@@ -106,6 +106,8 @@ let partitionLoopDistances = {
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
 const BILLBOARD_DESIGN_WIDTH = 5900;
 const BILLBOARD_DESIGN_HEIGHT = 3480;
+const BILLBOARD_MODEL_URL = "assets/models/D_Billboard_MockUp.glb";
+const BILLBOARD_MODEL_MESH_HINTS = ["billboard", "screen", "plane", "display", "led"];
 const BILLBOARD_LEFT_WIDTH = 1820;
 const BILLBOARD_CURVE_WIDTH = 1020;
 const BILLBOARD_RIGHT_WIDTH = 3060;
@@ -144,7 +146,9 @@ const preview3dThreeState = {
   textureRequestToken: 0,
   textureScrollBaseX: 0,
   textureOffsetY: 0,
-  textureMode: "linear"
+  textureMode: "linear",
+  modelLoadAttempted: false,
+  modelLoaded: false
 };
 let hasWarnedMissingThree = false;
 let preview3dAnimationFrameId = null;
@@ -1140,6 +1144,107 @@ function getThreeLib() {
   return window.THREE || null;
 }
 
+function getGLTFLoaderClass() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.THREE_GLTFLoader || null;
+}
+
+function chooseBillboardMeshFromModel(root, THREE) {
+  if (!root || !THREE) {
+    return null;
+  }
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  const candidates = [];
+  root.traverse((node) => {
+    if (!node || !node.isMesh) {
+      return;
+    }
+    box.setFromObject(node);
+    box.getSize(size);
+    const width = Math.max(0, size.x);
+    const height = Math.max(0, size.y, size.z);
+    const areaScore = width * height;
+    const name = String(node.name || "").toLowerCase();
+    const hintScore = BILLBOARD_MODEL_MESH_HINTS.some((hint) => name.includes(hint)) ? 1000000000 : 0;
+    candidates.push({ node, score: hintScore + areaScore });
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.length ? candidates[0].node : null;
+}
+
+function tryLoadBillboardModel() {
+  if (preview3dThreeState.modelLoadAttempted) {
+    return;
+  }
+  const THREE = getThreeLib();
+  const GLTFLoader = getGLTFLoaderClass();
+  const scene = preview3dThreeState.scene;
+  if (!THREE || !GLTFLoader || !scene || !BILLBOARD_MODEL_URL) {
+    return;
+  }
+  preview3dThreeState.modelLoadAttempted = true;
+  const loader = new GLTFLoader();
+  loader.load(
+    BILLBOARD_MODEL_URL,
+    (gltf) => {
+      if (!gltf || !gltf.scene || !preview3dThreeState.scene) {
+        return;
+      }
+      const root = gltf.scene;
+      const selectedMesh = chooseBillboardMeshFromModel(root, THREE);
+      if (!selectedMesh) {
+        return;
+      }
+      const box = new THREE.Box3();
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      root.position.set(0, 0, 0);
+      root.rotation.set(0, 0, 0);
+      root.scale.set(1, 1, 1);
+      box.setFromObject(selectedMesh);
+      box.getSize(size);
+      const sourceWidth = Math.max(1, size.x);
+      const sourceHeight = Math.max(1, size.y, size.z);
+      const scaleFactor = Math.min(BILLBOARD_DESIGN_WIDTH / sourceWidth, BILLBOARD_DESIGN_HEIGHT / sourceHeight);
+      root.scale.multiplyScalar(scaleFactor);
+      box.setFromObject(selectedMesh);
+      box.getCenter(center);
+      root.position.sub(center);
+      preview3dThreeState.scene.add(root);
+      root.traverse((node) => {
+        if (node && node.isMesh && node !== selectedMesh) {
+          node.visible = false;
+        }
+      });
+      if (preview3dThreeState.mesh && preview3dThreeState.mesh.parent) {
+        preview3dThreeState.mesh.parent.remove(preview3dThreeState.mesh);
+      }
+      selectedMesh.visible = true;
+      selectedMesh.material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide
+      });
+      preview3dThreeState.mesh = selectedMesh;
+      PARTITION_KEYS.forEach((partitionKey) => {
+        const part = preview3dThreeState.partitionMeshes[partitionKey];
+        if (part && part.parent) {
+          part.parent.remove(part);
+        }
+        preview3dThreeState.partitionMeshes[partitionKey] = null;
+      });
+      preview3dThreeState.modelLoaded = true;
+      render3dPreview();
+    },
+    undefined,
+    () => {
+      // Keep procedural fallback mesh if model fails.
+    }
+  );
+}
+
 function draw3dFallbackMessage(message) {
   if (!billboard3dCanvas) {
     return;
@@ -1179,10 +1284,7 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.renderer &&
     preview3dThreeState.scene &&
     preview3dThreeState.camera &&
-    preview3dThreeState.mesh &&
-    preview3dThreeState.partitionMeshes.left &&
-    preview3dThreeState.partitionMeshes.curve &&
-    preview3dThreeState.partitionMeshes.right
+    preview3dThreeState.mesh
   ) {
     return true;
   }
@@ -1230,6 +1332,7 @@ function ensureThreePreviewSetup() {
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
   preview3dThreeState.partitionMeshes = partitionMeshes;
+  tryLoadBillboardModel();
   return true;
 }
 
