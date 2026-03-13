@@ -1652,7 +1652,6 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.mesh
   ) {
     clear3dFallbackMessage();
-    syncCameraControlVisibility();
     return true;
   }
 
