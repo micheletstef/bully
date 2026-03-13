@@ -1305,6 +1305,15 @@ function chooseBillboardMeshFromModel(root, THREE) {
   return candidates.length ? candidates[0].node : null;
 }
 
+function createNeutralBillboardMaterial(THREE) {
+  return new THREE.MeshStandardMaterial({
+    color: 0xbdbdbd,
+    roughness: 0.95,
+    metalness: 0,
+    side: THREE.DoubleSide
+  });
+}
+
 function findPreferredModelCamera(root) {
   if (!root) {
     return null;
@@ -1383,6 +1392,10 @@ function tryLoadBillboardModel() {
         preview3dThreeState.mesh.parent.remove(preview3dThreeState.mesh);
       }
       selectedMesh.visible = true;
+      selectedMesh.frustumCulled = false;
+      if (!ENABLE_3D_ARTWORK_PROJECTION) {
+        selectedMesh.material = createNeutralBillboardMaterial(THREE);
+      }
       if (preview3dThreeState.texture && ENABLE_3D_ARTWORK_PROJECTION) {
         selectedMesh.material.map = preview3dThreeState.texture;
         selectedMesh.material.needsUpdate = true;
@@ -1475,11 +1488,9 @@ function ensureThreePreviewSetup() {
   scene.add(keyLight);
   const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 20000);
   const geometry = createCurvedBillboardGeometry(THREE);
-  const material = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    side: THREE.DoubleSide
-  });
+  const material = createNeutralBillboardMaterial(THREE);
   const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
   scene.add(mesh);
   const partitionMeshes = {
     left: null,
@@ -1493,11 +1504,9 @@ function ensureThreePreviewSetup() {
     }
     const [startDistance, endDistance] = range;
     const partitionGeometry = createCurvedBillboardGeometry(THREE, startDistance, endDistance);
-    const partitionMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide
-    });
+    const partitionMaterial = createNeutralBillboardMaterial(THREE);
     const partitionMesh = new THREE.Mesh(partitionGeometry, partitionMaterial);
+    partitionMesh.frustumCulled = false;
     partitionMesh.visible = false;
     partitionMeshes[partitionKey] = partitionMesh;
     scene.add(partitionMesh);
