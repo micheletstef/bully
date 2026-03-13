@@ -98,11 +98,11 @@ let latestPointer = { x: null, y: null };
 let loopElapsedSeconds = 0;
 let loopDurationSeconds = 16;
 let loopTraverseSeconds = 16;
-let loopStageHeight = 1;
+let loopStageHeight = 3480;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
-let loopDistanceSource = 1;
+let loopDistanceSource = 5900;
 let partitionViewportRatios = {
   left: 0.25,
   curve: 0.25,
@@ -185,7 +185,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
   dragSensitivity: 1,
   textureQuality: 1.75
 };
-const ENABLE_3D_ARTWORK_PROJECTION = true;
+const ENABLE_3D_ARTWORK_PROJECTION = false;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dDragState = null;
@@ -4151,11 +4151,14 @@ async function init() {
       preview3dPlaybackSyncState.durationSeconds = durationSeconds;
     }
     let shouldRerender3d = false;
-    if (Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
+    const is3dMode = previewViewMode === "3d";
+    // Keep visual editor layout stable between flat and 3D modes.
+    // In 3D mode, ignore playback-reported geometry that can diverge from flat composition.
+    if (!is3dMode && Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
       loopStageHeight = stageHeight;
       shouldRerender3d = true;
     }
-    if (Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
+    if (!is3dMode && Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
       loopAssetGap = assetGap;
       shouldRerender3d = true;
     }
