@@ -3037,10 +3037,12 @@ function buildPartitionedSnapshotHtml(config) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const verticalSidePadding = Math.max(0, Number(state.padTopBottom) || 0);
         const sidePadding = verticalFlow
-          ? Math.max(0, Number(state.padTopBottom) || 0)
+          ? verticalSidePadding
           : Math.max(0, Number(state.padLeftRight) || 0);
         const partitionWidth = Math.max(1, await resolvePartitionWidth(container, partitionKey));
+        const verticalArtworkHeight = Math.max(1, partitionWidth - verticalSidePadding * 2);
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -3066,7 +3068,7 @@ function buildPartitionedSnapshotHtml(config) {
             image.src = src;
             image.alt = "";
             if (verticalFlow) {
-              image.style.height = partitionWidth + "px";
+              image.style.height = verticalArtworkHeight + "px";
             }
             track.appendChild(image);
             allImages.push(image);
