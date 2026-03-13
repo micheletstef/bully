@@ -1366,18 +1366,18 @@ function activeModelCamera() {
 }
 
 function syncCameraControlVisibility() {
+  const is3dMode = previewViewMode === "3d";
   const hasModelCameras =
-    preview3dThreeState.useModelCamera &&
     Array.isArray(preview3dThreeState.modelCameras) &&
     preview3dThreeState.modelCameras.length > 0;
   if (blenderCameraRow) {
-    blenderCameraRow.style.display = hasModelCameras ? "" : "none";
+    blenderCameraRow.style.display = is3dMode ? "" : "none";
   }
   manualCameraRows.forEach((row) => {
-    row.style.display = hasModelCameras ? "none" : "";
+    row.style.display = is3dMode ? "none" : "";
   });
-  if (!hasModelCameras && blenderCameraControl) {
-    blenderCameraControl.innerHTML = "";
+  if (is3dMode && !hasModelCameras) {
+    syncBlenderCameraControl();
   }
 }
 
@@ -1387,6 +1387,17 @@ function syncBlenderCameraControl() {
   }
   blenderCameraControl.innerHTML = "";
   const cameras = Array.isArray(preview3dThreeState.modelCameras) ? preview3dThreeState.modelCameras : [];
+  if (!cameras.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = preview3dThreeState.modelLoadAttempted
+      ? "no blender cameras found"
+      : "loading blender cameras...";
+    blenderCameraControl.appendChild(option);
+    blenderCameraControl.disabled = true;
+    return;
+  }
+  blenderCameraControl.disabled = false;
   cameras.forEach((camera, index) => {
     if (!camera) {
       return;
@@ -1408,7 +1419,16 @@ function tryLoadBillboardModel() {
   const THREE = getThreeLib();
   const GLTFLoader = getGLTFLoaderClass();
   const scene = preview3dThreeState.scene;
-  if (!THREE || !GLTFLoader || !scene || !BILLBOARD_MODEL_URL) {
+  if (!THREE || !scene || !BILLBOARD_MODEL_URL) {
+    return;
+  }
+  if (!GLTFLoader) {
+    preview3dThreeState.modelLoadAttempted = true;
+    preview3dThreeState.modelCameras = [];
+    preview3dThreeState.activeModelCameraUuid = "";
+    preview3dThreeState.useModelCamera = false;
+    syncBlenderCameraControl();
+    syncCameraControlVisibility();
     return;
   }
   preview3dThreeState.modelLoadAttempted = true;
@@ -1490,6 +1510,11 @@ function tryLoadBillboardModel() {
     undefined,
     () => {
       // Keep procedural fallback mesh if model fails.
+      preview3dThreeState.modelCameras = [];
+      preview3dThreeState.activeModelCameraUuid = "";
+      preview3dThreeState.useModelCamera = false;
+      syncBlenderCameraControl();
+      syncCameraControlVisibility();
     }
   );
 }
