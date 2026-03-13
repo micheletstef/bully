@@ -4235,4 +4235,33 @@ async function init() {
   syncVisualizationGeometry();
 }
 
-init();
+function waitForThreeBootstrap(timeoutMs = 4000) {
+  if (typeof window === "undefined" || window.THREE) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = () => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      window.removeEventListener("three-ready", onReady);
+      resolve();
+    };
+    const onReady = () => {
+      finish();
+    };
+    window.addEventListener("three-ready", onReady, { once: true });
+    window.setTimeout(() => {
+      finish();
+    }, Math.max(0, timeoutMs));
+  });
+}
+
+async function boot() {
+  await waitForThreeBootstrap(4000);
+  await init();
+}
+
+boot();
