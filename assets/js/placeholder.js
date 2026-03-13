@@ -13,6 +13,7 @@ const cameraPerspectiveControl = document.getElementById("cameraPerspectiveContr
 const cameraZoomControl = document.getElementById("cameraZoomControl");
 const cameraTargetXControl = document.getElementById("cameraTargetXControl");
 const cameraTargetYControl = document.getElementById("cameraTargetYControl");
+const cameraTargetZControl = document.getElementById("cameraTargetZControl");
 const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
@@ -62,6 +63,7 @@ const STORAGE_KEYS = {
   cameraZoom: "billboard.preview3dCameraZoom",
   cameraTargetX: "billboard.preview3dCameraTargetX",
   cameraTargetY: "billboard.preview3dCameraTargetY",
+  cameraTargetZ: "billboard.preview3dCameraTargetZ",
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
@@ -170,7 +172,8 @@ const preview3dCamera = {
   perspective: 1,
   zoom: 1,
   targetX: 0,
-  targetY: 0
+  targetY: 0,
+  targetZ: 0
 };
 const preview3dRenderSettings = {
   fit: 0.84,
@@ -929,9 +932,10 @@ function projectBillboardVertex(x, y, z) {
 function clampPreview3dCamera() {
   preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
-  preview3dCamera.zoom = Math.min(4.5, Math.max(0.35, preview3dCamera.zoom));
+  preview3dCamera.zoom = Math.min(4.5, Math.max(0.12, preview3dCamera.zoom));
   preview3dCamera.targetX = Math.min(3500, Math.max(-3500, preview3dCamera.targetX));
   preview3dCamera.targetY = Math.min(2500, Math.max(-2500, preview3dCamera.targetY));
+  preview3dCamera.targetZ = Math.min(4500, Math.max(-4500, preview3dCamera.targetZ));
   preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
   preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
   preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
@@ -956,6 +960,9 @@ function syncViewControlsUI() {
   if (cameraTargetYControl) {
     cameraTargetYControl.value = String(preview3dCamera.targetY);
   }
+  if (cameraTargetZControl) {
+    cameraTargetZControl.value = String(preview3dCamera.targetZ);
+  }
   if (cameraFitControl) {
     cameraFitControl.value = String(preview3dRenderSettings.fit);
   }
@@ -977,6 +984,7 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraZoom, String(preview3dCamera.zoom));
   writeStorage(STORAGE_KEYS.cameraTargetX, String(preview3dCamera.targetX));
   writeStorage(STORAGE_KEYS.cameraTargetY, String(preview3dCamera.targetY));
+  writeStorage(STORAGE_KEYS.cameraTargetZ, String(preview3dCamera.targetZ));
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
@@ -989,6 +997,7 @@ function restorePreview3dSettings() {
   preview3dCamera.zoom = readStoredNumber(STORAGE_KEYS.cameraZoom, preview3dCamera.zoom);
   preview3dCamera.targetX = readStoredNumber(STORAGE_KEYS.cameraTargetX, preview3dCamera.targetX);
   preview3dCamera.targetY = readStoredNumber(STORAGE_KEYS.cameraTargetY, preview3dCamera.targetY);
+  preview3dCamera.targetZ = readStoredNumber(STORAGE_KEYS.cameraTargetZ, preview3dCamera.targetZ);
   preview3dRenderSettings.fit = readStoredNumber(STORAGE_KEYS.cameraFit, preview3dRenderSettings.fit);
   preview3dRenderSettings.dragSensitivity = readStoredNumber(
     STORAGE_KEYS.cameraDragSensitivity,
@@ -1506,7 +1515,7 @@ function renderThreeFrame() {
     Math.sin(pitch) * radius * 0.9,
     Math.cos(yaw) * cosPitch * radius
   );
-  camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, 0);
+  camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, preview3dCamera.targetZ);
   camera.updateProjectionMatrix();
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
   if (
@@ -3775,6 +3784,16 @@ async function init() {
     });
   }
 
+  if (cameraTargetZControl) {
+    cameraTargetZControl.addEventListener("input", () => {
+      preview3dCamera.targetZ = Number(cameraTargetZControl.value) || 0;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      update3dPreviewAnimation();
+    });
+  }
+
   if (cameraFitControl) {
     cameraFitControl.addEventListener("input", () => {
       preview3dRenderSettings.fit = Number(cameraFitControl.value) || preview3dRenderSettings.fit;
@@ -3814,6 +3833,7 @@ async function init() {
       preview3dCamera.zoom = 1;
       preview3dCamera.targetX = 0;
       preview3dCamera.targetY = 0;
+      preview3dCamera.targetZ = 0;
       preview3dRenderSettings.fit = 0.84;
       preview3dRenderSettings.dragSensitivity = 1;
       preview3dRenderSettings.textureQuality = 1.75;
