@@ -20,17 +20,21 @@ body {
 .app-shell {
   position: relative;
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding: 18px;
   background: #fff;
 }
 
 .sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
+  position: relative;
   width: 300px;
-  overflow: auto;
-  padding: 18px 18px 24px;
+  overflow: visible;
+  padding: 0;
   background: transparent;
-  z-index: 10;
+  z-index: 1;
 }
 
 .directory-section {
@@ -77,18 +81,15 @@ body {
 
 .workspace {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  overflow: auto;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
 }
 
 .billboard-wrap {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(84vw, 1400px);
+  position: relative;
+  width: min(100%, 1400px);
+  margin: 72px auto 0;
 }
 
 .billboard-frame {
@@ -251,11 +252,12 @@ body {
 }
 
 .loop-visualization {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   width: max-content;
-  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
+  top: auto;
+  left: auto;
+  transform: none;
+  margin: 44px auto 0;
   height: 72px;
   padding: 0;
   overflow-x: visible;
@@ -348,7 +350,7 @@ body {
 }
 
 .loop-elapsed-time {
-  position: fixed;
+  position: absolute;
   font-size: 10px;
   color: #aa0000;
   white-space: nowrap;
@@ -358,11 +360,12 @@ body {
 }
 
 .partition-editors {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   width: max-content;
-  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
+  top: auto;
+  left: auto;
+  transform: none;
+  margin: 44px auto 0;
   display: none;
   grid-template-columns: 1fr;
   gap: 6px;
@@ -390,13 +393,14 @@ body {
 }
 
 .billboard-info {
-  position: fixed;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(calc(84vw - 340px), 1040px);
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: min(100%, 1040px);
   display: block;
-  z-index: 8;
+  z-index: 1;
+  margin: 22px auto 0;
 }
 
 .info-grid {
@@ -528,16 +532,17 @@ body {
 }
 
 .controls-column {
-  position: fixed;
-  right: 18px;
-  top: 18px;
-  z-index: 20;
-  width: min(300px, calc(100vw - 24px));
-  max-height: calc(100vh - 36px);
-  overflow-y: auto;
+  position: relative;
+  right: auto;
+  top: auto;
+  z-index: 1;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  margin-top: 14px;
 }
 
 .settings-panel {
@@ -545,10 +550,10 @@ body {
 }
 
 .view-controls-panel-fixed {
-  position: fixed;
-  right: 18px;
-  top: 18px;
-  z-index: 20;
+  position: relative;
+  right: auto;
+  top: auto;
+  z-index: 1;
 }
 
 .view-controls-header {
@@ -869,8 +874,22 @@ body {
 }
 
 @media (max-width: 1000px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 12px;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .billboard-wrap {
+    margin-top: 0;
+  }
+
   .billboard-info {
-    width: min(84vw, 1400px);
+    width: min(100%, 1400px);
   }
 
   .info-grid {
@@ -879,7 +898,7 @@ body {
   }
 
   .controls-column {
-    width: min(320px, calc(100vw - 24px));
+    width: 100%;
   }
 
 }

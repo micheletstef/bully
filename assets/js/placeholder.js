@@ -165,6 +165,7 @@ const preview3dThreeState = {
   textureScrollBaseX: 0,
   textureOffsetY: 0,
   textureMode: "linear",
+  loopTextureState: null,
   modelLoadAttempted: false,
   modelLoaded: false
 };
@@ -221,7 +222,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
   dragSensitivity: 1,
   textureQuality: 1.75
 };
-const ENABLE_3D_ARTWORK_PROJECTION = false;
+const ENABLE_3D_ARTWORK_PROJECTION = true;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dCameraPreset = "iso";
@@ -1778,6 +1779,10 @@ async function syncThreeLoopTexture() {
     3200,
     Math.max(520, Math.round(1024 * preview3dRenderSettings.textureQuality))
   );
+  const scale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const viewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * scale));
+  const viewportHeight = Math.max(64, Math.round(BILLBOARD_DESIGN_HEIGHT * scale));
+  const isPartitioned = currentDirectionIsPartitioned();
   const createTextureFromCanvas = (canvas) => {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -1787,7 +1792,7 @@ async function syncThreeLoopTexture() {
     if (preview3dThreeState.renderer && preview3dThreeState.renderer.capabilities) {
       texture.anisotropy = Math.min(8, preview3dThreeState.renderer.capabilities.getMaxAnisotropy());
     }
-    texture.repeat.set(0.5, 1);
+    texture.repeat.set(1, 1);
     texture.offset.set(0, 0);
     if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -1813,22 +1818,140 @@ async function syncThreeLoopTexture() {
   });
   preview3dThreeState.mesh.visible = true;
 
-  const surface = await build3dSurfaceStrip(targetHeight);
-  if (token !== preview3dThreeState.textureRequestToken || !surface) {
+  let linearSurface = null;
+  let partitionSurfaces = null;
+  if (isPartitioned) {
+    partitionSurfaces = {};
+    for (const key of PARTITION_KEYS) {
+      const surface = await build3dPartitionSurfaceStrip(targetHeight, key);
+      if (!surface) {
+        return;
+      }
+      partitionSurfaces[key] = surface;
+    }
+  } else {
+    linearSurface = await build3dSurfaceStrip(targetHeight);
+    if (!linearSurface) {
+      return;
+    }
+  }
+  if (token !== preview3dThreeState.textureRequestToken) {
     return;
   }
 
-  const texture = createTextureFromCanvas(surface.canvas);
+  const frameCanvas = document.createElement("canvas");
+  frameCanvas.width = viewportWidth;
+  frameCanvas.height = viewportHeight;
+  const frameCtx = frameCanvas.getContext("2d");
+  if (!frameCtx) {
+    return;
+  }
+  frameCtx.imageSmoothingEnabled = true;
+  frameCtx.imageSmoothingQuality = "high";
+
+  const texture = createTextureFromCanvas(frameCanvas);
   if (preview3dThreeState.texture) {
     preview3dThreeState.texture.dispose();
   }
   preview3dThreeState.texture = texture;
-  preview3dThreeState.textureSource = `linear:${current3dSources().join("|")}:${current3dOrientation()}`;
+  preview3dThreeState.textureSource = isPartitioned
+    ? `partitioned:${PARTITION_KEYS.map((key) => `${key}:${current3dPartitionSources(key).join("|")}:${current3dPartitionOrientation(key)}`).join(";")}`
+    : `linear:${current3dSources().join("|")}:${current3dOrientation()}`;
   preview3dThreeState.textureScrollBaseX = 0;
   preview3dThreeState.textureOffsetY = 0;
-  preview3dThreeState.textureMode = "linear";
+  preview3dThreeState.textureMode = isPartitioned ? "partitioned" : "linear";
+  preview3dThreeState.loopTextureState = {
+    partitioned: isPartitioned,
+    frameCanvas,
+    frameCtx,
+    linearSurface,
+    partitionSurfaces
+  };
   preview3dThreeState.mesh.material.map = texture;
   preview3dThreeState.mesh.material.needsUpdate = true;
+}
+
+function computePreview3dLoopProgress() {
+  let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
+  if (
+    preview3dPlaybackSyncState.hasSample &&
+    Number.isFinite(preview3dPlaybackSyncState.durationSeconds) &&
+    preview3dPlaybackSyncState.durationSeconds > 0
+  ) {
+    const nowMs = performance.now();
+    const extrapolatedElapsed =
+      preview3dPlaybackSyncState.elapsedSeconds +
+      Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+    const duration = preview3dPlaybackSyncState.durationSeconds;
+    progress = ((extrapolatedElapsed % duration) + duration) / duration;
+    progress = ((progress % 1) + 1) % 1;
+  }
+  return progress;
+}
+
+function drawSurfaceViewportWindow(ctx, surface, progress, destX, destY, destWidth, destHeight) {
+  if (!ctx || !surface || !surface.canvas || !surface.sequenceWidth || destWidth <= 0 || destHeight <= 0) {
+    return;
+  }
+  const sequenceWidth = Math.max(1, Math.round(surface.sequenceWidth));
+  let srcX = ((progress * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
+  let remaining = Math.max(1, Math.round(destWidth));
+  let dx = Math.round(destX);
+
+  while (remaining > 0) {
+    const available = sequenceWidth - srcX;
+    const drawWidth = Math.max(1, Math.min(remaining, available));
+    ctx.drawImage(
+      surface.canvas,
+      srcX,
+      0,
+      drawWidth,
+      surface.stripHeight,
+      dx,
+      Math.round(destY),
+      drawWidth,
+      Math.round(destHeight)
+    );
+    remaining -= drawWidth;
+    dx += drawWidth;
+    srcX = (srcX + drawWidth) % sequenceWidth;
+  }
+}
+
+function paintThreeLoopTextureFrame(progress) {
+  const texture = preview3dThreeState.texture;
+  const state = preview3dThreeState.loopTextureState;
+  if (!texture || !state || !state.frameCtx || !state.frameCanvas) {
+    return;
+  }
+  const { frameCanvas, frameCtx } = state;
+  frameCtx.fillStyle = currentBackgroundColor();
+  frameCtx.fillRect(0, 0, frameCanvas.width, frameCanvas.height);
+
+  if (state.partitioned && state.partitionSurfaces) {
+    const widths = {
+      left: Math.max(1, Math.round(frameCanvas.width * (BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH))),
+      curve: Math.max(1, Math.round(frameCanvas.width * (BILLBOARD_CURVE_WIDTH / BILLBOARD_DESIGN_WIDTH)))
+    };
+    widths.right = Math.max(1, frameCanvas.width - widths.left - widths.curve);
+    let cursor = 0;
+    drawSurfaceViewportWindow(frameCtx, state.partitionSurfaces.left, progress, cursor, 0, widths.left, frameCanvas.height);
+    cursor += widths.left;
+    drawSurfaceViewportWindow(frameCtx, state.partitionSurfaces.curve, progress, cursor, 0, widths.curve, frameCanvas.height);
+    cursor += widths.curve;
+    drawSurfaceViewportWindow(
+      frameCtx,
+      state.partitionSurfaces.right,
+      progress,
+      cursor,
+      0,
+      widths.right,
+      frameCanvas.height
+    );
+  } else {
+    drawSurfaceViewportWindow(frameCtx, state.linearSurface, progress, 0, 0, frameCanvas.width, frameCanvas.height);
+  }
+  texture.needsUpdate = true;
 }
 
 function renderThreeFrame() {
@@ -1874,25 +1997,13 @@ function renderThreeFrame() {
     set3dCameraModeStatus(`camera: ${preset ? preset.label : "ISO"}`);
   }
   camera.updateProjectionMatrix();
-  let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-  if (
-    preview3dPlaybackSyncState.hasSample &&
-    Number.isFinite(preview3dPlaybackSyncState.durationSeconds) &&
-    preview3dPlaybackSyncState.durationSeconds > 0
-  ) {
-    const nowMs = performance.now();
-    const extrapolatedElapsed =
-      preview3dPlaybackSyncState.elapsedSeconds +
-      Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
-    const duration = preview3dPlaybackSyncState.durationSeconds;
-    progress = ((extrapolatedElapsed % duration) + duration) / duration;
-    progress = ((progress % 1) + 1) % 1;
-  }
+  const progress = computePreview3dLoopProgress();
+  paintThreeLoopTextureFrame(progress);
   if (texture) {
-    texture.repeat.x = 0.5;
+    texture.repeat.x = 1;
     texture.repeat.y = 1;
-    texture.offset.x = preview3dThreeState.textureScrollBaseX + progress * 0.5;
-    texture.offset.y = preview3dThreeState.textureOffsetY;
+    texture.offset.x = 0;
+    texture.offset.y = 0;
   }
   renderer.render(scene, camera);
 }
@@ -3942,7 +4053,7 @@ function renderDirectory(directions) {
   const outputsSection = document.createElement("section");
   outputsSection.className = "directory-section";
   const outputsTitle = document.createElement("h2");
-  outputsTitle.textContent = "outputs";
+  outputsTitle.textContent = "outputs ";
   outputsSection.appendChild(outputsTitle);
 
   const outputs = sharedOutputs;
