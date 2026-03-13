@@ -18,6 +18,9 @@ const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
 const resetViewControlsButton = document.getElementById("resetViewControlsButton");
+const blenderCameraRow = document.getElementById("blenderCameraRow");
+const blenderCameraControl = document.getElementById("blenderCameraControl");
+const manualCameraRows = [...document.querySelectorAll(".camera-manual-row")];
 const viewModeChoiceButtons = [...document.querySelectorAll(".view-mode-choice")];
 const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
@@ -131,7 +134,6 @@ let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
-let locked3dVisualMetrics = null;
 let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
@@ -154,6 +156,8 @@ const preview3dThreeState = {
     right: null
   },
   modelCamera: null,
+  modelCameras: [],
+  activeModelCameraUuid: "",
   useModelCamera: false,
   textureSource: "",
   textureRequestToken: 0,
@@ -1336,6 +1340,67 @@ function findPreferredModelCamera(root) {
   return preferredCamera || fallbackCamera;
 }
 
+function collectModelCameras(root) {
+  if (!root) {
+    return [];
+  }
+  const cameras = [];
+  root.traverse((node) => {
+    if (node && node.isCamera) {
+      cameras.push(node);
+    }
+  });
+  return cameras;
+}
+
+function activeModelCamera() {
+  const cameras = Array.isArray(preview3dThreeState.modelCameras) ? preview3dThreeState.modelCameras : [];
+  if (!cameras.length) {
+    return null;
+  }
+  const active = cameras.find((cam) => cam && cam.uuid === preview3dThreeState.activeModelCameraUuid);
+  if (active) {
+    return active;
+  }
+  return cameras[0];
+}
+
+function syncCameraControlVisibility() {
+  const hasModelCameras =
+    preview3dThreeState.useModelCamera &&
+    Array.isArray(preview3dThreeState.modelCameras) &&
+    preview3dThreeState.modelCameras.length > 0;
+  if (blenderCameraRow) {
+    blenderCameraRow.style.display = hasModelCameras ? "" : "none";
+  }
+  manualCameraRows.forEach((row) => {
+    row.style.display = hasModelCameras ? "none" : "";
+  });
+  if (!hasModelCameras && blenderCameraControl) {
+    blenderCameraControl.innerHTML = "";
+  }
+}
+
+function syncBlenderCameraControl() {
+  if (!blenderCameraControl) {
+    return;
+  }
+  blenderCameraControl.innerHTML = "";
+  const cameras = Array.isArray(preview3dThreeState.modelCameras) ? preview3dThreeState.modelCameras : [];
+  cameras.forEach((camera, index) => {
+    if (!camera) {
+      return;
+    }
+    const option = document.createElement("option");
+    option.value = camera.uuid;
+    option.textContent = String(camera.name || `camera ${index + 1}`);
+    blenderCameraControl.appendChild(option);
+  });
+  if (preview3dThreeState.activeModelCameraUuid) {
+    blenderCameraControl.value = preview3dThreeState.activeModelCameraUuid;
+  }
+}
+
 function tryLoadBillboardModel() {
   if (preview3dThreeState.modelLoadAttempted) {
     return;
@@ -1356,11 +1421,22 @@ function tryLoadBillboardModel() {
       }
       const root = gltf.scene;
       const selectedMesh = chooseBillboardMeshFromModel(root, THREE);
+      const cameras = collectModelCameras(root);
+      const preferredCamera = findPreferredModelCamera(root);
+      preview3dThreeState.modelCameras = cameras;
+      preview3dThreeState.activeModelCameraUuid = preferredCamera
+        ? preferredCamera.uuid
+        : cameras[0]
+          ? cameras[0].uuid
+          : "";
+      preview3dThreeState.useModelCamera = cameras.length > 0;
+      syncBlenderCameraControl();
+      syncCameraControlVisibility();
       if (!selectedMesh) {
         // Keep procedural fallback if a valid UV-mapped screen mesh is not found.
         return;
       }
-      const modelCamera = findPreferredModelCamera(root);
+      const modelCamera = preferredCamera;
       const box = new THREE.Box3();
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
@@ -1388,7 +1464,6 @@ function tryLoadBillboardModel() {
       }
       preview3dThreeState.scene.add(root);
       preview3dThreeState.modelCamera = modelCamera;
-      preview3dThreeState.useModelCamera = !!modelCamera;
       if (preview3dThreeState.mesh && preview3dThreeState.mesh.parent) {
         preview3dThreeState.mesh.parent.remove(preview3dThreeState.mesh);
       }
@@ -1493,6 +1568,7 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.mesh
   ) {
     clear3dFallbackMessage();
+    syncCameraControlVisibility();
     return true;
   }
 
@@ -1540,6 +1616,7 @@ function ensureThreePreviewSetup() {
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
   preview3dThreeState.partitionMeshes = partitionMeshes;
+  syncCameraControlVisibility();
   tryLoadBillboardModel();
   clear3dFallbackMessage();
   return true;
@@ -1682,7 +1759,7 @@ function renderThreeFrame() {
   const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
   renderer.setSize(cssWidth, cssHeight, false);
   camera.aspect = cssWidth / cssHeight;
-  const modelCamera = preview3dThreeState.useModelCamera ? preview3dThreeState.modelCamera : null;
+  const modelCamera = preview3dThreeState.useModelCamera ? activeModelCamera() : null;
   if (modelCamera && modelCamera.isPerspectiveCamera) {
     const worldPosition = new modelCamera.position.constructor();
     const worldQuaternion = new modelCamera.quaternion.constructor();
@@ -1779,20 +1856,10 @@ async function render3dPreview() {
 
 function applyPreviewViewMode(mode) {
   previewViewMode = normalizePreviewViewMode(mode);
-  if (previewViewMode === "3d") {
-    // Lock visual-editor playback geometry so red timing frame matches flat mode.
-    locked3dVisualMetrics = {
-      viewportRatio: loopPlaybackViewportRatio,
-      loopDistance: loopDistanceSource,
-      stageHeight: loopStageHeight,
-      assetGap: loopAssetGap
-    };
-  } else {
-    locked3dVisualMetrics = null;
-  }
   if (previewViewModeControl && previewViewModeControl.value !== previewViewMode) {
     previewViewModeControl.value = previewViewMode;
   }
+  syncCameraControlVisibility();
   if (appShell) {
     appShell.classList.toggle("preview-3d-mode", previewViewMode === "3d");
   }
@@ -3008,6 +3075,15 @@ function restoreLoopLayoutSettings() {
     }
   }
 
+  if (blenderCameraControl) {
+    blenderCameraControl.addEventListener("change", () => {
+      preview3dThreeState.activeModelCameraUuid = blenderCameraControl.value || "";
+      if (previewViewMode === "3d") {
+        render3dPreview();
+      }
+    });
+  }
+
   if (assetGapControl) {
     const raw = readStorage(STORAGE_KEYS.assetGap);
     if (raw !== null) {
@@ -4174,8 +4250,7 @@ async function init() {
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
     }
-    const is3dMode = previewViewMode === "3d";
-    if (!is3dMode && Number.isFinite(viewportRatio)) {
+    if (Number.isFinite(viewportRatio)) {
       loopPlaybackViewportRatio = viewportRatio;
     }
     if (Number.isFinite(elapsedSeconds)) {
@@ -4189,24 +4264,16 @@ async function init() {
       preview3dPlaybackSyncState.durationSeconds = durationSeconds;
     }
     let shouldRerender3d = false;
-    // Keep visual editor layout stable between flat and 3D modes.
-    // In 3D mode, ignore playback-reported geometry that can diverge from flat composition.
-    if (!is3dMode && Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
+    if (Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
       loopStageHeight = stageHeight;
       shouldRerender3d = true;
     }
-    if (!is3dMode && Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
+    if (Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
       loopAssetGap = assetGap;
       shouldRerender3d = true;
     }
-    if (!is3dMode && Number.isFinite(loopDistance) && loopDistance > 0) {
+    if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
-    }
-    if (is3dMode && locked3dVisualMetrics) {
-      loopPlaybackViewportRatio = locked3dVisualMetrics.viewportRatio;
-      loopDistanceSource = locked3dVisualMetrics.loopDistance;
-      loopStageHeight = locked3dVisualMetrics.stageHeight;
-      loopAssetGap = locked3dVisualMetrics.assetGap;
     }
     if (payload.partitions && typeof payload.partitions === "object") {
       PARTITION_KEYS.forEach((key) => {
