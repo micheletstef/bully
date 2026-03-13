@@ -1428,21 +1428,19 @@ function tuneProjectionMaterial(material) {
     return;
   }
   const brightness = Math.max(0, Math.min(5, Number(preview3dRenderSettings.projectionBrightness) || 3.4));
-  const shadow = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionShadow) || 0.7));
   const glare = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionGlare) || 0.9));
-  const baseTone = Math.max(0.22, 1 - shadow * 0.34);
   if (material.color && typeof material.color.setRGB === "function") {
-    material.color.setRGB(baseTone, baseTone, baseTone);
+    material.color.setRGB(1, 1, 1);
   }
   if ("roughness" in material) {
-    material.roughness = Math.max(0.05, Math.min(0.95, 0.62 + shadow * 0.18 - glare * 0.4));
+    material.roughness = Math.max(0.05, Math.min(0.95, 0.68 - glare * 0.34));
   }
   if ("metalness" in material) {
     material.metalness = Math.max(0, Math.min(0.45, glare * 0.22));
   }
   if (material.emissive && typeof material.emissive.setHex === "function") {
     material.emissive.setHex(0xffffff);
-    material.emissiveIntensity = Math.max(0, brightness * (1 - shadow * 0.15));
+    material.emissiveIntensity = Math.max(0, brightness);
   }
   if ("emissiveMap" in material) {
     material.emissiveMap = material.map || null;
@@ -1451,6 +1449,38 @@ function tuneProjectionMaterial(material) {
     material.toneMapped = false;
   }
   material.needsUpdate = true;
+}
+
+function applyProjectionScreenFx(ctx, width, height) {
+  if (!ctx || width <= 0 || height <= 0) {
+    return;
+  }
+  const shadow = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionShadow) || 0));
+  const glare = Math.max(0, Math.min(2, Number(preview3dRenderSettings.projectionGlare) || 0));
+  if (shadow <= 0 && glare <= 0) {
+    return;
+  }
+
+  // Keep glare and shadow on opposite sides.
+  const shadowStrength = Math.min(0.75, shadow * 0.34);
+  const glareStrength = Math.min(0.48, glare * 0.22);
+  const edgeSpan = Math.max(0.28, Math.min(0.56, 0.34 + glare * 0.08));
+
+  if (shadowStrength > 0) {
+    const shadowGradient = ctx.createLinearGradient(0, 0, width * edgeSpan, 0);
+    shadowGradient.addColorStop(0, `rgba(0, 0, 0, ${shadowStrength.toFixed(4)})`);
+    shadowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = shadowGradient;
+    ctx.fillRect(0, 0, width * edgeSpan, height);
+  }
+
+  if (glareStrength > 0) {
+    const glareGradient = ctx.createLinearGradient(width, 0, width * (1 - edgeSpan), 0);
+    glareGradient.addColorStop(0, `rgba(255, 255, 255, ${glareStrength.toFixed(4)})`);
+    glareGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = glareGradient;
+    ctx.fillRect(width * (1 - edgeSpan), 0, width * edgeSpan, height);
+  }
 }
 
 function findPreferredModelCamera(root) {
@@ -1987,19 +2017,21 @@ async function syncThreeLoopTexture() {
 
 function computePreview3dLoopProgress() {
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
-  if (
+  const nowMs = performance.now();
+  const hasSyncedSample =
     preview3dPlaybackSyncState.hasSample &&
     Number.isFinite(preview3dPlaybackSyncState.durationSeconds) &&
-    preview3dPlaybackSyncState.durationSeconds > 0
-  ) {
-    const nowMs = performance.now();
-    const extrapolatedElapsed =
-      preview3dPlaybackSyncState.elapsedSeconds +
-      Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
-    const duration = preview3dPlaybackSyncState.durationSeconds;
-    progress = ((extrapolatedElapsed % duration) + duration) / duration;
-    progress = ((progress % 1) + 1) % 1;
+    preview3dPlaybackSyncState.durationSeconds > 0;
+  const duration = hasSyncedSample
+    ? preview3dPlaybackSyncState.durationSeconds
+    : Math.max(0.1, Number(loopDurationSeconds) || 16);
+  if (!Number.isFinite(preview3dPlaybackSyncState.syncedAtMs) || preview3dPlaybackSyncState.syncedAtMs <= 0) {
+    preview3dPlaybackSyncState.syncedAtMs = nowMs;
   }
+  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedSeconds : loopElapsedSeconds;
+  const extrapolatedElapsed = elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+  progress = ((extrapolatedElapsed % duration) + duration) / duration;
+  progress = ((progress % 1) + 1) % 1;
   return progress;
 }
 
@@ -2065,6 +2097,7 @@ function paintThreeLoopTextureFrame(progress) {
   } else {
     drawSurfaceViewportWindow(frameCtx, state.linearSurface, progress, 0, 0, frameCanvas.width, frameCanvas.height);
   }
+  applyProjectionScreenFx(frameCtx, frameCanvas.width, frameCanvas.height);
   texture.needsUpdate = true;
 }
 
@@ -4130,15 +4163,10 @@ function updateActiveWindow() {
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${traverseElapsed.toFixed(1)}s/${traverseDuration.toFixed(1)}s`;
-    let centerX = drawX + mainWidth / 2;
-    if (mainWidth <= 0 && overflowWidth > 0) {
-      centerX = baseX + overflowWidth / 2;
-    }
-    const editorRect = loopVisualization.getBoundingClientRect();
-    const absoluteLeft = editorRect.left + centerX;
-    const absoluteTop = editorRect.top + frameTopOffset + frameHeight + 2;
-    loopElapsedTime.style.left = `${absoluteLeft}px`;
-    loopElapsedTime.style.top = `${absoluteTop}px`;
+    const centeredLeft = loopVisualization.offsetLeft + loopVisualization.clientWidth / 2;
+    const outsideBottomTop = loopVisualization.offsetTop + frameHeight + 6;
+    loopElapsedTime.style.left = `${centeredLeft}px`;
+    loopElapsedTime.style.top = `${outsideBottomTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
   }
   if (previewViewMode === "3d") {
