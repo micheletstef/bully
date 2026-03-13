@@ -1551,13 +1551,14 @@ function tryLoadBillboardModel() {
       }
       selectedMesh.visible = true;
       selectedMesh.frustumCulled = false;
-      if (!ENABLE_3D_ARTWORK_PROJECTION) {
-        selectedMesh.material = createNeutralBillboardMaterial(THREE);
-      }
+      // Keep a stable material baseline so projection never changes billboard framing/appearance,
+      // except for adding/removing the artwork texture map.
+      const projectionMaterial = createNeutralBillboardMaterial(THREE);
       if (preview3dThreeState.texture && ENABLE_3D_ARTWORK_PROJECTION) {
-        selectedMesh.material.map = preview3dThreeState.texture;
-        selectedMesh.material.needsUpdate = true;
+        projectionMaterial.map = preview3dThreeState.texture;
       }
+      projectionMaterial.needsUpdate = true;
+      selectedMesh.material = projectionMaterial;
       preview3dThreeState.mesh = selectedMesh;
       PARTITION_KEYS.forEach((partitionKey) => {
         const part = preview3dThreeState.partitionMeshes[partitionKey];
