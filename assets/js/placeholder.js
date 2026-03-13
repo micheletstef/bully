@@ -17,6 +17,7 @@ const cameraTargetZControl = document.getElementById("cameraTargetZControl");
 const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
+const projectionBrightnessControl = document.getElementById("projectionBrightnessControl");
 const resetViewControlsButton = document.getElementById("resetViewControlsButton");
 const blenderCameraRow = document.getElementById("blenderCameraRow");
 const blenderCameraControl = document.getElementById("blenderCameraControl");
@@ -71,6 +72,7 @@ const STORAGE_KEYS = {
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
+  projectionBrightness: "billboard.preview3dProjectionBrightness",
   cameraViewPreset: "billboard.preview3dCameraViewPreset",
   cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
   direction: "billboard.selectedDirection",
@@ -221,7 +223,8 @@ const PREVIEW3D_CAMERA_PRESETS = {
 const PREVIEW3D_RENDER_DEFAULTS = {
   fit: 0.72,
   dragSensitivity: 1,
-  textureQuality: 1.75
+  textureQuality: 1.75,
+  projectionBrightness: 3.4
 };
 const ENABLE_3D_ARTWORK_PROJECTION = true;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
@@ -986,6 +989,10 @@ function clampPreview3dCamera() {
   preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
   preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
   preview3dRenderSettings.textureQuality = Math.min(3, Math.max(1, preview3dRenderSettings.textureQuality));
+  preview3dRenderSettings.projectionBrightness = Math.min(
+    5,
+    Math.max(0.8, preview3dRenderSettings.projectionBrightness)
+  );
 }
 
 function syncViewControlsUI() {
@@ -1019,6 +1026,9 @@ function syncViewControlsUI() {
   if (cameraTextureQualityControl) {
     cameraTextureQualityControl.value = String(preview3dRenderSettings.textureQuality);
   }
+  if (projectionBrightnessControl) {
+    projectionBrightnessControl.value = String(preview3dRenderSettings.projectionBrightness);
+  }
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
   }
@@ -1050,6 +1060,7 @@ function syncViewControlReadouts() {
   setViewControlReadout("cameraFitValue", preview3dRenderSettings.fit, 2);
   setViewControlReadout("cameraDragSensitivityValue", preview3dRenderSettings.dragSensitivity, 2);
   setViewControlReadout("cameraTextureQualityValue", preview3dRenderSettings.textureQuality, 2);
+  setViewControlReadout("projectionBrightnessValue", preview3dRenderSettings.projectionBrightness, 2);
 }
 
 function syncViewModeToggleStates() {
@@ -1130,6 +1141,7 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
+  writeStorage(STORAGE_KEYS.projectionBrightness, String(preview3dRenderSettings.projectionBrightness));
   writeStorage(STORAGE_KEYS.cameraViewPreset, normalizePreview3dCameraPreset(preview3dCameraPreset));
   writeStorage(STORAGE_KEYS.cameraPresetVersion, PREVIEW3D_CAMERA_PRESET_VERSION);
 }
@@ -1137,6 +1149,11 @@ function persistPreview3dSettings() {
 function restorePreview3dSettings() {
   // Temporary safety mode: always start from ISO camera on load.
   applyDefaultPreview3dCameraState();
+  preview3dRenderSettings.projectionBrightness = readStoredNumber(
+    STORAGE_KEYS.projectionBrightness,
+    PREVIEW3D_RENDER_DEFAULTS.projectionBrightness
+  );
+  clampPreview3dCamera();
   persistPreview3dSettings();
   return;
 
@@ -1405,12 +1422,22 @@ function tuneProjectionMaterial(material) {
   if (!material) {
     return;
   }
+  const brightness = Math.max(0.8, Math.min(5, Number(preview3dRenderSettings.projectionBrightness) || 3.4));
   if (material.color && typeof material.color.setHex === "function") {
     material.color.setHex(0xffffff);
   }
+  if ("roughness" in material) {
+    material.roughness = 0.5;
+  }
+  if ("metalness" in material) {
+    material.metalness = 0;
+  }
   if (material.emissive && typeof material.emissive.setHex === "function") {
-    material.emissive.setHex(0x2f2f2f);
-    material.emissiveIntensity = 0.42;
+    material.emissive.setHex(0xffffff);
+    material.emissiveIntensity = brightness;
+  }
+  if ("emissiveMap" in material) {
+    material.emissiveMap = material.map || null;
   }
   if ("toneMapped" in material) {
     material.toneMapped = false;
@@ -1511,6 +1538,7 @@ function tryLoadBillboardModel() {
     if (preview3dThreeState.mesh) {
       preview3dThreeState.mesh.visible = true;
     }
+    set3dLoaderVisible(false);
     syncBlenderCameraControl();
     syncCameraControlVisibility();
     return;
@@ -1521,7 +1549,7 @@ function tryLoadBillboardModel() {
     // Avoid showing fallback geometry before GLB mesh is ready.
     preview3dThreeState.mesh.visible = false;
   }
-  draw3dFallbackMessage("Loading 3D model...");
+  set3dLoaderVisible(true, "loading 3D model...");
   const loader = new GLTFLoader();
   loader.load(
     BILLBOARD_MODEL_URL,
@@ -1611,6 +1639,7 @@ function tryLoadBillboardModel() {
       if (preview3dThreeState.mesh) {
         preview3dThreeState.mesh.visible = true;
       }
+      set3dLoaderVisible(false);
       draw3dFallbackMessage("3D model failed to load; using fallback.");
       syncBlenderCameraControl();
       syncCameraControlVisibility();
@@ -1647,6 +1676,38 @@ function clear3dFallbackMessage() {
   if (status) {
     status.style.display = "none";
   }
+}
+
+function ensure3dLoaderNode() {
+  if (!billboardPreview3d) {
+    return null;
+  }
+  let loader = document.getElementById("billboard3dLoader");
+  if (!loader) {
+    loader = document.createElement("div");
+    loader.id = "billboard3dLoader";
+    loader.className = "billboard-3d-loader";
+    const spinner = document.createElement("span");
+    spinner.className = "billboard-3d-loader-spinner";
+    const label = document.createElement("span");
+    label.className = "billboard-3d-loader-label";
+    loader.appendChild(spinner);
+    loader.appendChild(label);
+    billboardPreview3d.appendChild(loader);
+  }
+  return loader;
+}
+
+function set3dLoaderVisible(isVisible, label = "loading 3D...") {
+  const loader = ensure3dLoaderNode();
+  if (!loader) {
+    return;
+  }
+  const labelNode = loader.querySelector(".billboard-3d-loader-label");
+  if (labelNode) {
+    labelNode.textContent = String(label || "loading 3D...");
+  }
+  loader.style.display = isVisible ? "inline-flex" : "none";
 }
 
 function set3dCameraModeStatus(label) {
@@ -2079,6 +2140,9 @@ function start3dAnimationLoop() {
 }
 
 function update3dPreviewAnimation() {
+  if (previewViewMode !== "3d") {
+    return;
+  }
   if (!ensureThreePreviewSetup()) {
     draw3dFallbackMessage("3D unavailable: THREE failed to initialize");
     return;
@@ -2087,15 +2151,24 @@ function update3dPreviewAnimation() {
 }
 
 async function render3dPreview() {
+  if (previewViewMode !== "3d") {
+    set3dLoaderVisible(false);
+    return;
+  }
   if (!billboardPreview3d || !billboard3dCanvas) {
     return;
   }
+  set3dLoaderVisible(true, "loading 3D...");
   if (!ensureThreePreviewSetup()) {
+    set3dLoaderVisible(false);
     draw3dFallbackMessage("3D unavailable: THREE failed to initialize");
     return;
   }
   await syncThreeLoopTexture();
   renderThreeFrame();
+  if (!preview3dThreeState.modelLoading) {
+    set3dLoaderVisible(false);
+  }
 }
 
 function applyPreviewViewMode(mode) {
@@ -2114,6 +2187,7 @@ function applyPreviewViewMode(mode) {
     render3dPreview();
     start3dAnimationLoop();
   } else {
+    set3dLoaderVisible(false);
     stop3dAnimationLoop();
     // Re-sync the iframe loop when coming back from hidden 3D mode.
     sendLoopConfigToPreview();
@@ -4041,7 +4115,9 @@ function updateActiveWindow() {
     loopElapsedTime.style.top = `${absoluteTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
   }
-  update3dPreviewAnimation();
+  if (previewViewMode === "3d") {
+    update3dPreviewAnimation();
+  }
 }
 
 function removeArtwork(index) {
@@ -4365,6 +4441,20 @@ async function init() {
     });
   }
 
+  if (projectionBrightnessControl) {
+    projectionBrightnessControl.addEventListener("input", () => {
+      preview3dRenderSettings.projectionBrightness =
+        Number(projectionBrightnessControl.value) || preview3dRenderSettings.projectionBrightness;
+      clampPreview3dCamera();
+      persistPreview3dSettings();
+      syncViewControlsUI();
+      if (preview3dThreeState.mesh && preview3dThreeState.mesh.material && ENABLE_3D_ARTWORK_PROJECTION) {
+        tuneProjectionMaterial(preview3dThreeState.mesh.material);
+      }
+      update3dPreviewAnimation();
+    });
+  }
+
   if (resetViewControlsButton) {
     resetViewControlsButton.addEventListener("click", () => {
       applyDefaultPreview3dCameraState();
@@ -4636,7 +4726,10 @@ function waitForThreeBootstrap(timeoutMs = 4000) {
 }
 
 async function boot() {
-  await waitForThreeBootstrap(4000);
+  const initialMode = normalizePreviewViewMode(readStorage(STORAGE_KEYS.previewViewMode) || "3d");
+  if (initialMode === "3d") {
+    await waitForThreeBootstrap(4000);
+  }
   await init();
 }
 

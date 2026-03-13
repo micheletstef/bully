@@ -122,6 +122,36 @@ body {
   overflow: hidden;
 }
 
+.billboard-3d-loader {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 7;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.billboard-3d-loader-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: billboard-loader-spin 0.8s linear infinite;
+}
+
+@keyframes billboard-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .billboard-3d-canvas {
   position: absolute;
   inset: 0;
