@@ -222,7 +222,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
   dragSensitivity: 1,
   textureQuality: 1.75
 };
-const ENABLE_3D_ARTWORK_PROJECTION = false;
+const ENABLE_3D_ARTWORK_PROJECTION = true;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dCameraPreset = "iso";
