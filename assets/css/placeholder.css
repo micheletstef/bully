@@ -82,14 +82,17 @@ body {
 .workspace {
   position: relative;
   width: 100%;
-  min-height: 0;
-  overflow: visible;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: auto;
 }
 
 .billboard-wrap {
-  position: relative;
-  width: min(100%, 1400px);
-  margin: 72px auto 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(84vw, 1400px);
 }
 
 .billboard-frame {
@@ -252,12 +255,11 @@ body {
 }
 
 .loop-visualization {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   width: max-content;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin: 44px auto 0;
+  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
   height: 72px;
   padding: 0;
   overflow-x: visible;
@@ -360,12 +362,11 @@ body {
 }
 
 .partition-editors {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   width: max-content;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin: 44px auto 0;
+  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
   display: none;
   grid-template-columns: 1fr;
   gap: 6px;
@@ -393,14 +394,13 @@ body {
 }
 
 .billboard-info {
-  position: relative;
-  top: auto;
-  left: auto;
-  transform: none;
-  width: min(100%, 1040px);
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(84vw - 340px), 1040px);
   display: block;
-  z-index: 1;
-  margin: 22px auto 0;
+  z-index: 8;
 }
 
 .info-grid {
@@ -884,12 +884,8 @@ body {
     width: 100%;
   }
 
-  .billboard-wrap {
-    margin-top: 0;
-  }
-
   .billboard-info {
-    width: min(100%, 1400px);
+    width: min(84vw, 1400px);
   }
 
   .info-grid {
