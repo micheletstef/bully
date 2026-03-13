@@ -170,14 +170,14 @@ let preview3dPlaybackSyncState = {
   durationSeconds: 1,
   syncedAtMs: 0
 };
-const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v3";
+const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v4";
 const PREVIEW3D_CAMERA_DEFAULTS = {
-  yaw: -0.78,
-  pitch: 0.96,
-  perspective: 1,
-  zoom: 1,
-  targetX: 0,
-  targetY: 3046,
+  yaw: -0.7,
+  pitch: 0.11,
+  perspective: 1.33,
+  zoom: 2.68,
+  targetX: 241,
+  targetY: 2973,
   targetZ: 0
 };
 const PREVIEW3D_RENDER_DEFAULTS = {
@@ -185,7 +185,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
   dragSensitivity: 1,
   textureQuality: 1.75
 };
-const ENABLE_3D_ARTWORK_PROJECTION = false;
+const ENABLE_3D_ARTWORK_PROJECTION = true;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
 let preview3dDragState = null;
