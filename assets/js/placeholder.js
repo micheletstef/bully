@@ -1957,6 +1957,15 @@ function applyPreviewViewMode(mode) {
     start3dAnimationLoop();
   } else {
     stop3dAnimationLoop();
+    // Re-sync the iframe loop when coming back from hidden 3D mode.
+    sendLoopConfigToPreview();
+    updateActiveWindow();
+    updatePartitionActiveWindows();
+    window.requestAnimationFrame(() => {
+      sendLoopConfigToPreview();
+      updateActiveWindow();
+      updatePartitionActiveWindows();
+    });
   }
   syncViewControlsUI();
 }
