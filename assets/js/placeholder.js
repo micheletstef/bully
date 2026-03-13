@@ -18,6 +18,7 @@ const cameraFitControl = document.getElementById("cameraFitControl");
 const cameraDragSensitivityControl = document.getElementById("cameraDragSensitivityControl");
 const cameraTextureQualityControl = document.getElementById("cameraTextureQualityControl");
 const resetViewControlsButton = document.getElementById("resetViewControlsButton");
+const viewModeChoiceButtons = [...document.querySelectorAll(".view-mode-choice")];
 const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
 const linearOrientationRow = document.getElementById("linearOrientationRow");
@@ -931,7 +932,7 @@ function projectBillboardVertex(x, y, z) {
 
 function clampPreview3dCamera() {
   preview3dCamera.pitch = Math.min(1.45, Math.max(-0.55, preview3dCamera.pitch));
-  preview3dCamera.perspective = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+  preview3dCamera.perspective = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
   preview3dCamera.zoom = Math.min(4.5, Math.max(0.12, preview3dCamera.zoom));
   preview3dCamera.targetX = Math.min(3500, Math.max(-3500, preview3dCamera.targetX));
   preview3dCamera.targetY = Math.min(2500, Math.max(-2500, preview3dCamera.targetY));
@@ -974,6 +975,58 @@ function syncViewControlsUI() {
   }
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
+  }
+  syncViewModeToggleStates();
+  syncViewControlReadouts();
+}
+
+function setViewControlReadout(id, value, decimals = 2) {
+  const output = document.getElementById(id);
+  if (!output) {
+    return;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    output.textContent = "-";
+    return;
+  }
+  output.textContent = decimals <= 0 ? String(Math.round(numeric)) : numeric.toFixed(decimals);
+}
+
+function syncViewControlReadouts() {
+  setViewControlReadout("cameraYawValue", preview3dCamera.yaw, 2);
+  setViewControlReadout("cameraPitchValue", preview3dCamera.pitch, 2);
+  setViewControlReadout("cameraPerspectiveValue", preview3dCamera.perspective, 2);
+  setViewControlReadout("cameraZoomValue", preview3dCamera.zoom, 2);
+  setViewControlReadout("cameraTargetXValue", preview3dCamera.targetX, 0);
+  setViewControlReadout("cameraTargetYValue", preview3dCamera.targetY, 0);
+  setViewControlReadout("cameraTargetZValue", preview3dCamera.targetZ, 0);
+  setViewControlReadout("cameraFitValue", preview3dRenderSettings.fit, 2);
+  setViewControlReadout("cameraDragSensitivityValue", preview3dRenderSettings.dragSensitivity, 2);
+  setViewControlReadout("cameraTextureQualityValue", preview3dRenderSettings.textureQuality, 2);
+}
+
+function syncViewModeToggleStates() {
+  viewModeChoiceButtons.forEach((button) => {
+    const value = normalizePreviewViewMode(button.dataset.value);
+    const isActive = previewViewMode === value;
+    button.classList.toggle("inactive", !isActive);
+    button.setAttribute("aria-checked", isActive ? "true" : "false");
+  });
+}
+
+function setPreviewViewModeControlValue(value) {
+  if (!previewViewModeControl) {
+    return;
+  }
+  const normalized = normalizePreviewViewMode(value);
+  const changed = normalizePreviewViewMode(previewViewModeControl.value) !== normalized;
+  previewViewModeControl.value = normalized;
+  if (changed) {
+    previewViewModeControl.dispatchEvent(new Event("change", { bubbles: true }));
+  } else {
+    previewViewMode = normalized;
+    syncViewModeToggleStates();
   }
 }
 
@@ -1031,7 +1084,7 @@ function apply3dDrag(clientX, clientY) {
     preview3dCamera.perspective += (-dy + dx * 0.35) * 0.003 * preview3dRenderSettings.dragSensitivity;
   } else if (preview3dDragState.dragMode === "pan") {
     const canvasHeight = Math.max(1, billboard3dCanvas ? billboard3dCanvas.clientHeight || 1 : 1);
-    const perspectiveFactor = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+    const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
     const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
     const panScale = (radius / canvasHeight) * 2.2;
     preview3dCamera.targetX -= dx * panScale * preview3dRenderSettings.dragSensitivity;
@@ -1511,7 +1564,7 @@ function renderThreeFrame() {
   const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
   renderer.setSize(cssWidth, cssHeight, false);
   camera.aspect = cssWidth / cssHeight;
-  const perspectiveFactor = Math.min(2.5, Math.max(0.35, preview3dCamera.perspective));
+  const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
   camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
 
   const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
@@ -3730,6 +3783,15 @@ async function init() {
       savePreviewViewMode(previewViewMode);
       applyPreviewViewMode(previewViewMode);
     });
+  }
+
+  if (viewModeChoiceButtons.length) {
+    viewModeChoiceButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setPreviewViewModeControlValue(button.dataset.value);
+      });
+    });
+    syncViewModeToggleStates();
   }
 
   if (cameraYawControl) {

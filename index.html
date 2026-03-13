@@ -221,52 +221,64 @@
       <div class="view-controls-header">
         <h3 id="viewControlsTitle" class="settings-title">view controls</h3>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-mode-row">
         <span class="settings-label">view mode</span>
-        <select id="previewViewModeControl">
-          <option value="flat">flat</option>
-          <option value="3d">3d street</option>
-        </select>
+        <div class="view-mode-toggle" role="radiogroup" aria-label="Preview view mode">
+          <button type="button" class="view-mode-choice" role="radio" data-value="flat">flat</button>
+          <span>/</span>
+          <button type="button" class="view-mode-choice" role="radio" data-value="3d">3D</button>
+        </div>
+        <input id="previewViewModeControl" type="hidden" value="flat" />
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">yaw</span>
         <input id="cameraYawControl" type="range" min="-3.14" max="3.14" step="0.01" value="-0.78" />
+        <span id="cameraYawValue" class="view-control-value">-0.78</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">pitch</span>
         <input id="cameraPitchControl" type="range" min="-1.2" max="1.45" step="0.01" value="0.96" />
+        <span id="cameraPitchValue" class="view-control-value">0.96</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">perspective</span>
-        <input id="cameraPerspectiveControl" type="range" min="0.35" max="2.5" step="0.01" value="1" />
+        <input id="cameraPerspectiveControl" type="range" min="0.1" max="2.5" step="0.01" value="1" />
+        <span id="cameraPerspectiveValue" class="view-control-value">1.00</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">screen scale</span>
         <input id="cameraZoomControl" type="range" min="0.12" max="4.5" step="0.01" value="1" />
+        <span id="cameraZoomValue" class="view-control-value">1.00</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">screen x</span>
         <input id="cameraTargetXControl" type="range" min="-3500" max="3500" step="1" value="0" />
+        <span id="cameraTargetXValue" class="view-control-value">0</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">screen y</span>
         <input id="cameraTargetYControl" type="range" min="-2500" max="2500" step="1" value="0" />
+        <span id="cameraTargetYValue" class="view-control-value">0</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">screen z</span>
         <input id="cameraTargetZControl" type="range" min="-4500" max="4500" step="1" value="0" />
+        <span id="cameraTargetZValue" class="view-control-value">0</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">frame fit</span>
         <input id="cameraFitControl" type="range" min="0.55" max="0.98" step="0.01" value="0.84" />
+        <span id="cameraFitValue" class="view-control-value">0.84</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">drag sensitivity</span>
         <input id="cameraDragSensitivityControl" type="range" min="0.4" max="2.6" step="0.05" value="1" />
+        <span id="cameraDragSensitivityValue" class="view-control-value">1.00</span>
       </div>
-      <div class="settings-row">
+      <div class="settings-row view-controls-slider-row">
         <span class="settings-label">texture quality</span>
         <input id="cameraTextureQualityControl" type="range" min="1" max="3" step="0.25" value="1.75" />
+        <span id="cameraTextureQualityValue" class="view-control-value">1.75</span>
       </div>
       <div class="settings-row settings-row-top">
         <button id="resetViewControlsButton" type="button" class="action-button">reset camera</button>
