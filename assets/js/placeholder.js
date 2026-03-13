@@ -942,7 +942,7 @@ function clampPreview3dCamera() {
   preview3dCamera.perspective = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
   preview3dCamera.zoom = Math.min(4.5, Math.max(0.12, preview3dCamera.zoom));
   preview3dCamera.targetX = Math.min(3500, Math.max(-3500, preview3dCamera.targetX));
-  preview3dCamera.targetY = Math.min(2500, Math.max(-2500, preview3dCamera.targetY));
+  preview3dCamera.targetY = Math.min(6000, Math.max(-6000, preview3dCamera.targetY));
   preview3dCamera.targetZ = Math.min(4500, Math.max(-4500, preview3dCamera.targetZ));
   preview3dRenderSettings.fit = Math.min(0.98, Math.max(0.55, preview3dRenderSettings.fit));
   preview3dRenderSettings.dragSensitivity = Math.min(2.6, Math.max(0.4, preview3dRenderSettings.dragSensitivity));
