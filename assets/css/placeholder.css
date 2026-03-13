@@ -474,6 +474,10 @@ body {
   align-items: start;
 }
 
+.settings-row-rows-inline {
+  grid-template-columns: 1fr;
+}
+
 .settings-inline-controls {
   display: flex;
   align-items: center;
@@ -636,6 +640,10 @@ body {
 .settings-row input[type="number"].input-compact {
   width: 54px;
   padding: 1px 3px;
+}
+
+.settings-row input[type="number"].input-tiny {
+  width: 46px;
 }
 
 .settings-row input[type="color"] {

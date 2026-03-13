@@ -1567,7 +1567,9 @@ function renderThreeFrame() {
   const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
   camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
 
-  const radius = (4200 * preview3dCamera.zoom) / perspectiveFactor;
+  // Keep the billboard close and let perspective mainly control lens feel (FOV),
+  // not camera distance. This avoids the "too far away" look at low perspective.
+  const radius = 2200 * preview3dCamera.zoom;
   const yaw = preview3dCamera.yaw;
   const pitch = preview3dCamera.pitch;
   const cosPitch = Math.cos(pitch);
