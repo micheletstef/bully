@@ -1406,25 +1406,34 @@ function tryLoadBillboardModel() {
 }
 
 function draw3dFallbackMessage(message) {
-  if (!billboard3dCanvas) {
+  if (!billboardPreview3d) {
     return;
   }
-  const ctx = billboard3dCanvas.getContext("2d");
-  if (!ctx) {
-    return;
+  let status = document.getElementById("billboard3dStatus");
+  if (!status) {
+    status = document.createElement("div");
+    status.id = "billboard3dStatus";
+    status.style.position = "absolute";
+    status.style.left = "10px";
+    status.style.top = "10px";
+    status.style.zIndex = "6";
+    status.style.padding = "4px 6px";
+    status.style.fontFamily = '"Courier New", Courier, monospace';
+    status.style.fontSize = "11px";
+    status.style.color = "#fff";
+    status.style.background = "rgba(0, 0, 0, 0.65)";
+    status.style.pointerEvents = "none";
+    billboardPreview3d.appendChild(status);
   }
-  const cssWidth = Math.max(1, billboard3dCanvas.clientWidth || 1);
-  const cssHeight = Math.max(1, billboard3dCanvas.clientHeight || 1);
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  billboard3dCanvas.width = Math.round(cssWidth * dpr);
-  billboard3dCanvas.height = Math.round(cssHeight * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
-  ctx.fillStyle = "#1a1a1a";
-  ctx.fillRect(0, 0, cssWidth, cssHeight);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '12px "Courier New", Courier, monospace';
-  ctx.fillText(message, 14, 22);
+  status.textContent = String(message || "");
+  status.style.display = "";
+}
+
+function clear3dFallbackMessage() {
+  const status = document.getElementById("billboard3dStatus");
+  if (status) {
+    status.style.display = "none";
+  }
 }
 
 function ensureThreePreviewSetup() {
@@ -1446,6 +1455,7 @@ function ensureThreePreviewSetup() {
     preview3dThreeState.camera &&
     preview3dThreeState.mesh
   ) {
+    clear3dFallbackMessage();
     return true;
   }
 
@@ -1498,6 +1508,7 @@ function ensureThreePreviewSetup() {
   preview3dThreeState.mesh = mesh;
   preview3dThreeState.partitionMeshes = partitionMeshes;
   tryLoadBillboardModel();
+  clear3dFallbackMessage();
   return true;
 }
 
