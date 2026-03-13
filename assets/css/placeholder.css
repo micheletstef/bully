@@ -320,6 +320,7 @@ body {
 }
 
 .loop-preview-item {
+  position: relative;
   height: 100%;
   min-width: 0;
   border: 0;
@@ -882,6 +883,8 @@ body {
 }
 
 .partition-preview-item .remove-partition-item {
+.loop-preview-item .remove-loop-item,
+.partition-preview-item .remove-partition-item {
   position: absolute;
   right: 0;
   top: 0;
@@ -895,9 +898,11 @@ body {
   height: 14px;
   padding: 0;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.8;
 }
 
+.loop-preview-item:hover .remove-loop-item,
+.loop-preview-item:focus-within .remove-loop-item,
 .partition-preview-item:hover .remove-partition-item,
 .partition-preview-item:focus-within .remove-partition-item {
   opacity: 1;

@@ -3822,6 +3822,25 @@ function renderLoopPreview() {
     image.alt = "";
     image.draggable = false;
     tile.appendChild(image);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "remove-loop-item";
+    removeButton.textContent = "x";
+    removeButton.title = "Remove asset";
+    removeButton.setAttribute("aria-label", "Remove asset");
+    const consumePointer = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    removeButton.addEventListener("mousedown", consumePointer);
+    removeButton.addEventListener("touchstart", consumePointer, { passive: false });
+    removeButton.addEventListener("click", (event) => {
+      consumePointer(event);
+      removeArtwork(index);
+    });
+    tile.appendChild(removeButton);
+
     loopPreviewTrack.appendChild(tile);
   });
   const spacerEnd = document.createElement("div");
