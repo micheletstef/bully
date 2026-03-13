@@ -131,6 +131,7 @@ let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
+let locked3dVisualMetrics = null;
 let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
@@ -1449,6 +1450,29 @@ function clear3dFallbackMessage() {
   }
 }
 
+function set3dCameraModeStatus(label) {
+  if (!billboardPreview3d) {
+    return;
+  }
+  let node = document.getElementById("billboard3dCameraMode");
+  if (!node) {
+    node = document.createElement("div");
+    node.id = "billboard3dCameraMode";
+    node.style.position = "absolute";
+    node.style.left = "10px";
+    node.style.bottom = "10px";
+    node.style.zIndex = "6";
+    node.style.padding = "2px 5px";
+    node.style.fontFamily = '"Courier New", Courier, monospace';
+    node.style.fontSize = "10px";
+    node.style.color = "#fff";
+    node.style.background = "rgba(0, 0, 0, 0.3)";
+    node.style.pointerEvents = "none";
+    billboardPreview3d.appendChild(node);
+  }
+  node.textContent = label;
+}
+
 function ensureThreePreviewSetup() {
   if (!billboard3dCanvas) {
     return false;
@@ -1666,10 +1690,11 @@ function renderThreeFrame() {
     modelCamera.getWorldQuaternion(worldQuaternion);
     camera.position.copy(worldPosition);
     camera.quaternion.copy(worldQuaternion);
-    const fitFactor = Math.max(0.55, Math.min(0.98, preview3dRenderSettings.fit || 0.72));
-    camera.fov = modelCamera.fov / fitFactor;
+    // Use Blender camera framing exactly when model camera is available.
+    camera.fov = modelCamera.fov;
     camera.near = modelCamera.near;
     camera.far = modelCamera.far;
+    set3dCameraModeStatus(`camera: glb ${String(modelCamera.name || "(unnamed)")}`);
   } else {
     const perspectiveFactor = Math.min(2.5, Math.max(0.1, preview3dCamera.perspective));
     camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
@@ -1683,6 +1708,7 @@ function renderThreeFrame() {
       Math.cos(yaw) * cosPitch * radius
     );
     camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, preview3dCamera.targetZ);
+    set3dCameraModeStatus("camera: app controls");
   }
   camera.updateProjectionMatrix();
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
@@ -1753,6 +1779,17 @@ async function render3dPreview() {
 
 function applyPreviewViewMode(mode) {
   previewViewMode = normalizePreviewViewMode(mode);
+  if (previewViewMode === "3d") {
+    // Lock visual-editor playback geometry so red timing frame matches flat mode.
+    locked3dVisualMetrics = {
+      viewportRatio: loopPlaybackViewportRatio,
+      loopDistance: loopDistanceSource,
+      stageHeight: loopStageHeight,
+      assetGap: loopAssetGap
+    };
+  } else {
+    locked3dVisualMetrics = null;
+  }
   if (previewViewModeControl && previewViewModeControl.value !== previewViewMode) {
     previewViewModeControl.value = previewViewMode;
   }
@@ -4137,7 +4174,8 @@ async function init() {
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
     }
-    if (Number.isFinite(viewportRatio)) {
+    const is3dMode = previewViewMode === "3d";
+    if (!is3dMode && Number.isFinite(viewportRatio)) {
       loopPlaybackViewportRatio = viewportRatio;
     }
     if (Number.isFinite(elapsedSeconds)) {
@@ -4151,7 +4189,6 @@ async function init() {
       preview3dPlaybackSyncState.durationSeconds = durationSeconds;
     }
     let shouldRerender3d = false;
-    const is3dMode = previewViewMode === "3d";
     // Keep visual editor layout stable between flat and 3D modes.
     // In 3D mode, ignore playback-reported geometry that can diverge from flat composition.
     if (!is3dMode && Number.isFinite(stageHeight) && stageHeight > 0 && stageHeight !== loopStageHeight) {
@@ -4162,8 +4199,14 @@ async function init() {
       loopAssetGap = assetGap;
       shouldRerender3d = true;
     }
-    if (Number.isFinite(loopDistance) && loopDistance > 0) {
+    if (!is3dMode && Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
+    }
+    if (is3dMode && locked3dVisualMetrics) {
+      loopPlaybackViewportRatio = locked3dVisualMetrics.viewportRatio;
+      loopDistanceSource = locked3dVisualMetrics.loopDistance;
+      loopStageHeight = locked3dVisualMetrics.stageHeight;
+      loopAssetGap = locked3dVisualMetrics.assetGap;
     }
     if (payload.partitions && typeof payload.partitions === "object") {
       PARTITION_KEYS.forEach((key) => {
