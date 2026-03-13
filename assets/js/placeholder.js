@@ -1020,9 +1020,6 @@ function syncViewControlsUI() {
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
   }
-  if (blenderCameraControl && previewViewMode === "3d") {
-    syncBlenderCameraControl();
-  }
   syncViewModeToggleStates();
   syncViewControlReadouts();
 }
@@ -1099,6 +1096,9 @@ function applyPreview3dCameraPreset(presetKey, options = {}) {
   }
   if (syncUi) {
     syncViewControlsUI();
+    if (blenderCameraControl) {
+      blenderCameraControl.value = preview3dCameraPreset;
+    }
   }
   if (render && previewViewMode === "3d") {
     render3dPreview();
