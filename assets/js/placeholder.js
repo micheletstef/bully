@@ -167,6 +167,7 @@ const preview3dThreeState = {
   textureMode: "linear",
   loopTextureState: null,
   modelLoadAttempted: false,
+  modelLoading: false,
   modelLoaded: false
 };
 let hasWarnedMissingThree = false;
@@ -1486,14 +1487,24 @@ function tryLoadBillboardModel() {
   }
   if (!GLTFLoader) {
     preview3dThreeState.modelLoadAttempted = true;
+    preview3dThreeState.modelLoading = false;
     preview3dThreeState.modelCameras = [];
     preview3dThreeState.activeModelCameraUuid = "";
     preview3dThreeState.useModelCamera = false;
+    if (preview3dThreeState.mesh) {
+      preview3dThreeState.mesh.visible = true;
+    }
     syncBlenderCameraControl();
     syncCameraControlVisibility();
     return;
   }
   preview3dThreeState.modelLoadAttempted = true;
+  preview3dThreeState.modelLoading = true;
+  if (preview3dThreeState.mesh) {
+    // Avoid showing fallback geometry before GLB mesh is ready.
+    preview3dThreeState.mesh.visible = false;
+  }
+  draw3dFallbackMessage("Loading 3D model...");
   const loader = new GLTFLoader();
   loader.load(
     BILLBOARD_MODEL_URL,
@@ -1568,14 +1579,21 @@ function tryLoadBillboardModel() {
         preview3dThreeState.partitionMeshes[partitionKey] = null;
       });
       preview3dThreeState.modelLoaded = true;
+      preview3dThreeState.modelLoading = false;
+      clear3dFallbackMessage();
       render3dPreview();
     },
     undefined,
     () => {
       // Keep procedural fallback mesh if model fails.
+      preview3dThreeState.modelLoading = false;
       preview3dThreeState.modelCameras = [];
       preview3dThreeState.activeModelCameraUuid = "";
       preview3dThreeState.useModelCamera = false;
+      if (preview3dThreeState.mesh) {
+        preview3dThreeState.mesh.visible = true;
+      }
+      draw3dFallbackMessage("3D model failed to load; using fallback.");
       syncBlenderCameraControl();
       syncCameraControlVisibility();
     }
@@ -1705,7 +1723,9 @@ function ensureThreePreviewSetup() {
   preview3dThreeState.partitionMeshes = partitionMeshes;
   syncCameraControlVisibility();
   tryLoadBillboardModel();
-  clear3dFallbackMessage();
+  if (!preview3dThreeState.modelLoading) {
+    clear3dFallbackMessage();
+  }
   return true;
 }
 
@@ -1725,6 +1745,7 @@ function loadThreeTextureFromSource(src) {
       }
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.flipY = false;
       texture.repeat.set(1, 1);
       texture.offset.set(0, 0);
       if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
@@ -1742,7 +1763,7 @@ function loadThreeTextureFromSource(src) {
       preview3dThreeState.textureMode = "linear";
       preview3dThreeState.mesh.material.map = texture;
       preview3dThreeState.mesh.material.needsUpdate = true;
-      preview3dThreeState.mesh.visible = true;
+      preview3dThreeState.mesh.visible = !preview3dThreeState.modelLoading;
       PARTITION_KEYS.forEach((partitionKey) => {
         const partitionMesh = preview3dThreeState.partitionMeshes[partitionKey];
         if (partitionMesh) {
@@ -1788,6 +1809,7 @@ async function syncThreeLoopTexture() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.flipY = false;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
     if (preview3dThreeState.renderer && preview3dThreeState.renderer.capabilities) {
@@ -1817,7 +1839,7 @@ async function syncThreeLoopTexture() {
     }
     disposePartitionTexture(partitionKey);
   });
-  preview3dThreeState.mesh.visible = true;
+  preview3dThreeState.mesh.visible = !preview3dThreeState.modelLoading;
 
   let linearSurface = null;
   let partitionSurfaces = null;
