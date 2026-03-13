@@ -168,12 +168,12 @@ let preview3dPlaybackSyncState = {
   durationSeconds: 1,
   syncedAtMs: 0
 };
-const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v1";
+const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v2";
 const PREVIEW3D_CAMERA_DEFAULTS = {
-  yaw: 0,
-  pitch: 0,
-  perspective: 1.1,
-  zoom: 0.42,
+  yaw: -0.78,
+  pitch: 0.96,
+  perspective: 1,
+  zoom: 1,
   targetX: 0,
   targetY: 0,
   targetZ: 0
