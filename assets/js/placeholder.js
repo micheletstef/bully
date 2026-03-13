@@ -1270,6 +1270,9 @@ function getGLTFLoaderClass() {
   if (typeof window === "undefined") {
     return null;
   }
+  if (!Object.prototype.hasOwnProperty.call(window, "THREE_GLTFLoader")) {
+    return undefined;
+  }
   return window.THREE_GLTFLoader || null;
 }
 
@@ -1420,6 +1423,10 @@ function tryLoadBillboardModel() {
   const GLTFLoader = getGLTFLoaderClass();
   const scene = preview3dThreeState.scene;
   if (!THREE || !scene || !BILLBOARD_MODEL_URL) {
+    return;
+  }
+  if (typeof GLTFLoader === "undefined") {
+    // three-loader.js is still resolving the GLTFLoader source.
     return;
   }
   if (!GLTFLoader) {
@@ -4384,7 +4391,10 @@ async function init() {
 }
 
 function waitForThreeBootstrap(timeoutMs = 4000) {
-  if (typeof window === "undefined" || window.THREE) {
+  if (
+    typeof window === "undefined" ||
+    (window.THREE && Object.prototype.hasOwnProperty.call(window, "THREE_GLTFLoader"))
+  ) {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
