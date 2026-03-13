@@ -1401,6 +1401,23 @@ function createNeutralBillboardMaterial(THREE) {
   });
 }
 
+function tuneProjectionMaterial(material) {
+  if (!material) {
+    return;
+  }
+  if (material.color && typeof material.color.setHex === "function") {
+    material.color.setHex(0xffffff);
+  }
+  if (material.emissive && typeof material.emissive.setHex === "function") {
+    material.emissive.setHex(0x2f2f2f);
+    material.emissiveIntensity = 0.42;
+  }
+  if ("toneMapped" in material) {
+    material.toneMapped = false;
+  }
+  material.needsUpdate = true;
+}
+
 function findPreferredModelCamera(root) {
   if (!root) {
     return null;
@@ -1567,6 +1584,7 @@ function tryLoadBillboardModel() {
       const projectionMaterial = createNeutralBillboardMaterial(THREE);
       if (preview3dThreeState.texture && ENABLE_3D_ARTWORK_PROJECTION) {
         projectionMaterial.map = preview3dThreeState.texture;
+        tuneProjectionMaterial(projectionMaterial);
       }
       projectionMaterial.needsUpdate = true;
       selectedMesh.material = projectionMaterial;
@@ -1762,6 +1780,9 @@ function loadThreeTextureFromSource(src) {
       preview3dThreeState.textureOffsetY = 0;
       preview3dThreeState.textureMode = "linear";
       preview3dThreeState.mesh.material.map = texture;
+      if (ENABLE_3D_ARTWORK_PROJECTION) {
+        tuneProjectionMaterial(preview3dThreeState.mesh.material);
+      }
       preview3dThreeState.mesh.material.needsUpdate = true;
       preview3dThreeState.mesh.visible = !preview3dThreeState.modelLoading;
       PARTITION_KEYS.forEach((partitionKey) => {
@@ -1891,6 +1912,7 @@ async function syncThreeLoopTexture() {
     partitionSurfaces
   };
   preview3dThreeState.mesh.material.map = texture;
+  tuneProjectionMaterial(preview3dThreeState.mesh.material);
   preview3dThreeState.mesh.material.needsUpdate = true;
 }
 
@@ -2044,6 +2066,8 @@ function tick3dAnimationLoop() {
     return;
   }
   renderThreeFrame();
+  updateActiveWindow();
+  updatePartitionActiveWindows();
   preview3dAnimationFrameId = requestAnimationFrame(tick3dAnimationLoop);
 }
 
@@ -3806,7 +3830,7 @@ function updatePartitionActiveWindows() {
   if (!currentDirectionIsPartitioned()) {
     return;
   }
-  const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
+  const normalizedProgress = computePreview3dLoopProgress();
 
   PARTITION_KEYS.forEach((partitionKey) => {
     const trackEl = partitionTrackElement(partitionKey);
@@ -3955,7 +3979,7 @@ function updateActiveWindow() {
   }
 
   const frameHeight = Math.max(1, loopVisualization.clientHeight);
-  const normalizedProgress = ((loopPlaybackProgress % 1) + 1) % 1;
+  const normalizedProgress = computePreview3dLoopProgress();
   const previewScale = getPreviewScale();
   const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
   const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
