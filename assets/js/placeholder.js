@@ -1133,6 +1133,12 @@ function persistPreview3dSettings() {
 }
 
 function restorePreview3dSettings() {
+  // Temporary safety mode: always start from ISO camera on load.
+  applyDefaultPreview3dCameraState();
+  persistPreview3dSettings();
+  return;
+
+  // Legacy restore path kept below for quick re-enable later.
   const presetVersion = readStorage(STORAGE_KEYS.cameraPresetVersion);
   if (presetVersion !== PREVIEW3D_CAMERA_PRESET_VERSION) {
     applyDefaultPreview3dCameraState();
@@ -1440,16 +1446,12 @@ function activeModelCamera() {
 }
 
 function syncCameraControlVisibility() {
-  const is3dMode = previewViewMode === "3d";
   if (blenderCameraRow) {
-    blenderCameraRow.style.display = is3dMode ? "" : "none";
+    blenderCameraRow.style.display = "none";
   }
   manualCameraRows.forEach((row) => {
-    row.style.display = is3dMode ? "none" : "";
+    row.style.display = "";
   });
-  if (is3dMode) {
-    syncBlenderCameraControl();
-  }
 }
 
 function syncBlenderCameraControl() {

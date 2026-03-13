@@ -394,15 +394,14 @@ body {
   top: 18px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(84vw, 1400px);
+  width: min(calc(84vw - 340px), 1040px);
   display: block;
   z-index: 8;
 }
 
 .info-grid {
   display: grid;
-  grid-template-columns: 1fr 260px;
-  column-gap: 28px;
+  grid-template-columns: 1fr;
   align-items: start;
 }
 
@@ -438,7 +437,8 @@ body {
 .settings-title {
   margin: 0 0 8px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 400;
+  text-decoration: underline;
   text-transform: lowercase;
 }
 
@@ -520,11 +520,28 @@ body {
 }
 
 .view-controls-panel {
-  width: min(300px, calc(100vw - 24px));
+  width: 100%;
   border: 0;
   background: transparent;
   padding: 0;
   font-size: 11px;
+}
+
+.controls-column {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 20;
+  width: min(300px, calc(100vw - 24px));
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.settings-panel {
+  width: 100%;
 }
 
 .view-controls-panel-fixed {
@@ -859,6 +876,10 @@ body {
   .info-grid {
     grid-template-columns: 1fr;
     row-gap: 8px;
+  }
+
+  .controls-column {
+    width: min(320px, calc(100vw - 24px));
   }
 
 }
