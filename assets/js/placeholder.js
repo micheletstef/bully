@@ -71,6 +71,7 @@ const STORAGE_KEYS = {
   cameraFit: "billboard.preview3dCameraFit",
   cameraDragSensitivity: "billboard.preview3dCameraDragSensitivity",
   cameraTextureQuality: "billboard.preview3dTextureQuality",
+  cameraViewPreset: "billboard.preview3dCameraViewPreset",
   cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
@@ -175,7 +176,7 @@ let preview3dPlaybackSyncState = {
   durationSeconds: 1,
   syncedAtMs: 0
 };
-const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v4";
+const PREVIEW3D_CAMERA_PRESET_VERSION = "2026-03-13-front-v5";
 const PREVIEW3D_CAMERA_DEFAULTS = {
   yaw: -0.7,
   pitch: 0.11,
@@ -185,6 +186,36 @@ const PREVIEW3D_CAMERA_DEFAULTS = {
   targetY: 2973,
   targetZ: 0
 };
+const PREVIEW3D_CAMERA_PRESETS = {
+  iso: {
+    label: "ISO",
+    camera: { ...PREVIEW3D_CAMERA_DEFAULTS }
+  },
+  left: {
+    label: "LEFT",
+    camera: {
+      yaw: -1.46,
+      pitch: 0.02,
+      perspective: 1.12,
+      zoom: 2.56,
+      targetX: -1820,
+      targetY: 2973,
+      targetZ: 0
+    }
+  },
+  right: {
+    label: "RIGHT",
+    camera: {
+      yaw: 1.18,
+      pitch: 0.02,
+      perspective: 1.12,
+      zoom: 2.56,
+      targetX: 1700,
+      targetY: 2973,
+      targetZ: 0
+    }
+  }
+};
 const PREVIEW3D_RENDER_DEFAULTS = {
   fit: 0.72,
   dragSensitivity: 1,
@@ -193,6 +224,7 @@ const PREVIEW3D_RENDER_DEFAULTS = {
 const ENABLE_3D_ARTWORK_PROJECTION = false;
 const preview3dCamera = { ...PREVIEW3D_CAMERA_DEFAULTS };
 const preview3dRenderSettings = { ...PREVIEW3D_RENDER_DEFAULTS };
+let preview3dCameraPreset = "iso";
 let preview3dDragState = null;
 
 function getAppBasePath() {
@@ -988,6 +1020,9 @@ function syncViewControlsUI() {
   if (previewViewModeControl) {
     previewViewModeControl.value = previewViewMode;
   }
+  if (blenderCameraControl && previewViewMode === "3d") {
+    syncBlenderCameraControl();
+  }
   syncViewModeToggleStates();
   syncViewControlReadouts();
 }
@@ -1042,8 +1077,42 @@ function setPreviewViewModeControlValue(value) {
   }
 }
 
+function normalizePreview3dCameraPreset(value) {
+  const key = String(value || "").toLowerCase();
+  return Object.prototype.hasOwnProperty.call(PREVIEW3D_CAMERA_PRESETS, key) ? key : "iso";
+}
+
+function currentPreview3dCameraPreset() {
+  return PREVIEW3D_CAMERA_PRESETS[normalizePreview3dCameraPreset(preview3dCameraPreset)];
+}
+
+function applyPreview3dCameraPreset(presetKey, options = {}) {
+  const { persist = true, syncUi = true, render = true } = options;
+  preview3dCameraPreset = normalizePreview3dCameraPreset(presetKey);
+  const preset = currentPreview3dCameraPreset();
+  if (preset && preset.camera) {
+    Object.assign(preview3dCamera, preset.camera);
+  }
+  clampPreview3dCamera();
+  if (persist) {
+    persistPreview3dSettings();
+  }
+  if (syncUi) {
+    syncViewControlsUI();
+  }
+  if (render && previewViewMode === "3d") {
+    render3dPreview();
+  }
+}
+
 function applyDefaultPreview3dCameraState() {
-  Object.assign(preview3dCamera, PREVIEW3D_CAMERA_DEFAULTS);
+  preview3dCameraPreset = "iso";
+  const preset = currentPreview3dCameraPreset();
+  if (preset && preset.camera) {
+    Object.assign(preview3dCamera, preset.camera);
+  } else {
+    Object.assign(preview3dCamera, PREVIEW3D_CAMERA_DEFAULTS);
+  }
   Object.assign(preview3dRenderSettings, PREVIEW3D_RENDER_DEFAULTS);
   clampPreview3dCamera();
 }
@@ -1059,6 +1128,7 @@ function persistPreview3dSettings() {
   writeStorage(STORAGE_KEYS.cameraFit, String(preview3dRenderSettings.fit));
   writeStorage(STORAGE_KEYS.cameraDragSensitivity, String(preview3dRenderSettings.dragSensitivity));
   writeStorage(STORAGE_KEYS.cameraTextureQuality, String(preview3dRenderSettings.textureQuality));
+  writeStorage(STORAGE_KEYS.cameraViewPreset, normalizePreview3dCameraPreset(preview3dCameraPreset));
   writeStorage(STORAGE_KEYS.cameraPresetVersion, PREVIEW3D_CAMERA_PRESET_VERSION);
 }
 
@@ -1069,6 +1139,7 @@ function restorePreview3dSettings() {
     persistPreview3dSettings();
     return;
   }
+  preview3dCameraPreset = normalizePreview3dCameraPreset(readStorage(STORAGE_KEYS.cameraViewPreset));
   preview3dCamera.yaw = readStoredNumber(STORAGE_KEYS.cameraYaw, PREVIEW3D_CAMERA_DEFAULTS.yaw);
   preview3dCamera.pitch = readStoredNumber(STORAGE_KEYS.cameraPitch, PREVIEW3D_CAMERA_DEFAULTS.pitch);
   preview3dCamera.perspective = readStoredNumber(
@@ -1370,16 +1441,13 @@ function activeModelCamera() {
 
 function syncCameraControlVisibility() {
   const is3dMode = previewViewMode === "3d";
-  const hasModelCameras =
-    Array.isArray(preview3dThreeState.modelCameras) &&
-    preview3dThreeState.modelCameras.length > 0;
   if (blenderCameraRow) {
     blenderCameraRow.style.display = is3dMode ? "" : "none";
   }
   manualCameraRows.forEach((row) => {
     row.style.display = is3dMode ? "none" : "";
   });
-  if (is3dMode && !hasModelCameras) {
+  if (is3dMode) {
     syncBlenderCameraControl();
   }
 }
@@ -1389,30 +1457,14 @@ function syncBlenderCameraControl() {
     return;
   }
   blenderCameraControl.innerHTML = "";
-  const cameras = Array.isArray(preview3dThreeState.modelCameras) ? preview3dThreeState.modelCameras : [];
-  if (!cameras.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = preview3dThreeState.modelLoadAttempted
-      ? "no blender cameras found"
-      : "loading blender cameras...";
-    blenderCameraControl.appendChild(option);
-    blenderCameraControl.disabled = true;
-    return;
-  }
   blenderCameraControl.disabled = false;
-  cameras.forEach((camera, index) => {
-    if (!camera) {
-      return;
-    }
+  Object.entries(PREVIEW3D_CAMERA_PRESETS).forEach(([key, preset]) => {
     const option = document.createElement("option");
-    option.value = camera.uuid;
-    option.textContent = String(camera.name || `camera ${index + 1}`);
+    option.value = key;
+    option.textContent = preset.label;
     blenderCameraControl.appendChild(option);
   });
-  if (preview3dThreeState.activeModelCameraUuid) {
-    blenderCameraControl.value = preview3dThreeState.activeModelCameraUuid;
-  }
+  blenderCameraControl.value = normalizePreview3dCameraPreset(preview3dCameraPreset);
 }
 
 function tryLoadBillboardModel() {
@@ -1456,7 +1508,7 @@ function tryLoadBillboardModel() {
         : cameras[0]
           ? cameras[0].uuid
           : "";
-      preview3dThreeState.useModelCamera = cameras.length > 0;
+      preview3dThreeState.useModelCamera = false;
       syncBlenderCameraControl();
       syncCameraControlVisibility();
       if (!selectedMesh) {
@@ -1817,7 +1869,8 @@ function renderThreeFrame() {
       Math.cos(yaw) * cosPitch * radius
     );
     camera.lookAt(preview3dCamera.targetX, preview3dCamera.targetY, preview3dCamera.targetZ);
-    set3dCameraModeStatus("camera: app controls");
+    const preset = currentPreview3dCameraPreset();
+    set3dCameraModeStatus(`camera: ${preset ? preset.label : "ISO"}`);
   }
   camera.updateProjectionMatrix();
   let progress = ((Number(loopPlaybackProgress) % 1) + 1) % 1;
@@ -3109,10 +3162,7 @@ function restoreLoopLayoutSettings() {
 
   if (blenderCameraControl) {
     blenderCameraControl.addEventListener("change", () => {
-      preview3dThreeState.activeModelCameraUuid = blenderCameraControl.value || "";
-      if (previewViewMode === "3d") {
-        render3dPreview();
-      }
+      applyPreview3dCameraPreset(blenderCameraControl.value);
     });
   }
 
