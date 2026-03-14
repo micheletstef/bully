@@ -691,8 +691,8 @@ function current3dPartitionOrientation(partitionKey) {
   if (!key) {
     return "horizontal";
   }
-  const orientations = currentPartitionArtworkOrientations();
-  return orientations[key] === "vertical" ? "vertical" : "horizontal";
+  // Partitioned artworks are always authored as inline strips.
+  return "horizontal";
 }
 
 function current3dSources() {
@@ -3040,10 +3040,8 @@ function buildPartitionedSnapshotHtml(config) {
       }
 
       function orientationForPartition(partitionKey) {
-        if (state.artworkOrientations && typeof state.artworkOrientations === "object") {
-          return state.artworkOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
-        }
-        return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
+        // Partitioned output always renders inline artwork for all panels.
+        return "horizontal";
       }
 
       async function resolvePartitionWidth(container, partitionKey) {
