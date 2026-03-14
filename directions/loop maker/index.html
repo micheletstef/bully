@@ -73,6 +73,34 @@
         font-size: 11px;
       }
 
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        border: 0;
+        clip: rect(0 0 0 0);
+        overflow: hidden;
+      }
+
+      .drop-zone {
+        display: grid;
+        place-items: center;
+        min-height: 74px;
+        border: 1px dashed rgba(255, 255, 255, 0.5);
+        padding: 10px;
+        font-size: 11px;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .drop-zone.drag-over {
+        border-style: solid;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
       button {
         border: 1px solid rgba(255, 255, 255, 0.5);
         background: transparent;
@@ -187,7 +215,10 @@
         <div class="controls">
           <div class="row">
             <label for="frameInput">upload frames (png/jpg/webp/gif)</label>
-            <input id="frameInput" type="file" accept="image/*" multiple />
+            <label id="dropZone" class="drop-zone" for="frameInput">
+              drop image sequence here<br />or click to browse
+            </label>
+            <input id="frameInput" class="visually-hidden" type="file" accept="image/*" multiple />
           </div>
 
           <div class="row">
@@ -232,6 +263,7 @@
       const playPauseButton = document.getElementById("playPauseButton");
       const exportButton = document.getElementById("exportButton");
       const clearButton = document.getElementById("clearButton");
+      const dropZone = document.getElementById("dropZone");
       const frameList = document.getElementById("frameList");
       const previewImage = document.getElementById("previewImage");
       const emptyState = document.getElementById("emptyState");
@@ -482,6 +514,24 @@
       frameInput.addEventListener("change", async () => {
         await addFrames(frameInput.files);
         frameInput.value = "";
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.add("drag-over");
+        });
+      });
+
+      ["dragleave", "dragend", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          if (eventName === "drop") {
+            const files = event.dataTransfer ? event.dataTransfer.files : null;
+            addFrames(files);
+          }
+          dropZone.classList.remove("drag-over");
+        });
       });
 
       fpsInput.addEventListener("input", () => {

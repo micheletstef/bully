@@ -558,6 +558,14 @@ body.dark-mode .orientation-choice.inactive {
   display: grid;
 }
 
+.app-shell.loop-maker-mode .billboard-annotations,
+.app-shell.loop-maker-mode .billboard-info,
+.app-shell.loop-maker-mode .loop-visualization,
+.app-shell.loop-maker-mode .partition-editors,
+.app-shell.loop-maker-mode #loopElapsedTime {
+  display: none !important;
+}
+
 .partition-settings-tabs {
   display: none;
   align-items: center;

@@ -90,11 +90,13 @@ const STORAGE_KEYS = {
   partitionArtworks: "billboard.partitionArtworks"
 };
 const PARTITION_DIRECTION_NAME = "partitioned";
+const LOOP_MAKER_DIRECTION_NAME = "loop maker";
 const PARTITION_KEYS = ["left", "curve", "right"];
 const DIRECTION_DISPLAY_NAMES = {
   linear: "linear billboard",
   "linear loop": "linear billboard",
-  partitioned: "partitioned billboard"
+  partitioned: "partitioned billboard",
+  "loop maker": "loop maker"
 };
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 const DEFAULT_PARTITION_ARTWORKS = {
@@ -533,8 +535,16 @@ function isPartitionedDirection(name) {
   return String(name || "").toLowerCase() === PARTITION_DIRECTION_NAME;
 }
 
+function isLoopMakerDirection(name) {
+  return String(name || "").toLowerCase() === LOOP_MAKER_DIRECTION_NAME;
+}
+
 function currentDirectionIsPartitioned() {
   return isPartitionedDirection(activeDirectionName || getCurrentDirectionName());
+}
+
+function currentDirectionIsLoopMaker() {
+  return isLoopMakerDirection(activeDirectionName || getCurrentDirectionName());
 }
 
 function fileExtension(name) {
@@ -960,15 +970,27 @@ async function loadDirectionsFromManifest() {
 
 function syncDirectionModeUI() {
   const partitioned = currentDirectionIsPartitioned();
+  const loopMaker = currentDirectionIsLoopMaker();
   if (appShell) {
     appShell.classList.toggle("partitioned-mode", partitioned);
+    appShell.classList.toggle("loop-maker-mode", loopMaker);
   }
   if (partitionEditors) {
-    partitionEditors.style.display = partitioned ? "grid" : "none";
+    partitionEditors.style.display = partitioned && !loopMaker ? "grid" : "none";
   }
   if (settingsTitle) {
     const base = getDirectionDisplayName(activeDirectionName || "single");
     settingsTitle.textContent = `${base} settings`;
+  }
+  if (settingsToggleButton) {
+    settingsToggleButton.style.display = loopMaker ? "none" : "";
+  }
+  if (viewControlsToggleButton) {
+    viewControlsToggleButton.style.display = loopMaker ? "none" : "";
+  }
+  if (loopMaker) {
+    setSettingsPanelVisibility(false);
+    setViewControlsPanelVisibility(false);
   }
   if (linearOrientationRow) {
     linearOrientationRow.style.display = partitioned ? "none" : "";
@@ -1356,10 +1378,11 @@ function create3dTextSprite(THREE, text, options = {}) {
     map: texture,
     transparent: true,
     depthWrite: false,
-    depthTest: false
+    depthTest: true
   });
   const sprite = new THREE.Sprite(material);
-  const worldHeight = Math.max(90, Number(options.worldHeight) || 180);
+  const worldHeightRaw = Number(options.worldHeight);
+  const worldHeight = Number.isFinite(worldHeightRaw) && worldHeightRaw > 0 ? worldHeightRaw : 20;
   const aspect = canvas.width / canvas.height;
   sprite.scale.set(worldHeight * aspect, worldHeight, 1);
   return sprite;
@@ -1511,12 +1534,13 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     return null;
   }
   const meshHeight = Math.max(1, centerTop.point.distanceTo(centerBottom.point));
-  const outwardOffset = Math.min(12, Math.max(2.5, meshHeight * 0.0025));
+  const outwardOffset = Math.max(0.001, meshHeight * 0.0016);
+  const partitionLabelLift = Math.max(0.001, meshHeight * 0.055);
   const dividerMaterial = new THREE.LineBasicMaterial({
     color: 0x121212,
     transparent: true,
-    opacity: 0.76,
-    depthTest: false,
+    opacity: 0.82,
+    depthTest: true,
     depthWrite: false
   });
   [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
@@ -1535,38 +1559,32 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     line.frustumCulled = false;
     line.renderOrder = 999;
     group.add(line);
-    const dividerLabel = create3dTextSprite(THREE, idx === 0 ? "1820px" : "2840px", {
-      worldHeight: Math.min(120, Math.max(36, meshHeight * 0.024)),
-      color: "#111111",
-      fontSize: 26
-    });
-    if (dividerLabel) {
-      dividerLabel.position.copy(frameTop.point.clone().add(frameTop.normal.clone().multiplyScalar(outwardOffset * 1.4)));
-      dividerLabel.frustumCulled = false;
-      dividerLabel.renderOrder = 1000;
-      group.add(dividerLabel);
-    }
   });
   const partitionLabels = [
     { key: "left", text: "7th" },
-    { key: "curve", text: "curve" },
+    { key: "curve", text: "Curve" },
     { key: "right", text: "47th" }
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.9, 0.028);
+    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.95, 0.028);
     if (!frame) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.min(140, Math.max(44, meshHeight * 0.03)),
+      worldHeight: Math.max(0.001, meshHeight * 0.028),
       color: "#111111",
-      fontSize: 30
+      fontSize: 24
     });
     if (!sprite) {
       return;
     }
-    sprite.position.copy(frame.point.clone().add(frame.normal.clone().multiplyScalar(outwardOffset * 1.35)));
+    sprite.position.copy(
+      frame.point
+        .clone()
+        .add(frame.up.clone().multiplyScalar(partitionLabelLift))
+        .add(frame.normal.clone().multiplyScalar(outwardOffset * 1.2))
+    );
     sprite.frustumCulled = false;
     sprite.renderOrder = 1000;
     group.add(sprite);
