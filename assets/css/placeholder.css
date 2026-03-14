@@ -558,6 +558,14 @@ body.dark-mode .orientation-choice.inactive {
   display: grid;
 }
 
+#partitionSettingsTargetRow {
+  display: none;
+}
+
+.app-shell.partitioned-mode #partitionSettingsTargetRow {
+  display: grid;
+}
+
 .app-shell.preview-3d-mode #billboardPreview {
   display: none !important;
 }

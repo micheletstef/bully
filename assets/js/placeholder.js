@@ -26,6 +26,8 @@ const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
 const linearOrientationRow = document.getElementById("linearOrientationRow");
 const partitionOrientationRows = document.getElementById("partitionOrientationRows");
+const partitionSettingsTargetRow = document.getElementById("partitionSettingsTargetRow");
+const partitionSettingsTargetControl = document.getElementById("partitionSettingsTargetControl");
 const partitionOrientationLeftControl = document.getElementById("partitionOrientationLeftControl");
 const partitionOrientationCurveControl = document.getElementById("partitionOrientationCurveControl");
 const partitionOrientationRightControl = document.getElementById("partitionOrientationRightControl");
@@ -65,6 +67,7 @@ const STORAGE_KEYS = {
   rowCount: "billboard.loopRowCount",
   rowOffset: "billboard.loopRowOffset",
   rowGap: "billboard.loopRowGap",
+  partitionSettings: "billboard.partitionSettings",
   cameraYaw: "billboard.preview3dCameraYaw",
   cameraPitch: "billboard.preview3dCameraPitch",
   cameraPerspective: "billboard.preview3dCameraPerspective",
@@ -84,14 +87,31 @@ const STORAGE_KEYS = {
 };
 const PARTITION_DIRECTION_NAME = "partitioned";
 const PARTITION_KEYS = ["left", "curve", "right"];
+const DIRECTION_DISPLAY_NAMES = {
+  linear: "linear billboard",
+  "linear loop": "linear billboard",
+  partitioned: "partitioned billboard"
+};
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 const DEFAULT_PARTITION_ARTWORKS = {
   left: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
   curve: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
   right: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")]
 };
+const DEFAULT_PARTITION_SETTINGS_ENTRY = {
+  seconds: 16,
+  padTopBottom: 0,
+  padLeftRight: 0,
+  backgroundColor: "#fff8a5",
+  assetGap: 0,
+  rowCount: 1,
+  rowOffset: 0,
+  rowGap: 0
+};
 let loopArtworks = [...DEFAULT_ARTWORKS];
 let partitionArtworks = createDefaultPartitionArtworks();
+let partitionSettingsByKey = createDefaultPartitionSettings();
+let activePartitionSettingsKey = "left";
 let draggingArtworkIndex = null;
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
@@ -289,6 +309,15 @@ function directionPath(name) {
   return `directions/${encodeURIComponent(name)}/index.html`;
 }
 
+function getDirectionDisplayName(name) {
+  const raw = String(name || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const mapped = DIRECTION_DISPLAY_NAMES[raw.toLowerCase()];
+  return mapped || raw;
+}
+
 function generateArtworkId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -346,9 +375,118 @@ function createDefaultPartitionArtworks() {
   };
 }
 
+function sanitizePartitionSettingsEntry(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const secondsRaw = Number(source.seconds);
+  const padTopBottomRaw = Number(source.padTopBottom);
+  const padLeftRightRaw = Number(source.padLeftRight);
+  const assetGapRaw = Number(source.assetGap);
+  const rowCountRaw = Number(source.rowCount);
+  const rowOffsetRaw = Number(source.rowOffset);
+  const rowGapRaw = Number(source.rowGap);
+  return {
+    seconds: Number.isFinite(secondsRaw) && secondsRaw > 0 ? secondsRaw : DEFAULT_PARTITION_SETTINGS_ENTRY.seconds,
+    padTopBottom:
+      Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0
+        ? padTopBottomRaw
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.padTopBottom,
+    padLeftRight:
+      Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0
+        ? padLeftRightRaw
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.padLeftRight,
+    backgroundColor:
+      typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
+        ? source.backgroundColor
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.backgroundColor,
+    assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS_ENTRY.assetGap,
+    rowCount:
+      Number.isFinite(rowCountRaw) && rowCountRaw >= 1
+        ? Math.round(rowCountRaw)
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.rowCount,
+    rowOffset:
+      Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0
+        ? rowOffsetRaw
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.rowOffset,
+    rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : DEFAULT_PARTITION_SETTINGS_ENTRY.rowGap
+  };
+}
+
+function createDefaultPartitionSettings() {
+  return {
+    left: sanitizePartitionSettingsEntry(DEFAULT_PARTITION_SETTINGS_ENTRY),
+    curve: sanitizePartitionSettingsEntry(DEFAULT_PARTITION_SETTINGS_ENTRY),
+    right: sanitizePartitionSettingsEntry(DEFAULT_PARTITION_SETTINGS_ENTRY)
+  };
+}
+
 function normalizePartitionKey(key) {
   const clean = String(key || "").toLowerCase();
   return PARTITION_KEYS.includes(clean) ? clean : null;
+}
+
+function activePartitionSettingsKeyValue() {
+  const selected = normalizePartitionKey(
+    partitionSettingsTargetControl ? partitionSettingsTargetControl.value : activePartitionSettingsKey
+  );
+  return selected || "left";
+}
+
+function partitionSettingsForKey(partitionKey) {
+  const key = normalizePartitionKey(partitionKey) || "left";
+  const entry = partitionSettingsByKey && partitionSettingsByKey[key] ? partitionSettingsByKey[key] : null;
+  return sanitizePartitionSettingsEntry(entry);
+}
+
+function applyPartitionSettingsToControls(partitionKey) {
+  const key = normalizePartitionKey(partitionKey) || "left";
+  const settings = partitionSettingsForKey(key);
+  activePartitionSettingsKey = key;
+  if (partitionSettingsTargetControl && partitionSettingsTargetControl.value !== key) {
+    partitionSettingsTargetControl.value = key;
+  }
+  if (speedControl) {
+    speedControl.value = String(settings.seconds);
+  }
+  if (padTBControl) {
+    padTBControl.value = String(settings.padTopBottom);
+  }
+  if (padLRControl) {
+    padLRControl.value = String(settings.padLeftRight);
+  }
+  if (bgColorControl) {
+    bgColorControl.value = settings.backgroundColor;
+  }
+  if (assetGapControl) {
+    assetGapControl.value = String(settings.assetGap);
+  }
+  if (rowCountControl) {
+    rowCountControl.value = String(settings.rowCount);
+  }
+  if (rowOffsetControl) {
+    rowOffsetControl.value = String(settings.rowOffset);
+  }
+  if (rowGapControl) {
+    rowGapControl.value = String(settings.rowGap);
+  }
+  loopTraverseSeconds = settings.seconds;
+  loopAssetGap = settings.assetGap;
+  loopRowGap = settings.rowGap;
+  syncSpeedReadout();
+  syncVisualizationBackground();
+}
+
+function writeCurrentControlsToPartitionSettings(partitionKey) {
+  const key = normalizePartitionKey(partitionKey) || activePartitionSettingsKeyValue();
+  partitionSettingsByKey[key] = sanitizePartitionSettingsEntry({
+    seconds: currentSpeedSeconds(),
+    padTopBottom: currentPadTopBottom(),
+    padLeftRight: currentPadLeftRight(),
+    backgroundColor: currentBackgroundColor(),
+    assetGap: currentAssetGap(),
+    rowCount: currentRowCount(),
+    rowOffset: currentRowOffset(),
+    rowGap: currentRowGap()
+  });
 }
 
 function isPartitionedDirection(name) {
@@ -629,7 +767,7 @@ function syncDirectionModeUI() {
     partitionEditors.style.display = partitioned ? "grid" : "none";
   }
   if (settingsTitle) {
-    const base = activeDirectionName || "single";
+    const base = getDirectionDisplayName(activeDirectionName || "single");
     settingsTitle.textContent = `${base} settings`;
   }
   if (linearOrientationRow) {
@@ -638,7 +776,11 @@ function syncDirectionModeUI() {
   if (partitionOrientationRows) {
     partitionOrientationRows.style.display = partitioned ? "" : "none";
   }
+  if (partitionSettingsTargetRow) {
+    partitionSettingsTargetRow.style.display = partitioned ? "" : "none";
+  }
   if (partitioned) {
+    applyPartitionSettingsToControls(activePartitionSettingsKeyValue());
     if (loopActiveWindow) {
       loopActiveWindow.style.display = "none";
     }
@@ -772,9 +914,21 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
 
   const preserveInlineWhenVertical = options && options.preserveInlineWhenVertical === true;
   const rotateAssetsInStrip = orientation === "vertical" && !preserveInlineWhenVertical;
-  const padLRDesign = Math.max(0, Number(currentPadLeftRight()) || 0);
-  const padTBDesign = Math.max(0, Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(currentPadTopBottom()) || 0));
-  const gapDesign = Math.max(0, Number(currentAssetGap()) || 0);
+  const padLRDesign = Math.max(
+    0,
+    Number(options && options.padLeftRight !== undefined ? options.padLeftRight : currentPadLeftRight()) || 0
+  );
+  const padTBDesign = Math.max(
+    0,
+    Math.min(
+      BILLBOARD_DESIGN_HEIGHT / 2 - 1,
+      Number(options && options.padTopBottom !== undefined ? options.padTopBottom : currentPadTopBottom()) || 0
+    )
+  );
+  const gapDesign = Math.max(
+    0,
+    Number(options && options.assetGap !== undefined ? options.assetGap : currentAssetGap()) || 0
+  );
   const artworkHeightDesign = Math.max(1, BILLBOARD_DESIGN_HEIGHT - padTBDesign * 2);
   const scale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
   const stripHeight = Math.max(128, Math.round(BILLBOARD_DESIGN_HEIGHT * scale));
@@ -804,7 +958,7 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
   }
   stripCtx.imageSmoothingEnabled = true;
   stripCtx.imageSmoothingQuality = "high";
-  stripCtx.fillStyle = currentBackgroundColor();
+  stripCtx.fillStyle = options && options.backgroundColor ? options.backgroundColor : currentBackgroundColor();
   stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
 
   const drawSequence = (startX) => {
@@ -841,9 +995,14 @@ async function build3dSurfaceStrip(targetHeight) {
 async function build3dPartitionSurfaceStrip(targetHeight, partitionKey, orientationOverride = null) {
   const sources = current3dPartitionSources(partitionKey);
   const orientation = orientationOverride || current3dPartitionOrientation(partitionKey);
+  const settings = partitionSettingsForKey(partitionKey);
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation, {
     // Keep partition artwork inline in vertical mode; rotate only at draw time.
-    preserveInlineWhenVertical: true
+    preserveInlineWhenVertical: true,
+    padTopBottom: settings.padTopBottom,
+    padLeftRight: settings.padLeftRight,
+    assetGap: settings.assetGap,
+    backgroundColor: settings.backgroundColor
   });
 }
 
@@ -1961,6 +2120,7 @@ async function syncThreeLoopTexture() {
   let linearSurface = null;
   let partitionSurfaces = null;
   let partitionOrientations = null;
+  let partitionSettingsState = null;
   if (isPartitioned) {
     const partitionViewportWidths = {
       left: Math.max(1, Math.round(viewportWidth * (BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH))),
@@ -1969,9 +2129,11 @@ async function syncThreeLoopTexture() {
     partitionViewportWidths.right = Math.max(1, viewportWidth - partitionViewportWidths.left - partitionViewportWidths.curve);
     partitionSurfaces = {};
     partitionOrientations = {};
+    partitionSettingsState = {};
     for (const key of PARTITION_KEYS) {
       const orientation = current3dPartitionOrientation(key);
       partitionOrientations[key] = orientation;
+      partitionSettingsState[key] = partitionSettingsForKey(key);
       const partitionTargetHeight = orientation === "vertical"
         ? Math.max(128, partitionViewportWidths[key] || targetHeight)
         : targetHeight;
@@ -2018,7 +2180,8 @@ async function syncThreeLoopTexture() {
     frameCtx,
     linearSurface,
     partitionSurfaces,
-    partitionOrientations
+    partitionOrientations,
+    partitionSettings: partitionSettingsState
   };
   preview3dThreeState.mesh.material.map = texture;
   tuneProjectionMaterial(preview3dThreeState.mesh.material);
@@ -2043,6 +2206,19 @@ function computePreview3dLoopProgress() {
   progress = ((extrapolatedElapsed % duration) + duration) / duration;
   progress = ((progress % 1) + 1) % 1;
   return progress;
+}
+
+function computePreview3dElapsedSeconds() {
+  const nowMs = performance.now();
+  const hasSyncedSample =
+    preview3dPlaybackSyncState.hasSample &&
+    Number.isFinite(preview3dPlaybackSyncState.durationSeconds) &&
+    preview3dPlaybackSyncState.durationSeconds > 0;
+  if (!Number.isFinite(preview3dPlaybackSyncState.syncedAtMs) || preview3dPlaybackSyncState.syncedAtMs <= 0) {
+    preview3dPlaybackSyncState.syncedAtMs = nowMs;
+  }
+  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedSeconds : loopElapsedSeconds;
+  return elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
 }
 
 function drawSurfaceViewportWindow(ctx, surface, progress, destX, destY, destWidth, destHeight) {
@@ -2125,16 +2301,25 @@ function paintThreeLoopTextureFrame(progress) {
     };
     widths.right = Math.max(1, frameCanvas.width - widths.left - widths.curve);
     const partitionOrientations = state.partitionOrientations || {};
+    const partitionSettingsState = state.partitionSettings || {};
+    const elapsedSeconds = computePreview3dElapsedSeconds();
     const drawPartition = (partitionKey, cursorX, width) => {
       const surface = state.partitionSurfaces[partitionKey];
       if (!surface) {
         return;
       }
       const orientation = partitionOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+      const settings = partitionSettingsState[partitionKey] || null;
+      const partitionSecondsRaw = Number(settings && settings.seconds);
+      const partitionSeconds =
+        Number.isFinite(partitionSecondsRaw) && partitionSecondsRaw > 0
+          ? partitionSecondsRaw
+          : Math.max(0.1, Number(loopDurationSeconds) || 16);
+      const partitionProgress = ((elapsedSeconds % partitionSeconds) + partitionSeconds) / partitionSeconds;
       if (orientation === "vertical") {
-        drawSurfaceViewportWindowVertical(frameCtx, surface, progress, cursorX, 0, width, frameCanvas.height);
+        drawSurfaceViewportWindowVertical(frameCtx, surface, partitionProgress, cursorX, 0, width, frameCanvas.height);
       } else {
-        drawSurfaceViewportWindow(frameCtx, surface, progress, cursorX, 0, width, frameCanvas.height);
+        drawSurfaceViewportWindow(frameCtx, surface, partitionProgress, cursorX, 0, width, frameCanvas.height);
       }
     };
     let cursor = 0;
@@ -2570,16 +2755,17 @@ function getCurrentDirectionName() {
 }
 
 function getCurrentLoopConfig() {
+  const activePartitionSettings = partitionSettingsForKey(activePartitionSettingsKeyValue());
   const config = {
-    seconds: currentSpeedSeconds(),
-    padTopBottom: currentPadTopBottom(),
-    padLeftRight: currentPadLeftRight(),
-    backgroundColor: currentBackgroundColor(),
-    assetGap: currentAssetGap(),
+    seconds: currentDirectionIsPartitioned() ? activePartitionSettings.seconds : currentSpeedSeconds(),
+    padTopBottom: currentDirectionIsPartitioned() ? activePartitionSettings.padTopBottom : currentPadTopBottom(),
+    padLeftRight: currentDirectionIsPartitioned() ? activePartitionSettings.padLeftRight : currentPadLeftRight(),
+    backgroundColor: currentDirectionIsPartitioned() ? activePartitionSettings.backgroundColor : currentBackgroundColor(),
+    assetGap: currentDirectionIsPartitioned() ? activePartitionSettings.assetGap : currentAssetGap(),
     artworkOrientation: currentArtworkOrientation(),
-    rowCount: currentRowCount(),
-    rowOffset: currentRowOffset(),
-    rowGap: currentRowGap(),
+    rowCount: currentDirectionIsPartitioned() ? activePartitionSettings.rowCount : currentRowCount(),
+    rowOffset: currentDirectionIsPartitioned() ? activePartitionSettings.rowOffset : currentRowOffset(),
+    rowGap: currentDirectionIsPartitioned() ? activePartitionSettings.rowGap : currentRowGap(),
     directionMode: currentDirectionIsPartitioned() ? "partitioned" : "linear"
   };
 
@@ -2590,6 +2776,10 @@ function getCurrentLoopConfig() {
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
     config.artworkOrientations = currentPartitionArtworkOrientations();
+    config.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
+      acc[key] = partitionSettingsForKey(key);
+      return acc;
+    }, {});
   } else {
     config.artworks = loopArtworks.map((item) => item.src);
   }
@@ -3074,6 +3264,16 @@ function buildPartitionedSnapshotHtml(config) {
       const PARTITION_TOTAL_WIDTH = 5900;
       const DEFAULT_SOURCE = "assets/linear-loop-strip.png";
       const state = ${safeState};
+      const DEFAULT_PARTITION_SETTINGS = {
+        seconds: 16,
+        padTopBottom: 0,
+        padLeftRight: 0,
+        backgroundColor: "#fff8a5",
+        assetGap: 0,
+        rowCount: 1,
+        rowOffset: 0,
+        rowGap: 0
+      };
 
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
@@ -3101,6 +3301,43 @@ function buildPartitionedSnapshotHtml(config) {
           return state.artworkOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
         }
         return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
+      }
+
+      function settingsForPartition(partitionKey) {
+        const perPartition =
+          state.partitionSettings && typeof state.partitionSettings === "object" ? state.partitionSettings[partitionKey] : null;
+        const source = perPartition && typeof perPartition === "object" ? perPartition : state;
+        const secondsRaw = Number(source.seconds);
+        const padTopBottomRaw = Number(source.padTopBottom);
+        const padLeftRightRaw = Number(source.padLeftRight);
+        const assetGapRaw = Number(source.assetGap);
+        const rowCountRaw = Number(source.rowCount);
+        const rowOffsetRaw = Number(source.rowOffset);
+        const rowGapRaw = Number(source.rowGap);
+        return {
+          seconds: Number.isFinite(secondsRaw) && secondsRaw > 0 ? secondsRaw : DEFAULT_PARTITION_SETTINGS.seconds,
+          padTopBottom:
+            Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0
+              ? padTopBottomRaw
+              : DEFAULT_PARTITION_SETTINGS.padTopBottom,
+          padLeftRight:
+            Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0
+              ? padLeftRightRaw
+              : DEFAULT_PARTITION_SETTINGS.padLeftRight,
+          backgroundColor:
+            typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
+              ? source.backgroundColor
+              : DEFAULT_PARTITION_SETTINGS.backgroundColor,
+          assetGap:
+            Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS.assetGap,
+          rowCount:
+            Number.isFinite(rowCountRaw) && rowCountRaw >= 1
+              ? Math.round(rowCountRaw)
+              : DEFAULT_PARTITION_SETTINGS.rowCount,
+          rowOffset:
+            Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : DEFAULT_PARTITION_SETTINGS.rowOffset,
+          rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : DEFAULT_PARTITION_SETTINGS.rowGap
+        };
       }
 
       async function resolvePartitionWidth(container, partitionKey) {
@@ -3133,10 +3370,18 @@ function buildPartitionedSnapshotHtml(config) {
 
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
-        const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
+        const partitionSettings = settingsForPartition(partitionKey);
+        container.style.background = partitionSettings.backgroundColor;
+        container.style.setProperty("--loop-row-gap", Math.max(0, Number(partitionSettings.rowGap) || 0) + "px");
+        container.style.paddingTop = Math.max(0, Number(partitionSettings.padTopBottom) || 0) + "px";
+        container.style.paddingBottom = Math.max(0, Number(partitionSettings.padTopBottom) || 0) + "px";
+        container.style.paddingLeft = Math.max(0, Number(partitionSettings.padLeftRight) || 0) + "px";
+        container.style.paddingRight = Math.max(0, Number(partitionSettings.padLeftRight) || 0) + "px";
+        container.style.boxSizing = "border-box";
+        const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
         // Keep artwork inline in all orientations; vertical only changes track rotation/direction.
-        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const sidePadding = 0;
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -3206,7 +3451,7 @@ function buildPartitionedSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapSize = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = Math.max(0, Number(partitionSettings.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -3219,26 +3464,21 @@ function buildPartitionedSnapshotHtml(config) {
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
-        const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
+        const offsetSecondsPerRow = ((Number(partitionSettings.rowOffset) || 0) / safeDistance) * partitionSettings.seconds;
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", delay + "s");
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
+          track.style.animationDuration = partitionSettings.seconds + "s";
+          track.style.gap = Math.max(0, Number(partitionSettings.assetGap) || 0) + "px";
           track.style.setProperty("--loop-distance", safeDistance + "px");
           track.style.setProperty("--loop-row-direction", "normal");
         });
       }
 
       async function render() {
-        const safeBackground = /^#[0-9a-f]{6}$/i.test(state.backgroundColor || "")
-          ? state.backgroundColor
-          : "#fff8a5";
-        document.documentElement.style.setProperty("--loop-duration", (Number(state.seconds) || 16) + "s");
-        document.documentElement.style.setProperty("--loop-pad-tb", Math.max(0, Number(state.padTopBottom) || 0) + "px");
-        document.documentElement.style.setProperty("--loop-pad-lr", Math.max(0, Number(state.padLeftRight) || 0) + "px");
-        document.documentElement.style.setProperty("--loop-bg", safeBackground);
-        document.documentElement.style.setProperty("--loop-gap", Math.max(0, Number(state.assetGap) || 0) + "px");
-        document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
+        const baseSettings = settingsForPartition("left");
+        document.documentElement.style.setProperty("--loop-bg", baseSettings.backgroundColor);
 
         const partitions = state.artworksByPartition && typeof state.artworksByPartition === "object"
           ? state.artworksByPartition
@@ -3249,6 +3489,8 @@ function buildPartitionedSnapshotHtml(config) {
           if (!container) {
             continue;
           }
+          const partitionSettings = settingsForPartition(key);
+          container.style.background = partitionSettings.backgroundColor;
           const raw = Array.isArray(partitions[key]) ? partitions[key] : [];
           const sources = raw.length ? raw.map(normalizeArtworkSource) : [DEFAULT_SOURCE];
           await renderPartition(container, sources, key);
@@ -3317,6 +3559,13 @@ function coerceSnapshotLoopConfig(candidate) {
   const rowCountRaw = Number(candidate.rowCount);
   const rowOffsetRaw = Number(candidate.rowOffset);
   const rowGapRaw = Number(candidate.rowGap);
+  const partitionSettings =
+    candidate.partitionSettings && typeof candidate.partitionSettings === "object"
+      ? PARTITION_KEYS.reduce((acc, key) => {
+          acc[key] = sanitizePartitionSettingsEntry(candidate.partitionSettings[key]);
+          return acc;
+        }, {})
+      : null;
   const backgroundColor =
     typeof candidate.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.backgroundColor)
       ? candidate.backgroundColor
@@ -3335,6 +3584,7 @@ function coerceSnapshotLoopConfig(candidate) {
     rowCount: Number.isFinite(rowCountRaw) && rowCountRaw >= 1 ? Math.round(rowCountRaw) : 1,
     rowOffset: Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : 0,
     rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : 0,
+    partitionSettings,
     directionMode:
       candidate.directionMode === "partitioned" || artworksByPartition ? "partitioned" : "linear"
   };
@@ -3676,6 +3926,14 @@ function savePartitionArtworks(artworksByPartition) {
   writeStorage(STORAGE_KEYS.partitionArtworks, JSON.stringify(artworksByPartition));
 }
 
+function savePartitionSettings(settingsByPartition) {
+  const safe = createDefaultPartitionSettings();
+  PARTITION_KEYS.forEach((key) => {
+    safe[key] = sanitizePartitionSettingsEntry(settingsByPartition && settingsByPartition[key]);
+  });
+  writeStorage(STORAGE_KEYS.partitionSettings, JSON.stringify(safe));
+}
+
 function restoreArtworks() {
   const rawValue = readStorage(STORAGE_KEYS.artworks);
   if (!rawValue) {
@@ -3720,6 +3978,27 @@ function restorePartitionArtworks() {
   }
 }
 
+function restorePartitionSettings() {
+  const defaults = createDefaultPartitionSettings();
+  const rawValue = readStorage(STORAGE_KEYS.partitionSettings);
+  if (!rawValue) {
+    return defaults;
+  }
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== "object") {
+      return defaults;
+    }
+    const restored = {};
+    PARTITION_KEYS.forEach((key) => {
+      restored[key] = sanitizePartitionSettingsEntry(parsed[key]);
+    });
+    return restored;
+  } catch (error) {
+    return defaults;
+  }
+}
+
 function syncSpeedReadout() {
   if (!speedValue) {
     return;
@@ -3734,18 +4013,19 @@ function sendLoopConfigToPreview() {
   if (!billboardPreview.contentWindow) {
     return;
   }
-  const seconds = currentSpeedSeconds();
+  const activePartitionSettings = partitionSettingsForKey(activePartitionSettingsKeyValue());
+  const seconds = currentDirectionIsPartitioned() ? activePartitionSettings.seconds : currentSpeedSeconds();
   const payload = {
     type: "setLoopConfig",
     seconds,
-    padTopBottom: currentPadTopBottom(),
-    padLeftRight: currentPadLeftRight(),
-    backgroundColor: currentBackgroundColor(),
-    assetGap: currentAssetGap(),
+    padTopBottom: currentDirectionIsPartitioned() ? activePartitionSettings.padTopBottom : currentPadTopBottom(),
+    padLeftRight: currentDirectionIsPartitioned() ? activePartitionSettings.padLeftRight : currentPadLeftRight(),
+    backgroundColor: currentDirectionIsPartitioned() ? activePartitionSettings.backgroundColor : currentBackgroundColor(),
+    assetGap: currentDirectionIsPartitioned() ? activePartitionSettings.assetGap : currentAssetGap(),
     artworkOrientation: currentArtworkOrientation(),
-    rowCount: currentRowCount(),
-    rowOffset: currentRowOffset(),
-    rowGap: currentRowGap()
+    rowCount: currentDirectionIsPartitioned() ? activePartitionSettings.rowCount : currentRowCount(),
+    rowOffset: currentDirectionIsPartitioned() ? activePartitionSettings.rowOffset : currentRowOffset(),
+    rowGap: currentDirectionIsPartitioned() ? activePartitionSettings.rowGap : currentRowGap()
   };
   if (currentDirectionIsPartitioned()) {
     payload.artworksByPartition = {
@@ -3754,6 +4034,10 @@ function sendLoopConfigToPreview() {
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
     payload.artworkOrientations = currentPartitionArtworkOrientations();
+    payload.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
+      acc[key] = partitionSettingsForKey(key);
+      return acc;
+    }, {});
   } else {
     payload.artworks = loopArtworks.map((item) => item.src);
   }
@@ -3818,35 +4102,35 @@ function syncPartitionEditorVisuals() {
   if (!partitionEditors) {
     return;
   }
-  const scale = getPartitionPreviewScale();
+  const baseScale = getPartitionPreviewScale();
   const stageHeight = Math.max(1, loopStageHeight);
-  const scaledArtHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
-  const scaledPadTB = Math.max(0, Math.round(Math.max(0, loopPadTopBottom) * scale * 100) / 100);
-  const scaledPadLR = Math.max(0, Math.round(Math.max(0, loopPadLeftRight) * scale * 100) / 100);
-  const scaledGap = Math.max(0, Math.round(Math.max(0, loopAssetGap) * scale * 100) / 100);
-  partitionEditors.style.setProperty("--partition-preview-art-height", `${scaledArtHeight}px`);
-  partitionEditors.style.setProperty("--partition-preview-pad-tb", `${scaledPadTB}px`);
-  partitionEditors.style.setProperty("--partition-preview-pad-lr", `${scaledPadLR}px`);
-  partitionEditors.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
-  partitionEditors.style.setProperty("--partition-preview-bg", currentBackgroundColor());
+  partitionEditors.style.setProperty("--partition-preview-art-height", `${Math.max(8, Math.round(stageHeight * baseScale * 100) / 100)}px`);
+  partitionEditors.style.setProperty("--partition-preview-pad-tb", "0px");
+  partitionEditors.style.setProperty("--partition-preview-pad-lr", "0px");
+  partitionEditors.style.setProperty("--partition-preview-gap", "0px");
+  partitionEditors.style.setProperty("--partition-preview-bg", partitionSettingsForKey("left").backgroundColor);
 
   PARTITION_KEYS.forEach((partitionKey) => {
     const trackEl = partitionTrackElement(partitionKey);
     if (!trackEl) {
       return;
     }
-    const orientation = currentPartitionArtworkOrientations()[partitionKey];
-    const range = BILLBOARD_PARTITION_RANGES[partitionKey];
-    const partitionDesignWidth = Array.isArray(range) ? Math.max(1, Number(range[1]) - Number(range[0])) : stageHeight;
-    const scaledPartitionWidth = Math.max(8, Math.round(partitionDesignWidth * scale * 100) / 100);
-    const verticalFlow = orientation === "vertical";
-    const trackArtHeight = verticalFlow ? scaledPartitionWidth : scaledArtHeight;
-    const trackPadTB = verticalFlow ? scaledPadLR : scaledPadTB;
-    const trackPadLR = verticalFlow ? scaledPadTB : scaledPadLR;
-    const spacerWidth = trackPadLR;
+    const settings = partitionSettingsForKey(partitionKey);
+    const totalSourceHeight = Math.max(1, stageHeight + Math.max(0, settings.padTopBottom) * 2);
+    const scale = 54 / totalSourceHeight;
+    const scaledArtHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
+    const scaledPadTB = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
+    const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
+    const scaledGap = Math.max(0, Math.round(Math.max(0, settings.assetGap) * scale * 100) / 100);
+    const trackArtHeight = scaledArtHeight;
+    const trackPadTB = scaledPadTB;
+    const trackPadLR = scaledPadLR;
+    const spacerWidth = scaledPadLR;
     trackEl.style.setProperty("--partition-preview-art-height", `${trackArtHeight}px`);
     trackEl.style.setProperty("--partition-preview-pad-tb", `${trackPadTB}px`);
     trackEl.style.setProperty("--partition-preview-pad-lr", `${trackPadLR}px`);
+    trackEl.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
+    trackEl.style.setProperty("--partition-preview-bg", settings.backgroundColor);
     trackEl.querySelectorAll(".partition-preview-spacer").forEach((spacer) => {
       spacer.style.width = `${spacerWidth}px`;
     });
@@ -4461,7 +4745,7 @@ function renderDirectory(directions) {
   directionsSection.className = "directory-section";
 
   const directionsTitle = document.createElement("h2");
-  directionsTitle.textContent = "setups";
+  directionsTitle.textContent = "tools";
   directionsSection.appendChild(directionsTitle);
 
   const savedDirection = restoreSelectedDirection();
@@ -4474,7 +4758,7 @@ function renderDirectory(directions) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "direction-item";
-    button.textContent = name;
+    button.textContent = getDirectionDisplayName(name);
     button.dataset.directionName = name;
     button.addEventListener("click", () => {
       loadDirection(directionPath(name), name);
@@ -4577,6 +4861,8 @@ async function init() {
   }
   loopArtworks = restoreArtworks();
   partitionArtworks = restorePartitionArtworks();
+  partitionSettingsByKey = restorePartitionSettings();
+  activePartitionSettingsKey = activePartitionSettingsKeyValue();
 
   try {
     let directions = [];
@@ -4587,14 +4873,14 @@ async function init() {
     }
 
     if (!directions.length) {
-      throw new Error("No setups found");
+      throw new Error("No tools found");
     }
 
     knownDirections = [...directions];
     sharedOutputs = await fetchOutputsFromServer();
     renderDirectory(directions);
   } catch (error) {
-    emptyState.textContent = "No setups found. Check directions/manifest.json.";
+    emptyState.textContent = "No tools found. Check directions/manifest.json.";
   }
 
   syncSpeedReadout();
@@ -4606,18 +4892,41 @@ async function init() {
   syncViewControlsUI();
   syncPanelVisibility();
 
+  if (partitionSettingsTargetControl) {
+    partitionSettingsTargetControl.addEventListener("change", () => {
+      const key = activePartitionSettingsKeyValue();
+      applyPartitionSettingsToControls(key);
+      syncEffectiveLoopPadding();
+      syncVisualizationPaddingScaled();
+      syncVisualizationGapScaled();
+      syncPartitionEditorVisuals();
+      render3dPreview();
+      sendLoopConfigToPreview();
+    });
+  }
+
   if (speedControl) {
     speedControl.addEventListener("input", () => {
       loopDurationSeconds = currentSpeedSeconds();
       syncSpeedReadout();
-      saveSpeed(currentSpeedSeconds());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveSpeed(currentSpeedSeconds());
+      }
       sendLoopConfigToPreview();
     });
   }
 
   if (padTBControl) {
     padTBControl.addEventListener("input", () => {
-      savePadTopBottom(currentPadTopBottom());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        savePadTopBottom(currentPadTopBottom());
+      }
       syncEffectiveLoopPadding();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
@@ -4629,7 +4938,12 @@ async function init() {
 
   if (padLRControl) {
     padLRControl.addEventListener("input", () => {
-      savePadLeftRight(currentPadLeftRight());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        savePadLeftRight(currentPadLeftRight());
+      }
       syncEffectiveLoopPadding();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
@@ -4641,7 +4955,12 @@ async function init() {
 
   if (bgColorControl) {
     bgColorControl.addEventListener("input", () => {
-      saveBackgroundColor(currentBackgroundColor());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveBackgroundColor(currentBackgroundColor());
+      }
       syncVisualizationBackground();
       syncPartitionEditorVisuals();
       render3dPreview();
@@ -4815,7 +5134,12 @@ async function init() {
 
   if (assetGapControl) {
     assetGapControl.addEventListener("input", () => {
-      saveAssetGap(currentAssetGap());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveAssetGap(currentAssetGap());
+      }
       loopAssetGap = currentAssetGap();
       syncVisualizationGapScaled();
       syncPartitionEditorVisuals();
@@ -4860,7 +5184,12 @@ async function init() {
 
   if (rowCountControl) {
     rowCountControl.addEventListener("input", () => {
-      saveRowCount(currentRowCount());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveRowCount(currentRowCount());
+      }
       render3dPreview();
       sendLoopConfigToPreview();
     });
@@ -4868,7 +5197,12 @@ async function init() {
 
   if (rowOffsetControl) {
     rowOffsetControl.addEventListener("input", () => {
-      saveRowOffset(currentRowOffset());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveRowOffset(currentRowOffset());
+      }
       render3dPreview();
       sendLoopConfigToPreview();
     });
@@ -4876,7 +5210,12 @@ async function init() {
 
   if (rowGapControl) {
     rowGapControl.addEventListener("input", () => {
-      saveRowGap(currentRowGap());
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveRowGap(currentRowGap());
+      }
       loopRowGap = currentRowGap();
       render3dPreview();
       sendLoopConfigToPreview();

@@ -26,7 +26,7 @@
         <div id="directoryPanel" class="directory-panel"></div>
         <aside class="controls-column" aria-label="settings controls">
           <div class="settings-panel">
-            <h3 id="settingsTitle" class="settings-title">linear loop settings</h3>
+            <h3 id="settingsTitle" class="settings-title">linear billboard settings</h3>
 
             <section class="settings-group">
               <div class="settings-row settings-row-speed">
@@ -99,6 +99,14 @@
                   </div>
                   <input id="partitionOrientationRightControl" type="hidden" value="horizontal" />
                 </div>
+              </div>
+              <div id="partitionSettingsTargetRow" class="settings-row">
+                <span class="settings-label">partition settings</span>
+                <select id="partitionSettingsTargetControl" aria-label="Partition settings target">
+                  <option value="left">facing 7th</option>
+                  <option value="curve">curve</option>
+                  <option value="right">facing 47th</option>
+                </select>
               </div>
               <div class="settings-row settings-row-compact-pairs settings-row-rows-inline">
                 <div class="settings-inline-controls">

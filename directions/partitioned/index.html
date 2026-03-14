@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>partitioned</title>
+    <title>partitioned billboard</title>
     <style>
       :root {
         --loop-duration: 16s;
@@ -101,10 +101,10 @@
 
       @keyframes loop-y {
         from {
-          transform: rotate(90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: rotate(90deg) translateX(0);
+          transform: rotate(-90deg) translateX(0);
         }
       }
 
@@ -178,6 +178,21 @@
         rowOffset: 0,
         rowGap: 0
       };
+      const DEFAULT_PARTITION_SETTINGS = {
+        seconds: 16,
+        padTopBottom: 0,
+        padLeftRight: 0,
+        backgroundColor: "#fff8a5",
+        assetGap: 0,
+        rowCount: 1,
+        rowOffset: 0,
+        rowGap: 0
+      };
+      state.partitionSettings = {
+        left: { ...DEFAULT_PARTITION_SETTINGS },
+        curve: { ...DEFAULT_PARTITION_SETTINGS },
+        right: { ...DEFAULT_PARTITION_SETTINGS }
+      };
       let playbackTimer = null;
       let primaryTrack = null;
       let primaryDistance = 1;
@@ -219,6 +234,42 @@
         return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
       }
 
+      function settingsForPartition(partitionKey) {
+        const raw = state.partitionSettings && state.partitionSettings[partitionKey];
+        const source = raw && typeof raw === "object" ? raw : {};
+        const secondsRaw = Number(source.seconds);
+        const padTopBottomRaw = Number(source.padTopBottom);
+        const padLeftRightRaw = Number(source.padLeftRight);
+        const assetGapRaw = Number(source.assetGap);
+        const rowCountRaw = Number(source.rowCount);
+        const rowOffsetRaw = Number(source.rowOffset);
+        const rowGapRaw = Number(source.rowGap);
+        return {
+          seconds: Number.isFinite(secondsRaw) && secondsRaw > 0 ? secondsRaw : DEFAULT_PARTITION_SETTINGS.seconds,
+          padTopBottom:
+            Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0
+              ? padTopBottomRaw
+              : DEFAULT_PARTITION_SETTINGS.padTopBottom,
+          padLeftRight:
+            Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0
+              ? padLeftRightRaw
+              : DEFAULT_PARTITION_SETTINGS.padLeftRight,
+          backgroundColor:
+            typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
+              ? source.backgroundColor
+              : DEFAULT_PARTITION_SETTINGS.backgroundColor,
+          assetGap:
+            Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS.assetGap,
+          rowCount:
+            Number.isFinite(rowCountRaw) && rowCountRaw >= 1
+              ? Math.round(rowCountRaw)
+              : DEFAULT_PARTITION_SETTINGS.rowCount,
+          rowOffset:
+            Number.isFinite(rowOffsetRaw) && rowOffsetRaw >= 0 ? rowOffsetRaw : DEFAULT_PARTITION_SETTINGS.rowOffset,
+          rowGap: Number.isFinite(rowGapRaw) && rowGapRaw >= 0 ? rowGapRaw : DEFAULT_PARTITION_SETTINGS.rowGap
+        };
+      }
+
       async function resolvePartitionWidth(container, partitionKey) {
         const measure = () =>
           Math.max(
@@ -246,14 +297,16 @@
 
       async function renderPartition(container, sources, partitionKey, appliedPadTopBottom, appliedPadLeftRight) {
         container.innerHTML = "";
-        const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
+        const partitionSettings = settingsForPartition(partitionKey);
+        container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
+        container.style.paddingTop = `${Math.max(0, Number(appliedPadTopBottom) || 0)}px`;
+        container.style.paddingBottom = `${Math.max(0, Number(appliedPadTopBottom) || 0)}px`;
+        container.style.paddingLeft = `${Math.max(0, Number(appliedPadLeftRight) || 0)}px`;
+        container.style.paddingRight = `${Math.max(0, Number(appliedPadLeftRight) || 0)}px`;
+        container.style.boxSizing = "border-box";
+        const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const verticalSidePadding = Math.max(0, Number(appliedPadTopBottom) || 0);
-        const sidePadding = verticalFlow
-          ? verticalSidePadding
-          : Math.max(0, Number(appliedPadLeftRight) || 0);
-        const partitionWidth = Math.max(1, await resolvePartitionWidth(container, partitionKey));
-        const verticalArtworkHeight = Math.max(1, partitionWidth - verticalSidePadding * 2);
+        const sidePadding = 0;
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -278,9 +331,6 @@
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
-            if (verticalFlow) {
-              image.style.height = `${verticalArtworkHeight}px`;
-            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
@@ -326,7 +376,7 @@
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapSize = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = Math.max(0, Number(partitionSettings.assetGap) || 0);
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -341,11 +391,14 @@
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
-        const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
+        const offsetSecondsPerRow =
+          ((Number(partitionSettings.rowOffset) || 0) / safeDistance) * partitionSettings.seconds;
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
           track.style.setProperty("--loop-row-delay", `${delay}s`);
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
+          track.style.animationDuration = `${partitionSettings.seconds}s`;
+          track.style.gap = `${Math.max(0, Number(partitionSettings.assetGap) || 0)}px`;
           track.style.setProperty("--loop-distance", `${safeDistance}px`);
           track.style.setProperty("--loop-row-direction", "normal");
         });
@@ -367,21 +420,22 @@
           Number(document.documentElement.clientWidth) || 0,
           Number(window.innerWidth) || 0
         );
-        const padTopBottomDesign = Math.max(0, Number(state.padTopBottom) || 0);
-        const padLeftRightDesign = Math.max(0, Number(state.padLeftRight) || 0);
+        const baseSettings = settingsForPartition("left");
+        const padTopBottomDesign = Math.max(0, Number(baseSettings.padTopBottom) || 0);
+        const padLeftRightDesign = Math.max(0, Number(baseSettings.padLeftRight) || 0);
         const appliedPadTopBottomRaw = (padTopBottomDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
         const appliedPadLeftRightRaw = (padLeftRightDesign / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
         const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
         const appliedPadTopBottom = Math.min(appliedPadTopBottomRaw, maxPadTopBottom);
         const appliedPadLeftRight = Math.max(0, appliedPadLeftRightRaw);
-        document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
+        document.documentElement.style.setProperty("--loop-duration", `${baseSettings.seconds}s`);
         document.documentElement.style.setProperty("--loop-pad-tb", `${appliedPadTopBottom}px`);
         document.documentElement.style.setProperty("--loop-pad-lr", `${appliedPadLeftRight}px`);
-        document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
-        document.documentElement.style.setProperty("--loop-gap", `${Math.max(0, Number(state.assetGap) || 0)}px`);
+        document.documentElement.style.setProperty("--loop-bg", baseSettings.backgroundColor);
+        document.documentElement.style.setProperty("--loop-gap", `${Math.max(0, Number(baseSettings.assetGap) || 0)}px`);
         document.documentElement.style.setProperty(
           "--loop-row-gap",
-          `${Math.max(0, Number(state.rowGap) || 0)}px`
+          `${Math.max(0, Number(baseSettings.rowGap) || 0)}px`
         );
         primaryTrack = null;
         primaryDistance = 1;
@@ -397,12 +451,19 @@
             ? sourceListRaw
             : [DEFAULT_SOURCE];
           const normalizedSources = sourceList.map(normalizeArtworkSource);
+          const partitionSettings = settingsForPartition(key);
+          const appliedPartitionPadTopBottomRaw = (partitionSettings.padTopBottom / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
+          const appliedPartitionPadLeftRightRaw = (partitionSettings.padLeftRight / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
+          const maxPartitionPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
+          const appliedPartitionPadTopBottom = Math.min(appliedPartitionPadTopBottomRaw, maxPartitionPadTopBottom);
+          const appliedPartitionPadLeftRight = Math.max(0, appliedPartitionPadLeftRightRaw);
+          container.style.background = partitionSettings.backgroundColor;
           const result = await renderPartition(
             container,
             normalizedSources,
             key,
-            appliedPadTopBottom,
-            appliedPadLeftRight
+            appliedPartitionPadTopBottom,
+            appliedPartitionPadLeftRight
           );
           const partitionVerticalFlow = orientationForPartition(key) === "vertical";
           const partitionViewportSize = partitionVerticalFlow
@@ -428,7 +489,7 @@
       }
 
       function emitPlayback() {
-        const durationMs = Math.max(1, state.seconds * 1000);
+        const durationMs = Math.max(1, settingsForPartition("left").seconds * 1000);
         const animationSource = primaryTrack || partitionContainers.left;
         const animation = animationSource ? animationSource.getAnimations()[0] : null;
         let elapsedMs = 0;
@@ -458,7 +519,7 @@
             elapsedSeconds: elapsedMs / 1000,
             durationSeconds: durationMs / 1000,
             stageHeight,
-            assetGap: state.assetGap,
+            assetGap: settingsForPartition("left").assetGap,
             loopDistance: primaryDistance,
             partitions: partitionMetrics
           },
@@ -561,6 +622,48 @@
         const rowGap = Number(payload.rowGap);
         if (Number.isFinite(rowGap) && rowGap >= 0) {
           state.rowGap = rowGap;
+        }
+
+        if (payload.partitionSettings && typeof payload.partitionSettings === "object") {
+          PARTITION_KEYS.forEach((key) => {
+            const existing = settingsForPartition(key);
+            const incoming = payload.partitionSettings[key];
+            const source = incoming && typeof incoming === "object" ? incoming : {};
+            state.partitionSettings[key] = {
+              seconds:
+                Number.isFinite(Number(source.seconds)) && Number(source.seconds) > 0
+                  ? Number(source.seconds)
+                  : existing.seconds,
+              padTopBottom:
+                Number.isFinite(Number(source.padTopBottom)) && Number(source.padTopBottom) >= 0
+                  ? Number(source.padTopBottom)
+                  : existing.padTopBottom,
+              padLeftRight:
+                Number.isFinite(Number(source.padLeftRight)) && Number(source.padLeftRight) >= 0
+                  ? Number(source.padLeftRight)
+                  : existing.padLeftRight,
+              backgroundColor:
+                typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
+                  ? source.backgroundColor
+                  : existing.backgroundColor,
+              assetGap:
+                Number.isFinite(Number(source.assetGap)) && Number(source.assetGap) >= 0
+                  ? Number(source.assetGap)
+                  : existing.assetGap,
+              rowCount:
+                Number.isFinite(Number(source.rowCount)) && Number(source.rowCount) >= 1
+                  ? Math.round(Number(source.rowCount))
+                  : existing.rowCount,
+              rowOffset:
+                Number.isFinite(Number(source.rowOffset)) && Number(source.rowOffset) >= 0
+                  ? Number(source.rowOffset)
+                  : existing.rowOffset,
+              rowGap:
+                Number.isFinite(Number(source.rowGap)) && Number(source.rowGap) >= 0
+                  ? Number(source.rowGap)
+                  : existing.rowGap
+            };
+          });
         }
 
         renderLoop();
