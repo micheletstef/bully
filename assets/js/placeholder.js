@@ -1389,6 +1389,79 @@ function sampleMeshLocalPointByUv(THREE, mesh, uTarget, vTarget) {
   return new THREE.Vector3(posAttr.getX(bestIndex), posAttr.getY(bestIndex), posAttr.getZ(bestIndex));
 }
 
+function sampleMeshTopEdgePointByRatio(THREE, mesh, ratio) {
+  if (!THREE || !mesh || !mesh.geometry) {
+    return null;
+  }
+  const geometry = mesh.geometry;
+  const posAttr = geometry.attributes && geometry.attributes.position ? geometry.attributes.position : null;
+  if (!posAttr || posAttr.count <= 0) {
+    return null;
+  }
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  const box = geometry.boundingBox;
+  if (!box) {
+    return null;
+  }
+  const clampedRatio = Math.max(0, Math.min(1, Number(ratio) || 0));
+  const topY = box.max.y;
+  const height = Math.max(1e-6, box.max.y - box.min.y);
+  const tolerance = Math.max(1e-4, height * 0.03);
+  const candidates = [];
+  for (let i = 0; i < posAttr.count; i += 1) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    const z = posAttr.getZ(i);
+    if (y >= topY - tolerance) {
+      candidates.push(new THREE.Vector3(x, y, z));
+    }
+  }
+  if (candidates.length < 2) {
+    return new THREE.Vector3(
+      box.min.x + (box.max.x - box.min.x) * clampedRatio,
+      topY,
+      (box.min.z + box.max.z) * 0.5
+    );
+  }
+  candidates.sort((a, b) => (a.x === b.x ? a.z - b.z : a.x - b.x));
+  const points = [];
+  const minDistance = Math.max(1e-5, Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.0012);
+  candidates.forEach((point) => {
+    if (!points.length || points[points.length - 1].distanceTo(point) >= minDistance) {
+      points.push(point);
+    }
+  });
+  if (points.length < 2) {
+    return points[0].clone();
+  }
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    total += points[i - 1].distanceTo(points[i]);
+  }
+  if (!Number.isFinite(total) || total <= 1e-6) {
+    return points[Math.round((points.length - 1) * clampedRatio)].clone();
+  }
+  const target = total * clampedRatio;
+  let traveled = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const seg = a.distanceTo(b);
+    if (traveled + seg >= target) {
+      const t = (target - traveled) / seg;
+      return new THREE.Vector3(
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+        a.z + (b.z - a.z) * t
+      );
+    }
+    traveled += seg;
+  }
+  return points[points.length - 1].clone();
+}
+
 function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   if (!THREE || !mesh || !mesh.geometry) {
     return null;
@@ -1418,7 +1491,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   });
   [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
     .forEach((uBoundary, idx) => {
-    const anchor = sampleMeshLocalPointByUv(THREE, mesh, uBoundary, 0.5);
+    const anchor = sampleMeshTopEdgePointByRatio(THREE, mesh, uBoundary);
     if (!anchor) {
       return;
     }
@@ -1450,7 +1523,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const sample = sampleMeshLocalPointByUv(THREE, mesh, centerDistance, 0.5);
+    const sample = sampleMeshTopEdgePointByRatio(THREE, mesh, centerDistance);
     if (!sample) {
       return;
     }
