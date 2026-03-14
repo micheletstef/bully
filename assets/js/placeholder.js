@@ -6,6 +6,7 @@ const speedValue = document.getElementById("speedValue");
 const padTBControl = document.getElementById("padTBControl");
 const padLRControl = document.getElementById("padLRControl");
 const bgColorControl = document.getElementById("bgColorControl");
+const assetColorControl = document.getElementById("assetColorControl");
 const previewViewModeControl = document.getElementById("previewViewModeControl");
 const cameraYawControl = document.getElementById("cameraYawControl");
 const cameraPitchControl = document.getElementById("cameraPitchControl");
@@ -26,8 +27,10 @@ const assetGapControl = document.getElementById("assetGapControl");
 const artworkOrientationControl = document.getElementById("artworkOrientationControl");
 const linearOrientationRow = document.getElementById("linearOrientationRow");
 const partitionOrientationRows = document.getElementById("partitionOrientationRows");
-const partitionSettingsTargetRow = document.getElementById("partitionSettingsTargetRow");
-const partitionSettingsTargetControl = document.getElementById("partitionSettingsTargetControl");
+const partitionSettingsTabs = [...document.querySelectorAll(".partition-settings-tab")];
+const partitionActiveOrientationLabel = document.getElementById("partitionActiveOrientationLabel");
+const partitionActiveOrientationHorizontal = document.getElementById("partitionActiveOrientationHorizontal");
+const partitionActiveOrientationVertical = document.getElementById("partitionActiveOrientationVertical");
 const partitionOrientationLeftControl = document.getElementById("partitionOrientationLeftControl");
 const partitionOrientationCurveControl = document.getElementById("partitionOrientationCurveControl");
 const partitionOrientationRightControl = document.getElementById("partitionOrientationRightControl");
@@ -60,6 +63,7 @@ const STORAGE_KEYS = {
   padTB: "billboard.loopPadTopBottom",
   padLR: "billboard.loopPadLeftRight",
   bgColor: "billboard.loopBackgroundColor",
+  assetColor: "billboard.loopAssetColor",
   previewViewMode: "billboard.previewViewMode",
   assetGap: "billboard.loopAssetGap",
   artworkOrientation: "billboard.loopArtworkOrientation",
@@ -103,6 +107,7 @@ const DEFAULT_PARTITION_SETTINGS_ENTRY = {
   padTopBottom: 0,
   padLeftRight: 0,
   backgroundColor: "#fff8a5",
+  assetColor: "#111111",
   assetGap: 0,
   rowCount: 1,
   rowOffset: 0,
@@ -398,6 +403,10 @@ function sanitizePartitionSettingsEntry(input) {
       typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
         ? source.backgroundColor
         : DEFAULT_PARTITION_SETTINGS_ENTRY.backgroundColor,
+    assetColor:
+      typeof source.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(source.assetColor)
+        ? source.assetColor
+        : DEFAULT_PARTITION_SETTINGS_ENTRY.assetColor,
     assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS_ENTRY.assetGap,
     rowCount:
       Number.isFinite(rowCountRaw) && rowCountRaw >= 1
@@ -425,9 +434,7 @@ function normalizePartitionKey(key) {
 }
 
 function activePartitionSettingsKeyValue() {
-  const selected = normalizePartitionKey(
-    partitionSettingsTargetControl ? partitionSettingsTargetControl.value : activePartitionSettingsKey
-  );
+  const selected = normalizePartitionKey(activePartitionSettingsKey);
   return selected || "left";
 }
 
@@ -441,9 +448,28 @@ function applyPartitionSettingsToControls(partitionKey) {
   const key = normalizePartitionKey(partitionKey) || "left";
   const settings = partitionSettingsForKey(key);
   activePartitionSettingsKey = key;
-  if (partitionSettingsTargetControl && partitionSettingsTargetControl.value !== key) {
-    partitionSettingsTargetControl.value = key;
+  partitionSettingsTabs.forEach((tab) => {
+    const tabKey = normalizePartitionKey(tab.dataset.partitionKey);
+    const isActive = tabKey === key;
+    tab.classList.toggle("inactive", !isActive);
+    tab.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  if (partitionActiveOrientationLabel) {
+    const label =
+      key === "left" ? "7th orientation" : key === "curve" ? "curve orientation" : "47th orientation";
+    partitionActiveOrientationLabel.textContent = label;
   }
+  const targetControlId =
+    key === "left"
+      ? "partitionOrientationLeftControl"
+      : key === "curve"
+        ? "partitionOrientationCurveControl"
+        : "partitionOrientationRightControl";
+  [partitionActiveOrientationHorizontal, partitionActiveOrientationVertical].forEach((button) => {
+    if (button) {
+      button.dataset.orientationTarget = targetControlId;
+    }
+  });
   if (speedControl) {
     speedControl.value = String(settings.seconds);
   }
@@ -455,6 +481,9 @@ function applyPartitionSettingsToControls(partitionKey) {
   }
   if (bgColorControl) {
     bgColorControl.value = settings.backgroundColor;
+  }
+  if (assetColorControl) {
+    assetColorControl.value = settings.assetColor;
   }
   if (assetGapControl) {
     assetGapControl.value = String(settings.assetGap);
@@ -471,6 +500,7 @@ function applyPartitionSettingsToControls(partitionKey) {
   loopTraverseSeconds = settings.seconds;
   loopAssetGap = settings.assetGap;
   loopRowGap = settings.rowGap;
+  syncOrientationToggleStates();
   syncSpeedReadout();
   syncVisualizationBackground();
 }
@@ -482,6 +512,7 @@ function writeCurrentControlsToPartitionSettings(partitionKey) {
     padTopBottom: currentPadTopBottom(),
     padLeftRight: currentPadLeftRight(),
     backgroundColor: currentBackgroundColor(),
+    assetColor: currentAssetColor(),
     assetGap: currentAssetGap(),
     rowCount: currentRowCount(),
     rowOffset: currentRowOffset(),
@@ -593,6 +624,130 @@ async function rasterFileToDataUrl(file) {
 function serializeSvgToDataUrl(svgElement) {
   const xml = new XMLSerializer().serializeToString(svgElement);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
+}
+
+const svgAssetColorCache = new Map();
+
+function isLikelySvgSource(src) {
+  const value = String(src || "").trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  return value.startsWith("data:image/svg+xml") || /\.svg([?#].*)?$/.test(value);
+}
+
+function decodeSvgDataUrl(dataUrl) {
+  const raw = String(dataUrl || "");
+  const commaIndex = raw.indexOf(",");
+  if (commaIndex < 0) {
+    return "";
+  }
+  const meta = raw.slice(0, commaIndex).toLowerCase();
+  const payload = raw.slice(commaIndex + 1);
+  try {
+    if (meta.includes(";base64")) {
+      return atob(payload);
+    }
+    return decodeURIComponent(payload);
+  } catch (error) {
+    return "";
+  }
+}
+
+async function readSvgSourceText(src) {
+  const value = String(src || "").trim();
+  if (!value || !isLikelySvgSource(value)) {
+    return "";
+  }
+  if (value.toLowerCase().startsWith("data:image/svg+xml")) {
+    return decodeSvgDataUrl(value);
+  }
+  try {
+    const response = await fetch(value, { cache: "force-cache" });
+    if (!response.ok) {
+      return "";
+    }
+    return await response.text();
+  } catch (error) {
+    return "";
+  }
+}
+
+function applyColorToSvgText(svgText, color) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(svgText || ""), "image/svg+xml");
+  const svg = doc.querySelector("svg");
+  if (!svg) {
+    return "";
+  }
+  const paintableTags = new Set([
+    "path",
+    "rect",
+    "circle",
+    "ellipse",
+    "polygon",
+    "polyline",
+    "line",
+    "text",
+    "g"
+  ]);
+  const nodes = [svg, ...svg.querySelectorAll("*")];
+  nodes.forEach((node) => {
+    const tag = String(node.tagName || "").toLowerCase();
+    if (!paintableTags.has(tag)) {
+      return;
+    }
+    const fill = node.getAttribute("fill");
+    const stroke = node.getAttribute("stroke");
+    if (!fill || String(fill).toLowerCase() !== "none") {
+      node.setAttribute("fill", color);
+    }
+    if (stroke && String(stroke).toLowerCase() !== "none") {
+      node.setAttribute("stroke", color);
+    }
+    const style = node.getAttribute("style");
+    if (style) {
+      const rewritten = style
+        .replace(/fill\s*:\s*[^;]+/gi, `fill:${color}`)
+        .replace(/stroke\s*:\s*[^;]+/gi, `stroke:${color}`);
+      node.setAttribute("style", rewritten);
+    }
+  });
+  return new XMLSerializer().serializeToString(svg);
+}
+
+async function colorizeSvgSource(src, color) {
+  if (!isLikelySvgSource(src) || !/^#[0-9a-f]{6}$/i.test(color || "")) {
+    return src;
+  }
+  const cacheKey = `${src}::${color.toLowerCase()}`;
+  if (svgAssetColorCache.has(cacheKey)) {
+    return svgAssetColorCache.get(cacheKey);
+  }
+  const pending = (async () => {
+    const text = await readSvgSourceText(src);
+    if (!text) {
+      return src;
+    }
+    const colored = applyColorToSvgText(text, color);
+    if (!colored) {
+      return src;
+    }
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(colored)}`;
+  })();
+  svgAssetColorCache.set(cacheKey, pending);
+  return pending;
+}
+
+async function applyAssetColorToSources(sources, color) {
+  if (!Array.isArray(sources) || !sources.length) {
+    return [];
+  }
+  if (!/^#[0-9a-f]{6}$/i.test(color || "")) {
+    return [...sources];
+  }
+  const tinted = await Promise.all(sources.map((src) => colorizeSvgSource(src, color)));
+  return tinted;
 }
 
 function trimSvgElement(svgElement) {
@@ -775,9 +930,6 @@ function syncDirectionModeUI() {
   }
   if (partitionOrientationRows) {
     partitionOrientationRows.style.display = partitioned ? "" : "none";
-  }
-  if (partitionSettingsTargetRow) {
-    partitionSettingsTargetRow.style.display = partitioned ? "" : "none";
   }
   if (partitioned) {
     applyPartitionSettingsToControls(activePartitionSettingsKeyValue());
@@ -987,15 +1139,15 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
 }
 
 async function build3dSurfaceStrip(targetHeight) {
-  const sources = current3dSources();
+  const sources = await applyAssetColorToSources(current3dSources(), currentAssetColor());
   const orientation = current3dOrientation();
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation);
 }
 
 async function build3dPartitionSurfaceStrip(targetHeight, partitionKey, orientationOverride = null) {
-  const sources = current3dPartitionSources(partitionKey);
-  const orientation = orientationOverride || current3dPartitionOrientation(partitionKey);
   const settings = partitionSettingsForKey(partitionKey);
+  const sources = await applyAssetColorToSources(current3dPartitionSources(partitionKey), settings.assetColor);
+  const orientation = orientationOverride || current3dPartitionOrientation(partitionKey);
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation, {
     // Keep partition artwork inline in vertical mode; rotate only at draw time.
     preserveInlineWhenVertical: true,
@@ -2594,6 +2746,13 @@ function currentBackgroundColor() {
   return bgColorControl.value || "#fff8a5";
 }
 
+function currentAssetColor() {
+  if (!assetColorControl) {
+    return "#111111";
+  }
+  return /^#[0-9a-f]{6}$/i.test(assetColorControl.value || "") ? assetColorControl.value : "#111111";
+}
+
 function currentAssetGap() {
   if (!assetGapControl) {
     return 0;
@@ -2761,6 +2920,7 @@ function getCurrentLoopConfig() {
     padTopBottom: currentDirectionIsPartitioned() ? activePartitionSettings.padTopBottom : currentPadTopBottom(),
     padLeftRight: currentDirectionIsPartitioned() ? activePartitionSettings.padLeftRight : currentPadLeftRight(),
     backgroundColor: currentDirectionIsPartitioned() ? activePartitionSettings.backgroundColor : currentBackgroundColor(),
+    assetColor: currentDirectionIsPartitioned() ? activePartitionSettings.assetColor : currentAssetColor(),
     assetGap: currentDirectionIsPartitioned() ? activePartitionSettings.assetGap : currentAssetGap(),
     artworkOrientation: currentArtworkOrientation(),
     rowCount: currentDirectionIsPartitioned() ? activePartitionSettings.rowCount : currentRowCount(),
@@ -3269,6 +3429,7 @@ function buildPartitionedSnapshotHtml(config) {
         padTopBottom: 0,
         padLeftRight: 0,
         backgroundColor: "#fff8a5",
+        assetColor: "#111111",
         assetGap: 0,
         rowCount: 1,
         rowOffset: 0,
@@ -3294,6 +3455,91 @@ function buildPartitionedSnapshotHtml(config) {
           img.addEventListener("load", resolve, { once: true });
           img.addEventListener("error", resolve, { once: true });
         });
+      }
+
+      function isLikelySvgSource(src) {
+        const value = String(src || "").trim().toLowerCase();
+        return value.startsWith("data:image/svg+xml") || /\.svg([?#].*)?$/.test(value);
+      }
+
+      function decodeSvgDataUrl(dataUrl) {
+        const raw = String(dataUrl || "");
+        const commaIndex = raw.indexOf(",");
+        if (commaIndex < 0) {
+          return "";
+        }
+        const meta = raw.slice(0, commaIndex).toLowerCase();
+        const payload = raw.slice(commaIndex + 1);
+        try {
+          if (meta.includes(";base64")) {
+            return atob(payload);
+          }
+          return decodeURIComponent(payload);
+        } catch (error) {
+          return "";
+        }
+      }
+
+      async function readSvgSourceText(src) {
+        const value = String(src || "").trim();
+        if (!value || !isLikelySvgSource(value)) {
+          return "";
+        }
+        if (value.toLowerCase().startsWith("data:image/svg+xml")) {
+          return decodeSvgDataUrl(value);
+        }
+        try {
+          const response = await fetch(value, { cache: "force-cache" });
+          if (!response.ok) {
+            return "";
+          }
+          return await response.text();
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function applyColorToSvgText(svgText, color) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(String(svgText || ""), "image/svg+xml");
+        const svg = doc.querySelector("svg");
+        if (!svg) {
+          return "";
+        }
+        const nodes = [svg, ...svg.querySelectorAll("*")];
+        nodes.forEach((node) => {
+          const fill = node.getAttribute("fill");
+          const stroke = node.getAttribute("stroke");
+          if (!fill || String(fill).toLowerCase() !== "none") {
+            node.setAttribute("fill", color);
+          }
+          if (stroke && String(stroke).toLowerCase() !== "none") {
+            node.setAttribute("stroke", color);
+          }
+          const style = node.getAttribute("style");
+          if (style) {
+            node.setAttribute(
+              "style",
+              style.replace(/fill\s*:\s*[^;]+/gi, "fill:" + color).replace(/stroke\s*:\s*[^;]+/gi, "stroke:" + color)
+            );
+          }
+        });
+        return new XMLSerializer().serializeToString(svg);
+      }
+
+      async function colorizeSvgSource(src, color) {
+        if (!isLikelySvgSource(src) || !/^#[0-9a-f]{6}$/i.test(color || "")) {
+          return src;
+        }
+        const text = await readSvgSourceText(src);
+        if (!text) {
+          return src;
+        }
+        const colored = applyColorToSvgText(text, color);
+        if (!colored) {
+          return src;
+        }
+        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(colored);
       }
 
       function orientationForPartition(partitionKey) {
@@ -3328,6 +3574,10 @@ function buildPartitionedSnapshotHtml(config) {
             typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
               ? source.backgroundColor
               : DEFAULT_PARTITION_SETTINGS.backgroundColor,
+          assetColor:
+            typeof source.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(source.assetColor)
+              ? source.assetColor
+              : DEFAULT_PARTITION_SETTINGS.assetColor,
           assetGap:
             Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS.assetGap,
           rowCount:
@@ -3492,7 +3742,11 @@ function buildPartitionedSnapshotHtml(config) {
           const partitionSettings = settingsForPartition(key);
           container.style.background = partitionSettings.backgroundColor;
           const raw = Array.isArray(partitions[key]) ? partitions[key] : [];
-          const sources = raw.length ? raw.map(normalizeArtworkSource) : [DEFAULT_SOURCE];
+          const sources = raw.length
+            ? await Promise.all(
+              raw.map((item) => colorizeSvgSource(normalizeArtworkSource(item), partitionSettings.assetColor))
+            )
+            : [DEFAULT_SOURCE];
           await renderPartition(container, sources, key);
         }
       }
@@ -3570,6 +3824,10 @@ function coerceSnapshotLoopConfig(candidate) {
     typeof candidate.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.backgroundColor)
       ? candidate.backgroundColor
       : "#fff8a5";
+  const assetColor =
+    typeof candidate.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.assetColor)
+      ? candidate.assetColor
+      : "#111111";
 
   return {
     seconds,
@@ -3578,6 +3836,7 @@ function coerceSnapshotLoopConfig(candidate) {
     padTopBottom: Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0 ? padTopBottomRaw : 0,
     padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
     backgroundColor,
+    assetColor,
     assetGap: Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : 0,
     artworkOrientation,
     artworkOrientations,
@@ -3733,6 +3992,10 @@ function saveBackgroundColor(value) {
   writeStorage(STORAGE_KEYS.bgColor, value);
 }
 
+function saveAssetColor(value) {
+  writeStorage(STORAGE_KEYS.assetColor, value);
+}
+
 function savePreviewViewMode(value) {
   writeStorage(STORAGE_KEYS.previewViewMode, normalizePreviewViewMode(value));
 }
@@ -3816,6 +4079,12 @@ function restoreLoopLayoutSettings() {
     const raw = readStorage(STORAGE_KEYS.bgColor);
     if (raw && /^#[0-9a-f]{6}$/i.test(raw)) {
       bgColorControl.value = raw;
+    }
+  }
+  if (assetColorControl) {
+    const raw = readStorage(STORAGE_KEYS.assetColor);
+    if (raw && /^#[0-9a-f]{6}$/i.test(raw)) {
+      assetColorControl.value = raw;
     }
   }
 
@@ -4021,6 +4290,7 @@ function sendLoopConfigToPreview() {
     padTopBottom: currentDirectionIsPartitioned() ? activePartitionSettings.padTopBottom : currentPadTopBottom(),
     padLeftRight: currentDirectionIsPartitioned() ? activePartitionSettings.padLeftRight : currentPadLeftRight(),
     backgroundColor: currentDirectionIsPartitioned() ? activePartitionSettings.backgroundColor : currentBackgroundColor(),
+    assetColor: currentDirectionIsPartitioned() ? activePartitionSettings.assetColor : currentAssetColor(),
     assetGap: currentDirectionIsPartitioned() ? activePartitionSettings.assetGap : currentAssetGap(),
     artworkOrientation: currentArtworkOrientation(),
     rowCount: currentDirectionIsPartitioned() ? activePartitionSettings.rowCount : currentRowCount(),
@@ -4892,16 +5162,18 @@ async function init() {
   syncViewControlsUI();
   syncPanelVisibility();
 
-  if (partitionSettingsTargetControl) {
-    partitionSettingsTargetControl.addEventListener("change", () => {
-      const key = activePartitionSettingsKeyValue();
-      applyPartitionSettingsToControls(key);
-      syncEffectiveLoopPadding();
-      syncVisualizationPaddingScaled();
-      syncVisualizationGapScaled();
-      syncPartitionEditorVisuals();
-      render3dPreview();
-      sendLoopConfigToPreview();
+  if (partitionSettingsTabs.length) {
+    partitionSettingsTabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const key = normalizePartitionKey(tab.dataset.partitionKey) || "left";
+        applyPartitionSettingsToControls(key);
+        syncEffectiveLoopPadding();
+        syncVisualizationPaddingScaled();
+        syncVisualizationGapScaled();
+        syncPartitionEditorVisuals();
+        render3dPreview();
+        sendLoopConfigToPreview();
+      });
     });
   }
 
@@ -4963,6 +5235,19 @@ async function init() {
       }
       syncVisualizationBackground();
       syncPartitionEditorVisuals();
+      render3dPreview();
+      sendLoopConfigToPreview();
+    });
+  }
+
+  if (assetColorControl) {
+    assetColorControl.addEventListener("input", () => {
+      if (currentDirectionIsPartitioned()) {
+        writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
+        savePartitionSettings(partitionSettingsByKey);
+      } else {
+        saveAssetColor(currentAssetColor());
+      }
       render3dPreview();
       sendLoopConfigToPreview();
     });

@@ -29,6 +29,11 @@
             <h3 id="settingsTitle" class="settings-title">linear billboard settings</h3>
 
             <section class="settings-group">
+              <div id="partitionSettingsTabs" class="partition-settings-tabs" role="tablist" aria-label="Partition settings tabs">
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="left" aria-selected="true">7th</button>
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="curve" aria-selected="false">curve</button>
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="right" aria-selected="false">47th</button>
+              </div>
               <div class="settings-row settings-row-speed">
                 <span class="settings-label">speed</span>
                 <input
@@ -56,7 +61,13 @@
               </div>
               <div class="settings-row">
                 <span class="settings-label">bg color</span>
-                <input id="bgColorControl" type="color" value="#fff8a5" />
+                <div class="settings-inline-controls">
+                  <input id="bgColorControl" type="color" value="#fff8a5" />
+                  <label class="settings-inline-field" for="assetColorControl">
+                    <span>asset</span>
+                    <input id="assetColorControl" type="color" value="#111111" />
+                  </label>
+                </div>
               </div>
               <div class="settings-row">
                 <span class="settings-label">asset gap</span>
@@ -73,40 +84,30 @@
               </div>
               <div id="partitionOrientationRows">
                 <div class="settings-row">
-                  <span class="settings-label">facing 7th orientation</span>
-                  <div class="orientation-toggle" role="radiogroup" aria-label="Facing 7th orientation">
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationLeftControl" data-value="horizontal">hor</button>
+                  <span id="partitionActiveOrientationLabel" class="settings-label">7th orientation</span>
+                  <div class="orientation-toggle" role="radiogroup" aria-label="Partition orientation">
+                    <button
+                      type="button"
+                      id="partitionActiveOrientationHorizontal"
+                      class="orientation-choice"
+                      role="radio"
+                      data-orientation-target="partitionOrientationLeftControl"
+                      data-value="horizontal"
+                    >hor</button>
                     <span>/</span>
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationLeftControl" data-value="vertical">vert</button>
+                    <button
+                      type="button"
+                      id="partitionActiveOrientationVertical"
+                      class="orientation-choice"
+                      role="radio"
+                      data-orientation-target="partitionOrientationLeftControl"
+                      data-value="vertical"
+                    >vert</button>
                   </div>
                   <input id="partitionOrientationLeftControl" type="hidden" value="horizontal" />
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">curve orientation</span>
-                  <div class="orientation-toggle" role="radiogroup" aria-label="Curve orientation">
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationCurveControl" data-value="horizontal">hor</button>
-                    <span>/</span>
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationCurveControl" data-value="vertical">vert</button>
-                  </div>
                   <input id="partitionOrientationCurveControl" type="hidden" value="horizontal" />
-                </div>
-                <div class="settings-row">
-                  <span class="settings-label">facing 47th orientation</span>
-                  <div class="orientation-toggle" role="radiogroup" aria-label="Facing 47th orientation">
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationRightControl" data-value="horizontal">hor</button>
-                    <span>/</span>
-                    <button type="button" class="orientation-choice" role="radio" data-orientation-target="partitionOrientationRightControl" data-value="vertical">vert</button>
-                  </div>
                   <input id="partitionOrientationRightControl" type="hidden" value="horizontal" />
                 </div>
-              </div>
-              <div id="partitionSettingsTargetRow" class="settings-row">
-                <span class="settings-label">partition settings</span>
-                <select id="partitionSettingsTargetControl" aria-label="Partition settings target">
-                  <option value="left">facing 7th</option>
-                  <option value="curve">curve</option>
-                  <option value="right">facing 47th</option>
-                </select>
               </div>
               <div class="settings-row settings-row-compact-pairs settings-row-rows-inline">
                 <div class="settings-inline-controls">

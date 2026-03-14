@@ -558,12 +558,31 @@ body.dark-mode .orientation-choice.inactive {
   display: grid;
 }
 
-#partitionSettingsTargetRow {
+.partition-settings-tabs {
   display: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
-.app-shell.partitioned-mode #partitionSettingsTargetRow {
-  display: grid;
+.partition-settings-tab {
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  color: #1f1f1f;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  text-transform: lowercase;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.partition-settings-tab.inactive {
+  color: #5d5d5d;
+  text-decoration: line-through;
+}
+
+.app-shell.partitioned-mode .partition-settings-tabs {
+  display: flex;
 }
 
 .app-shell.preview-3d-mode #billboardPreview {
@@ -869,6 +888,10 @@ body.dark-mode .view-controls-panel {
   border: 1px solid #b3b3b3;
   padding: 0;
   background: #fff;
+}
+
+.settings-inline-field input[type="color"] {
+  width: 54px;
 }
 
 .settings-row select {

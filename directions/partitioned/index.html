@@ -167,6 +167,7 @@
         padTopBottom: 0,
         padLeftRight: 0,
         backgroundColor: "#fff8a5",
+        assetColor: "#111111",
         assetGap: 0,
         artworkOrientation: "horizontal",
         artworkOrientations: {
@@ -183,6 +184,7 @@
         padTopBottom: 0,
         padLeftRight: 0,
         backgroundColor: "#fff8a5",
+        assetColor: "#111111",
         assetGap: 0,
         rowCount: 1,
         rowOffset: 0,
@@ -227,6 +229,91 @@
         });
       }
 
+      function isLikelySvgSource(src) {
+        const value = String(src || "").trim().toLowerCase();
+        return value.startsWith("data:image/svg+xml") || /\.svg([?#].*)?$/.test(value);
+      }
+
+      function decodeSvgDataUrl(dataUrl) {
+        const raw = String(dataUrl || "");
+        const commaIndex = raw.indexOf(",");
+        if (commaIndex < 0) {
+          return "";
+        }
+        const meta = raw.slice(0, commaIndex).toLowerCase();
+        const payload = raw.slice(commaIndex + 1);
+        try {
+          if (meta.includes(";base64")) {
+            return atob(payload);
+          }
+          return decodeURIComponent(payload);
+        } catch (error) {
+          return "";
+        }
+      }
+
+      async function readSvgSourceText(src) {
+        const value = String(src || "").trim();
+        if (!value || !isLikelySvgSource(value)) {
+          return "";
+        }
+        if (value.toLowerCase().startsWith("data:image/svg+xml")) {
+          return decodeSvgDataUrl(value);
+        }
+        try {
+          const response = await fetch(value, { cache: "force-cache" });
+          if (!response.ok) {
+            return "";
+          }
+          return await response.text();
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function applyColorToSvgText(svgText, color) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(String(svgText || ""), "image/svg+xml");
+        const svg = doc.querySelector("svg");
+        if (!svg) {
+          return "";
+        }
+        const nodes = [svg, ...svg.querySelectorAll("*")];
+        nodes.forEach((node) => {
+          const fill = node.getAttribute("fill");
+          const stroke = node.getAttribute("stroke");
+          if (!fill || String(fill).toLowerCase() !== "none") {
+            node.setAttribute("fill", color);
+          }
+          if (stroke && String(stroke).toLowerCase() !== "none") {
+            node.setAttribute("stroke", color);
+          }
+          const style = node.getAttribute("style");
+          if (style) {
+            node.setAttribute(
+              "style",
+              style.replace(/fill\s*:\s*[^;]+/gi, `fill:${color}`).replace(/stroke\s*:\s*[^;]+/gi, `stroke:${color}`)
+            );
+          }
+        });
+        return new XMLSerializer().serializeToString(svg);
+      }
+
+      async function colorizeSvgSource(src, color) {
+        if (!isLikelySvgSource(src) || !/^#[0-9a-f]{6}$/i.test(color || "")) {
+          return src;
+        }
+        const text = await readSvgSourceText(src);
+        if (!text) {
+          return src;
+        }
+        const colored = applyColorToSvgText(text, color);
+        if (!colored) {
+          return src;
+        }
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(colored)}`;
+      }
+
       function orientationForPartition(partitionKey) {
         if (state.artworkOrientations && typeof state.artworkOrientations === "object") {
           return state.artworkOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
@@ -258,6 +345,10 @@
             typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
               ? source.backgroundColor
               : DEFAULT_PARTITION_SETTINGS.backgroundColor,
+          assetColor:
+            typeof source.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(source.assetColor)
+              ? source.assetColor
+              : DEFAULT_PARTITION_SETTINGS.assetColor,
           assetGap:
             Number.isFinite(assetGapRaw) && assetGapRaw >= 0 ? assetGapRaw : DEFAULT_PARTITION_SETTINGS.assetGap,
           rowCount:
@@ -450,8 +541,10 @@
           const sourceList = Array.isArray(sourceListRaw) && sourceListRaw.length
             ? sourceListRaw
             : [DEFAULT_SOURCE];
-          const normalizedSources = sourceList.map(normalizeArtworkSource);
           const partitionSettings = settingsForPartition(key);
+          const normalizedSources = await Promise.all(
+            sourceList.map((item) => colorizeSvgSource(normalizeArtworkSource(item), partitionSettings.assetColor))
+          );
           const appliedPartitionPadTopBottomRaw = (partitionSettings.padTopBottom / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
           const appliedPartitionPadLeftRightRaw = (partitionSettings.padLeftRight / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
           const maxPartitionPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
@@ -586,6 +679,9 @@
         if (typeof payload.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(payload.backgroundColor)) {
           state.backgroundColor = payload.backgroundColor;
         }
+        if (typeof payload.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(payload.assetColor)) {
+          state.assetColor = payload.assetColor;
+        }
 
         const assetGap = Number(payload.assetGap);
         if (Number.isFinite(assetGap) && assetGap >= 0) {
@@ -646,6 +742,10 @@
                 typeof source.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(source.backgroundColor)
                   ? source.backgroundColor
                   : existing.backgroundColor,
+              assetColor:
+                typeof source.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(source.assetColor)
+                  ? source.assetColor
+                  : existing.assetColor,
               assetGap:
                 Number.isFinite(Number(source.assetGap)) && Number(source.assetGap) >= 0
                   ? Number(source.assetGap)
