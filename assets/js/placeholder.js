@@ -691,8 +691,8 @@ function current3dPartitionOrientation(partitionKey) {
   if (!key) {
     return "horizontal";
   }
-  // Partitioned artworks are always authored as inline strips.
-  return "horizontal";
+  const orientations = currentPartitionArtworkOrientations();
+  return orientations[key] === "vertical" ? "vertical" : "horizontal";
 }
 
 function current3dSources() {
@@ -2969,10 +2969,10 @@ function buildPartitionedSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: rotate(90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: rotate(90deg) translateX(0);
+          transform: rotate(-90deg) translateX(0);
         }
       }
 
@@ -3040,8 +3040,10 @@ function buildPartitionedSnapshotHtml(config) {
       }
 
       function orientationForPartition(partitionKey) {
-        // Partitioned output always renders inline artwork for all panels.
-        return "horizontal";
+        if (state.artworkOrientations && typeof state.artworkOrientations === "object") {
+          return state.artworkOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+        }
+        return state.artworkOrientation === "vertical" ? "vertical" : "horizontal";
       }
 
       async function resolvePartitionWidth(container, partitionKey) {
@@ -3076,12 +3078,8 @@ function buildPartitionedSnapshotHtml(config) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const verticalSidePadding = Math.max(0, Number(state.padTopBottom) || 0);
-        const sidePadding = verticalFlow
-          ? verticalSidePadding
-          : Math.max(0, Number(state.padLeftRight) || 0);
-        const partitionWidth = Math.max(1, await resolvePartitionWidth(container, partitionKey));
-        const verticalArtworkHeight = Math.max(1, partitionWidth - verticalSidePadding * 2);
+        // Keep artwork inline in all orientations; vertical only changes track rotation/direction.
+        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -3106,9 +3104,6 @@ function buildPartitionedSnapshotHtml(config) {
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
-            if (verticalFlow) {
-              image.style.height = verticalArtworkHeight + "px";
-            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
