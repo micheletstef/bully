@@ -497,6 +497,7 @@ function applyPartitionSettingsToControls(partitionKey) {
   if (rowGapControl) {
     rowGapControl.value = String(settings.rowGap);
   }
+  loopDurationSeconds = settings.seconds;
   loopTraverseSeconds = settings.seconds;
   loopAssetGap = settings.assetGap;
   loopRowGap = settings.rowGap;
@@ -5145,6 +5146,8 @@ async function init() {
   partitionArtworks = restorePartitionArtworks();
   partitionSettingsByKey = restorePartitionSettings();
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
+  loopDurationSeconds = currentSpeedSeconds();
+  loopTraverseSeconds = loopDurationSeconds;
 
   try {
     let directions = [];
@@ -5191,15 +5194,20 @@ async function init() {
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
-      loopDurationSeconds = currentSpeedSeconds();
+      const nextSeconds = currentSpeedSeconds();
+      loopDurationSeconds = nextSeconds;
+      loopTraverseSeconds = nextSeconds;
       syncSpeedReadout();
       if (currentDirectionIsPartitioned()) {
         writeCurrentControlsToPartitionSettings(activePartitionSettingsKeyValue());
         savePartitionSettings(partitionSettingsByKey);
       } else {
-        saveSpeed(currentSpeedSeconds());
+        saveSpeed(nextSeconds);
       }
+      render3dPreview();
       sendLoopConfigToPreview();
+      updateActiveWindow();
+      updatePartitionActiveWindows();
     });
   }
 
