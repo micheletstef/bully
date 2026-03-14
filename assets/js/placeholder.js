@@ -1751,26 +1751,10 @@ function set3dLoaderVisible(isVisible, label = "loading 3D...") {
 }
 
 function set3dCameraModeStatus(label) {
-  if (!billboardPreview3d) {
-    return;
+  const node = document.getElementById("billboard3dCameraMode");
+  if (node && node.parentNode) {
+    node.parentNode.removeChild(node);
   }
-  let node = document.getElementById("billboard3dCameraMode");
-  if (!node) {
-    node = document.createElement("div");
-    node.id = "billboard3dCameraMode";
-    node.style.position = "absolute";
-    node.style.left = "10px";
-    node.style.bottom = "10px";
-    node.style.zIndex = "6";
-    node.style.padding = "2px 5px";
-    node.style.fontFamily = '"Courier New", Courier, monospace';
-    node.style.fontSize = "10px";
-    node.style.color = "#fff";
-    node.style.background = "rgba(0, 0, 0, 0.3)";
-    node.style.pointerEvents = "none";
-    billboardPreview3d.appendChild(node);
-  }
-  node.textContent = label;
 }
 
 function ensureThreePreviewSetup() {
@@ -4862,11 +4846,12 @@ async function init() {
     const stageHeight = Number(payload.stageHeight);
     const assetGap = Number(payload.assetGap);
     const loopDistance = Number(payload.loopDistance);
+    const shouldUpdateViewportMetrics = previewViewMode !== "3d";
 
     if (Number.isFinite(progress)) {
       loopPlaybackProgress = progress;
     }
-    if (Number.isFinite(viewportRatio)) {
+    if (shouldUpdateViewportMetrics && Number.isFinite(viewportRatio)) {
       loopPlaybackViewportRatio = viewportRatio;
     }
     if (Number.isFinite(elapsedSeconds)) {
@@ -4891,7 +4876,7 @@ async function init() {
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
     }
-    if (payload.partitions && typeof payload.partitions === "object") {
+    if (shouldUpdateViewportMetrics && payload.partitions && typeof payload.partitions === "object") {
       PARTITION_KEYS.forEach((key) => {
         const part = payload.partitions[key];
         if (!part || typeof part !== "object") {
@@ -4906,7 +4891,7 @@ async function init() {
           partitionLoopDistances[key] = distance;
         }
       });
-    } else {
+    } else if (shouldUpdateViewportMetrics) {
       PARTITION_KEYS.forEach((key) => {
         partitionViewportRatios[key] = loopPlaybackViewportRatio;
         partitionLoopDistances[key] = loopDistanceSource;
