@@ -504,6 +504,8 @@
         timer: null
       };
       let previewRenderToken = 0;
+      let previewUpdateInFlight = false;
+      let previewUpdateQueued = false;
       let previewFrameMetrics = null;
       let cropDragState = null;
       let boundsCanvas = null;
@@ -987,7 +989,7 @@
         return frame.image;
       }
 
-      async function updatePreview() {
+      async function performPreviewUpdate() {
         if (!state.frames.length) {
           previewCanvas.style.display = "none";
           emptyState.style.display = "block";
@@ -1017,6 +1019,24 @@
         previewCanvas.style.display = "block";
         drawPreviewFrame(frame, image, normalizedOffset, scaleFactor);
         emptyState.style.display = "none";
+      }
+
+      function updatePreview() {
+        previewUpdateQueued = true;
+        if (previewUpdateInFlight) {
+          return;
+        }
+        previewUpdateInFlight = true;
+        (async () => {
+          try {
+            while (previewUpdateQueued) {
+              previewUpdateQueued = false;
+              await performPreviewUpdate();
+            }
+          } finally {
+            previewUpdateInFlight = false;
+          }
+        })();
       }
 
       function renderFrameList() {
