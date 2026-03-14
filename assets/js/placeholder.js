@@ -3865,7 +3865,7 @@ function renderLoopPreview() {
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
 
-  loopArtworks.forEach((item, index) => {
+  loopArtworks.forEach((item) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
     tile.dataset.index = String(index);
@@ -3876,24 +3876,6 @@ function renderLoopPreview() {
     image.alt = "";
     image.draggable = false;
     tile.appendChild(image);
-
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "remove-loop-item";
-    removeButton.textContent = "x";
-    removeButton.title = "Remove asset";
-    removeButton.setAttribute("aria-label", "Remove asset");
-    const consumePointer = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    removeButton.addEventListener("mousedown", consumePointer);
-    removeButton.addEventListener("touchstart", consumePointer, { passive: false });
-    removeButton.addEventListener("click", (event) => {
-      consumePointer(event);
-      removeArtwork(index);
-    });
-    tile.appendChild(removeButton);
 
     loopPreviewTrack.appendChild(tile);
   });
@@ -4087,7 +4069,7 @@ function renderPartitionEditor(partitionKey) {
   spacerStart.className = "partition-preview-spacer partition-preview-segment";
   trackEl.appendChild(spacerStart);
 
-  items.forEach((item, index) => {
+  items.forEach((item) => {
     const tile = document.createElement("div");
     tile.className = "partition-preview-item partition-preview-segment";
     tile.dataset.artworkId = item.id;
@@ -4098,16 +4080,6 @@ function renderPartitionEditor(partitionKey) {
     image.draggable = false;
     tile.appendChild(image);
 
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "remove-partition-item";
-    removeButton.textContent = "x";
-    removeButton.title = "Remove asset";
-    removeButton.setAttribute("aria-label", "Remove asset");
-    removeButton.addEventListener("click", () => {
-      removePartitionArtwork(key, index);
-    });
-    tile.appendChild(removeButton);
     trackEl.appendChild(tile);
   });
 
@@ -4255,10 +4227,29 @@ async function initLoopSortable() {
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
+      onStart: (evt) => {
+        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+        updateLatestPointerFromEvent(originalEvent);
+      },
+      onMove: (evt) => {
+        const originalEvent = evt && evt.originalEvent ? evt.originalEvent : null;
+        updateLatestPointerFromEvent(originalEvent);
+        return true;
+      },
       onChange: () => {
         updateActiveWindow();
       },
-      onEnd: () => {
+      onEnd: (evt) => {
+        const draggedId = evt && evt.item && evt.item.dataset ? evt.item.dataset.artworkId : "";
+        const pointer = pointerFromSortableEvent(evt);
+        if (draggedId && pointer) {
+          const dropTarget = document.elementFromPoint(pointer.x, pointer.y);
+          const droppedTrack = dropTarget ? dropTarget.closest(".loop-preview-track") : null;
+          if (!droppedTrack) {
+            removeArtworkById(draggedId);
+            return;
+          }
+        }
         const idOrder = [...loopPreviewTrack.querySelectorAll(".loop-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
@@ -4359,6 +4350,22 @@ function removeArtwork(index) {
   saveArtworks(loopArtworks);
   renderLoopPreview();
   sendLoopConfigToPreview();
+}
+
+function removeArtworkById(artworkId) {
+  const id = String(artworkId || "");
+  if (!id || loopArtworks.length <= 1) {
+    return false;
+  }
+  const index = loopArtworks.findIndex((item) => item && item.id === id);
+  if (index < 0) {
+    return false;
+  }
+  loopArtworks.splice(index, 1);
+  saveArtworks(loopArtworks);
+  renderLoopPreview();
+  sendLoopConfigToPreview();
+  return true;
 }
 
 function renderDirectory(directions) {
