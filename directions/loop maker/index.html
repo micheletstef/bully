@@ -341,6 +341,15 @@
           </div>
 
           <div class="row">
+            <label for="autoCenterInput">content centering</label>
+            <div class="fps-line">
+              <input id="autoCenterInput" type="checkbox" />
+              <span id="autoCenterValue">off</span>
+            </div>
+            <div class="timing">detects visible pixel bounds and centers per frame</div>
+          </div>
+
+          <div class="row">
             <label>crop (percent)</label>
             <div class="crop-grid">
               <div class="fps-line">
@@ -410,6 +419,8 @@
       const timingValue = document.getElementById("timingValue");
       const frameStepInput = document.getElementById("frameStepInput");
       const frameStepValue = document.getElementById("frameStepValue");
+      const autoCenterInput = document.getElementById("autoCenterInput");
+      const autoCenterValue = document.getElementById("autoCenterValue");
       const cropTopInput = document.getElementById("cropTopInput");
       const cropRightInput = document.getElementById("cropRightInput");
       const cropBottomInput = document.getElementById("cropBottomInput");
@@ -435,6 +446,7 @@
         fps: 8,
         speedMultiplier: 1,
         frameStep: 1,
+        autoCenterContent: false,
         cropTop: 0,
         cropRight: 0,
         cropBottom: 0,
@@ -445,6 +457,8 @@
       let previewRenderToken = 0;
       let previewFrameMetrics = null;
       let cropDragState = null;
+      let boundsCanvas = null;
+      let boundsContext = null;
 
       function setStatus(message) {
         status.textContent = String(message || "");
@@ -463,6 +477,103 @@
         const step = Math.max(1, Math.round(Number(state.frameStep) || 1));
         const result = state.frames.filter((_, index) => index % step === 0);
         return result.length ? result : state.frames.slice(0, 1);
+      }
+
+      function getBoundsContext(width, height) {
+        const safeWidth = Math.max(1, Math.round(width));
+        const safeHeight = Math.max(1, Math.round(height));
+        if (!boundsCanvas) {
+          boundsCanvas = document.createElement("canvas");
+        }
+        if (boundsCanvas.width !== safeWidth || boundsCanvas.height !== safeHeight) {
+          boundsCanvas.width = safeWidth;
+          boundsCanvas.height = safeHeight;
+        }
+        if (!boundsContext) {
+          boundsContext = boundsCanvas.getContext("2d", { willReadFrequently: true });
+        }
+        return boundsContext;
+      }
+
+      function contentBoundsCacheKey(cropRect) {
+        return `${cropRect.sx}:${cropRect.sy}:${cropRect.sw}:${cropRect.sh}`;
+      }
+
+      function detectFrameContentBounds(frame, image, cropRect) {
+        if (!frame || !image || !cropRect) {
+          return {
+            cx: cropRect ? cropRect.sw * 0.5 : 0,
+            cy: cropRect ? cropRect.sh * 0.5 : 0
+          };
+        }
+        if (!frame.boundsCache || typeof frame.boundsCache !== "object") {
+          frame.boundsCache = Object.create(null);
+        }
+        const cacheKey = contentBoundsCacheKey(cropRect);
+        const cached = frame.boundsCache[cacheKey];
+        if (cached) {
+          return cached;
+        }
+        const context = getBoundsContext(cropRect.sw, cropRect.sh);
+        if (!context) {
+          const fallback = { cx: cropRect.sw * 0.5, cy: cropRect.sh * 0.5 };
+          frame.boundsCache[cacheKey] = fallback;
+          return fallback;
+        }
+        context.clearRect(0, 0, cropRect.sw, cropRect.sh);
+        context.drawImage(image, cropRect.sx, cropRect.sy, cropRect.sw, cropRect.sh, 0, 0, cropRect.sw, cropRect.sh);
+        const imageData = context.getImageData(0, 0, cropRect.sw, cropRect.sh).data;
+        let minX = cropRect.sw;
+        let minY = cropRect.sh;
+        let maxX = -1;
+        let maxY = -1;
+        const alphaThreshold = 8;
+        for (let index = 3; index < imageData.length; index += 4) {
+          const alpha = imageData[index];
+          if (alpha <= alphaThreshold) {
+            continue;
+          }
+          const pixelIndex = (index - 3) / 4;
+          const x = pixelIndex % cropRect.sw;
+          const y = Math.floor(pixelIndex / cropRect.sw);
+          if (x < minX) {
+            minX = x;
+          }
+          if (y < minY) {
+            minY = y;
+          }
+          if (x > maxX) {
+            maxX = x;
+          }
+          if (y > maxY) {
+            maxY = y;
+          }
+        }
+        const bounds = maxX < 0 || maxY < 0
+          ? { cx: cropRect.sw * 0.5, cy: cropRect.sh * 0.5 }
+          : {
+              cx: (minX + maxX + 1) * 0.5,
+              cy: (minY + maxY + 1) * 0.5
+            };
+        frame.boundsCache[cacheKey] = bounds;
+        return bounds;
+      }
+
+      function autoCenterShiftPx(frame, image, cropRect, destWidth, destHeight) {
+        if (!state.autoCenterContent) {
+          return { x: 0, y: 0 };
+        }
+        const bounds = detectFrameContentBounds(frame, image, cropRect);
+        const centerX = cropRect.sw * 0.5;
+        const centerY = cropRect.sh * 0.5;
+        const offsetSourceX = centerX - bounds.cx;
+        const offsetSourceY = centerY - bounds.cy;
+        const scaleX = destWidth / Math.max(1, cropRect.sw);
+        const scaleY = destHeight / Math.max(1, cropRect.sh);
+        return {
+          x: offsetSourceX * scaleX,
+          y: offsetSourceY * scaleY
+        };
       }
 
       function updateButtons() {
@@ -533,7 +644,7 @@
         return { cssWidth, cssHeight, dpr };
       }
 
-      function drawPreviewFrame(image) {
+      function drawPreviewFrame(frame, image) {
         const context = previewCanvas.getContext("2d", { willReadFrequently: true });
         if (!context) {
           return;
@@ -553,6 +664,7 @@
         }
         const dx = (cssWidth - dw) * 0.5;
         const dy = (cssHeight - dh) * 0.5;
+        const offset = autoCenterShiftPx(frame, image, cropRect, dw, dh);
         context.imageSmoothingEnabled = true;
         context.drawImage(
           image,
@@ -560,8 +672,8 @@
           cropRect.sy,
           cropRect.sw,
           cropRect.sh,
-          dx,
-          dy,
+          dx + offset.x,
+          dy + offset.y,
           dw,
           dh
         );
@@ -621,7 +733,7 @@
           return;
         }
         previewCanvas.style.display = "block";
-        drawPreviewFrame(image);
+        drawPreviewFrame(frame, image);
         emptyState.style.display = "none";
       }
 
@@ -720,6 +832,10 @@
         frameStepValue.textContent = step <= 1 ? "every frame" : `every ${step} frames`;
       }
 
+      function syncAutoCenterReadout() {
+        autoCenterValue.textContent = state.autoCenterContent ? "on" : "off";
+      }
+
       function syncCropReadout() {
         cropTopValue.textContent = `top ${state.cropTop}%`;
         cropRightValue.textContent = `right ${state.cropRight}%`;
@@ -737,6 +853,7 @@
         syncSpeedReadout();
         syncTimingReadout();
         syncFrameStepReadout();
+        syncAutoCenterReadout();
         syncCropReadout();
       }
 
@@ -785,7 +902,8 @@
             name: file.name || "frame",
             file,
             url: URL.createObjectURL(file),
-            image: null
+            image: null,
+            boundsCache: Object.create(null)
           });
         });
         state.currentIndex = 0;
@@ -844,8 +962,10 @@
             workerScript: "https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js"
           });
 
-          loadedImages.forEach((image) => {
+          loadedImages.forEach((image, index) => {
+            const frame = frames[index];
             const cropRect = cropRectForImage(image);
+            const offset = autoCenterShiftPx(frame, image, cropRect, width, height);
             context.clearRect(0, 0, width, height);
             context.drawImage(
               image,
@@ -853,8 +973,8 @@
               cropRect.sy,
               cropRect.sw,
               cropRect.sh,
-              0,
-              0,
+              offset.x,
+              offset.y,
               width,
               height
             );
@@ -938,6 +1058,12 @@
         state.currentIndex = 0;
         updateAllReadouts();
         restartPlayback();
+      });
+
+      autoCenterInput.addEventListener("change", () => {
+        state.autoCenterContent = Boolean(autoCenterInput.checked);
+        updateAllReadouts();
+        updatePreview();
       });
 
       [cropTopInput, cropRightInput, cropBottomInput, cropLeftInput].forEach((input) => {
@@ -1043,6 +1169,7 @@
 
       syncPlaybackButton();
       syncCropInputsFromState();
+      autoCenterInput.checked = state.autoCenterContent;
       updateAllReadouts();
       updateButtons();
       updatePreview();

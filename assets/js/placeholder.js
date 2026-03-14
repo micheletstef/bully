@@ -1169,7 +1169,10 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
   const widths = widthsDesign.map((width) => Math.max(1, Math.round(width * scale)));
   const sequenceWidth = Math.max(
     1,
-    Math.round(padLRPx * 2 + widths.reduce((sum, value) => sum + value, 0) + Math.max(0, images.length - 1) * gapPx)
+    // Include the wrap gap (last -> first) so single-asset loops still show asset gap.
+    Math.round(
+      padLRPx * 2 + widths.reduce((sum, value) => sum + value, 0) + Math.max(0, images.length) * gapPx
+    )
   );
   const stripCanvas = document.createElement("canvas");
   stripCanvas.width = sequenceWidth * 2;
@@ -1538,7 +1541,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   }
   const meshHeight = Math.max(1, centerTop.point.distanceTo(centerBottom.point));
   const outwardOffset = Math.max(0.001, meshHeight * 0.001);
-  const partitionLabelLift = Math.max(0.001, meshHeight * 0.018);
+  const partitionLabelLift = Math.max(0.001, meshHeight * 0.032);
   const worldUp = new THREE.Vector3(0, 1, 0);
   const partitionLabels = [
     { key: "left", text: "7th" },
@@ -1559,9 +1562,9 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.max(0.001, meshHeight * 0.044),
+      worldHeight: Math.max(0.001, meshHeight * 0.034),
       color: "#111111",
-      fontSize: 48
+      fontSize: 40
     });
     if (!sprite) {
       return;
