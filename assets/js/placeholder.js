@@ -4331,20 +4331,27 @@ function updateActiveWindow() {
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${traverseElapsed.toFixed(1)}s/${traverseDuration.toFixed(1)}s`;
-    let activeCenterX = loopVisualization.clientWidth / 2;
-    if (mainWidth > 0 || overflowWidth > 0) {
-      const primaryCenter = drawX + mainWidth / 2;
-      const secondaryCenter = baseX + overflowWidth / 2;
-      if (mainWidth > 0 && overflowWidth > 0) {
-        activeCenterX = mainWidth >= overflowWidth ? primaryCenter : secondaryCenter;
-      } else if (mainWidth > 0) {
-        activeCenterX = primaryCenter;
-      } else {
-        activeCenterX = secondaryCenter;
-      }
+    const offsetParent = loopElapsedTime.offsetParent || loopVisualization.parentElement || document.body;
+    const parentRect =
+      offsetParent && offsetParent.getBoundingClientRect
+        ? offsetParent.getBoundingClientRect()
+        : { left: 0, top: 0 };
+    const parentScrollLeft = Number(offsetParent && offsetParent.scrollLeft) || 0;
+    const parentScrollTop = Number(offsetParent && offsetParent.scrollTop) || 0;
+    const visualizationRect = loopVisualization.getBoundingClientRect();
+    const primaryRect = loopActiveWindow.getBoundingClientRect();
+    const secondaryRect =
+      loopActiveWindowSecondary && loopActiveWindowSecondary.style.display !== "none"
+        ? loopActiveWindowSecondary.getBoundingClientRect()
+        : null;
+    let activeRect = primaryRect;
+    if (secondaryRect && secondaryRect.width > primaryRect.width) {
+      activeRect = secondaryRect;
+    } else if (primaryRect.width <= 0 && secondaryRect) {
+      activeRect = secondaryRect;
     }
-    const centeredLeft = loopVisualization.offsetLeft + activeCenterX;
-    const outsideBottomTop = loopVisualization.offsetTop + frameHeight + 6;
+    const centeredLeft = activeRect.left + activeRect.width / 2 - parentRect.left + parentScrollLeft;
+    const outsideBottomTop = visualizationRect.bottom - parentRect.top + parentScrollTop + 6;
     loopElapsedTime.style.left = `${centeredLeft}px`;
     loopElapsedTime.style.top = `${outsideBottomTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
