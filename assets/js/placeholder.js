@@ -4887,6 +4887,13 @@ async function init() {
   syncVisualizationGapScaled();
   syncPartitionEditorVisuals();
   syncVisualizationGeometry();
+  sendLoopConfigToPreview();
+  window.requestAnimationFrame(() => {
+    sendLoopConfigToPreview();
+  });
+  window.setTimeout(() => {
+    sendLoopConfigToPreview();
+  }, 120);
 }
 
 function waitForThreeBootstrap(timeoutMs = 4000) {
