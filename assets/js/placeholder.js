@@ -1609,39 +1609,22 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     if (!frame || !frame.normal) {
       return;
     }
-    const labelMesh = create3dTextLabelMesh(THREE, text, {
+    const labelSprite = create3dTextSprite(THREE, text, {
       worldHeight: Math.max(0.001, meshHeight * 0.028),
       color: "#111111",
       fontSize: 34
     });
-    if (!labelMesh) {
+    if (!labelSprite) {
       return;
     }
-    labelMesh.position.copy(
+    labelSprite.position.copy(
       frame.point
         .clone()
         .add(worldUp.clone().multiplyScalar(partitionLabelLift))
         .add(frame.normal.clone().multiplyScalar(outwardOffset * 1.2))
     );
-    const up = frame.up.clone().normalize();
-    let normal = frame.normal.clone().normalize();
-    if (normal.lengthSq() <= 1e-8) {
-      normal = new THREE.Vector3(0, 0, 1);
-    }
-    let right =
-      frame.tangentU && frame.tangentU.lengthSq() > 1e-8
-        ? frame.tangentU.clone().normalize()
-        : normal.clone().cross(up).normalize();
-    if (right.lengthSq() <= 1e-8) {
-      right = new THREE.Vector3(1, 0, 0);
-    }
-    const orthogonalUp = normal.clone().cross(right).normalize();
-    const safeUp = orthogonalUp.lengthSq() > 1e-8 ? orthogonalUp : up;
-    const basis = new THREE.Matrix4();
-    basis.makeBasis(right, safeUp, normal);
-    labelMesh.quaternion.setFromRotationMatrix(basis);
-    labelMesh.renderOrder = 1000;
-    group.add(labelMesh);
+    labelSprite.renderOrder = 1000;
+    group.add(labelSprite);
   });
   group.renderOrder = 998;
   return group;
