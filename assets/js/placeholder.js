@@ -1462,41 +1462,79 @@ function sampleMeshTopEdgePointByRatio(THREE, mesh, ratio) {
   return points[points.length - 1].clone();
 }
 
+function sampleMeshUvFrame(THREE, mesh, u, v, sampleStep = 0.02) {
+  if (!THREE || !mesh) {
+    return null;
+  }
+  const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+  const u0 = clamp01(u);
+  const v0 = clamp01(v);
+  const center = sampleMeshLocalPointByUv(THREE, mesh, u0, v0);
+  if (!center) {
+    return null;
+  }
+  const du = Math.max(0.005, Math.min(0.08, sampleStep));
+  const dv = Math.max(0.005, Math.min(0.08, sampleStep));
+  const left = sampleMeshLocalPointByUv(THREE, mesh, clamp01(u0 - du), v0) || center;
+  const right = sampleMeshLocalPointByUv(THREE, mesh, clamp01(u0 + du), v0) || center;
+  const down = sampleMeshLocalPointByUv(THREE, mesh, u0, clamp01(v0 - dv)) || center;
+  const tangentU = right.clone().sub(left);
+  const tangentV = center.clone().sub(down);
+  if (tangentU.lengthSq() <= 1e-8 || tangentV.lengthSq() <= 1e-8) {
+    return {
+      point: center,
+      up: new THREE.Vector3(0, 1, 0),
+      normal: new THREE.Vector3(0, 0, 1)
+    };
+  }
+  const up = tangentV.clone().normalize();
+  let normal = tangentU.clone().cross(up).normalize();
+  if (normal.lengthSq() <= 1e-8) {
+    normal = new THREE.Vector3(0, 0, 1);
+  }
+  return {
+    point: center,
+    up,
+    normal
+  };
+}
+
 function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   if (!THREE || !mesh || !mesh.geometry) {
     return null;
   }
   const group = new THREE.Group();
   group.name = "partition-annotations";
-  const geometry = mesh.geometry;
-  if (!geometry.boundingBox) {
-    geometry.computeBoundingBox();
-  }
-  const box = geometry.boundingBox;
-  if (!box) {
+  const centerTop = sampleMeshUvFrame(THREE, mesh, 0.5, 1, 0.03);
+  if (!centerTop) {
     return null;
   }
-  const topY = box.max.y;
-  const meshHeight = Math.max(1, box.max.y - box.min.y);
-  const lineStartOffset = Math.min(120, Math.max(24, meshHeight * 0.02));
-  const lineHeight = Math.min(520, Math.max(140, meshHeight * 0.12));
-  const dividerLabelOffset = Math.min(120, Math.max(30, meshHeight * 0.03));
-  const partitionLabelOffset = Math.min(240, Math.max(80, meshHeight * 0.065));
+  const centerMid = sampleMeshUvFrame(THREE, mesh, 0.5, 0.5, 0.03);
+  const meshHeight =
+    centerMid && centerMid.point ? Math.max(1, centerTop.point.distanceTo(centerMid.point) * 2) : 3000;
+  const lineStartOffset = Math.min(100, Math.max(18, meshHeight * 0.016));
+  const lineHeight = Math.min(360, Math.max(110, meshHeight * 0.09));
+  const dividerLabelOffset = Math.min(90, Math.max(22, meshHeight * 0.022));
+  const partitionLabelOffset = Math.min(180, Math.max(56, meshHeight * 0.045));
+  const outwardOffset = Math.min(28, Math.max(8, meshHeight * 0.004));
   const dividerMaterial = new THREE.LineBasicMaterial({
     color: 0x121212,
     transparent: true,
     opacity: 0.82,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false
   });
   [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
     .forEach((uBoundary, idx) => {
-    const anchor = sampleMeshTopEdgePointByRatio(THREE, mesh, uBoundary);
-    if (!anchor) {
+    const frame = sampleMeshUvFrame(THREE, mesh, uBoundary, 1, 0.028);
+    if (!frame) {
       return;
     }
-    const lineStart = new THREE.Vector3(anchor.x, topY + lineStartOffset, anchor.z);
-    const lineEnd = new THREE.Vector3(anchor.x, topY + lineStartOffset + lineHeight, anchor.z);
+    const lineStart = frame.point
+      .clone()
+      .add(frame.up.clone().multiplyScalar(lineStartOffset))
+      .add(frame.normal.clone().multiplyScalar(outwardOffset));
+    const lineEnd = lineStart.clone().add(frame.up.clone().multiplyScalar(lineHeight));
     const points = [lineStart, lineEnd];
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(lineGeometry, dividerMaterial.clone());
@@ -1510,7 +1548,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
       fontSize: 36
     });
     if (dividerLabel) {
-      dividerLabel.position.set(anchor.x, topY + lineStartOffset + lineHeight + dividerLabelOffset, anchor.z);
+      dividerLabel.position.copy(lineEnd.clone().add(frame.up.clone().multiplyScalar(dividerLabelOffset)));
       dividerLabel.frustumCulled = false;
       dividerLabel.renderOrder = 1000;
       group.add(dividerLabel);
@@ -1523,8 +1561,8 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const sample = sampleMeshTopEdgePointByRatio(THREE, mesh, centerDistance);
-    if (!sample) {
+    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 1, 0.028);
+    if (!frame) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
@@ -1535,7 +1573,12 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     if (!sprite) {
       return;
     }
-    sprite.position.set(sample.x, topY + lineStartOffset + lineHeight + partitionLabelOffset, sample.z);
+    sprite.position.copy(
+      frame.point
+        .clone()
+        .add(frame.up.clone().multiplyScalar(lineStartOffset + lineHeight + partitionLabelOffset))
+        .add(frame.normal.clone().multiplyScalar(outwardOffset))
+    );
     sprite.frustumCulled = false;
     sprite.renderOrder = 1000;
     group.add(sprite);

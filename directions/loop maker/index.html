@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>loop maker</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        font-family: "Courier New", Courier, monospace;
+      }
+
+      body {
+        background: #111;
+        color: #f5f5f5;
+      }
+
+      .tool {
+        display: grid;
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        gap: 12px;
+        width: 100%;
+        height: 100%;
+        padding: 12px;
+      }
+
+      .panel {
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        padding: 10px;
+        overflow: auto;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .panel h1 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        text-transform: lowercase;
+        font-weight: 400;
+      }
+
+      .controls {
+        display: grid;
+        gap: 10px;
+      }
+
+      .row {
+        display: grid;
+        gap: 6px;
+      }
+
+      .row label {
+        font-size: 11px;
+        opacity: 0.9;
+        text-transform: lowercase;
+      }
+
+      input[type="file"],
+      input[type="range"],
+      button {
+        width: 100%;
+        font-family: inherit;
+        font-size: 11px;
+      }
+
+      button {
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: transparent;
+        color: inherit;
+        padding: 5px 8px;
+        text-transform: lowercase;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .fps-line {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 11px;
+        opacity: 0.8;
+      }
+
+      .list {
+        display: grid;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .item {
+        display: grid;
+        grid-template-columns: 36px 1fr auto auto;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 4px;
+      }
+
+      .item img {
+        width: 36px;
+        height: 24px;
+        object-fit: cover;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .item-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+      }
+
+      .mini {
+        width: auto;
+        min-width: 26px;
+        padding: 3px 6px;
+      }
+
+      .preview-wrap {
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        display: grid;
+        place-items: center;
+        min-width: 0;
+        min-height: 0;
+        background: repeating-conic-gradient(#1b1b1b 0% 25%, #141414 0% 50%) 50% / 16px 16px;
+      }
+
+      .preview-inner {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 14px;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        image-rendering: auto;
+      }
+
+      .empty {
+        text-align: center;
+        font-size: 12px;
+        opacity: 0.75;
+      }
+
+      .status {
+        margin-top: 8px;
+        min-height: 16px;
+        font-size: 11px;
+        opacity: 0.9;
+      }
+
+      @media (max-width: 920px) {
+        .tool {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="tool">
+      <section class="panel">
+        <h1>loop maker</h1>
+        <div class="controls">
+          <div class="row">
+            <label for="frameInput">upload frames (png/jpg/webp/gif)</label>
+            <input id="frameInput" type="file" accept="image/*" multiple />
+          </div>
+
+          <div class="row">
+            <label>frame rate</label>
+            <div class="fps-line">
+              <input id="fpsInput" type="range" min="1" max="30" step="1" value="8" />
+              <span id="fpsValue">8 fps</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="playPauseButton" type="button" disabled>pause</button>
+          </div>
+
+          <div class="row">
+            <button id="exportButton" type="button" disabled>export gif</button>
+            <p class="hint">exports in current frame order</p>
+          </div>
+
+          <div class="row">
+            <button id="clearButton" type="button" disabled>clear frames</button>
+          </div>
+        </div>
+
+        <div id="frameList" class="list"></div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="preview-wrap">
+        <div class="preview-inner">
+          <img id="previewImage" class="preview-image" alt="Loop preview frame" style="display: none" />
+          <div id="emptyState" class="empty">add multiple images to preview your loop</div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.js"></script>
+    <script>
+      const frameInput = document.getElementById("frameInput");
+      const fpsInput = document.getElementById("fpsInput");
+      const fpsValue = document.getElementById("fpsValue");
+      const playPauseButton = document.getElementById("playPauseButton");
+      const exportButton = document.getElementById("exportButton");
+      const clearButton = document.getElementById("clearButton");
+      const frameList = document.getElementById("frameList");
+      const previewImage = document.getElementById("previewImage");
+      const emptyState = document.getElementById("emptyState");
+      const status = document.getElementById("status");
+
+      const state = {
+        frames: [],
+        currentIndex: 0,
+        fps: 8,
+        playing: true,
+        timer: null
+      };
+
+      function setStatus(message) {
+        status.textContent = String(message || "");
+      }
+
+      function clearStatus() {
+        setStatus("");
+      }
+
+      function frameDelayMs() {
+        return Math.max(1, Math.round(1000 / Math.max(1, state.fps)));
+      }
+
+      function updateButtons() {
+        const hasFrames = state.frames.length > 0;
+        playPauseButton.disabled = !hasFrames;
+        exportButton.disabled = !hasFrames;
+        clearButton.disabled = !hasFrames;
+      }
+
+      function updatePreview() {
+        if (!state.frames.length) {
+          previewImage.style.display = "none";
+          emptyState.style.display = "block";
+          return;
+        }
+        const frame = state.frames[state.currentIndex] || state.frames[0];
+        previewImage.src = frame.url;
+        previewImage.style.display = "block";
+        emptyState.style.display = "none";
+      }
+
+      function renderFrameList() {
+        frameList.innerHTML = "";
+        state.frames.forEach((frame, index) => {
+          const item = document.createElement("div");
+          item.className = "item";
+
+          const thumb = document.createElement("img");
+          thumb.src = frame.url;
+          thumb.alt = "";
+          item.appendChild(thumb);
+
+          const name = document.createElement("div");
+          name.className = "item-name";
+          name.textContent = `${index + 1}. ${frame.name}`;
+          item.appendChild(name);
+
+          const upButton = document.createElement("button");
+          upButton.type = "button";
+          upButton.className = "mini";
+          upButton.textContent = "↑";
+          upButton.title = "move up";
+          upButton.disabled = index === 0;
+          upButton.addEventListener("click", () => moveFrame(index, index - 1));
+          item.appendChild(upButton);
+
+          const downButton = document.createElement("button");
+          downButton.type = "button";
+          downButton.className = "mini";
+          downButton.textContent = "↓";
+          downButton.title = "move down";
+          downButton.disabled = index === state.frames.length - 1;
+          downButton.addEventListener("click", () => moveFrame(index, index + 1));
+          item.appendChild(downButton);
+
+          frameList.appendChild(item);
+        });
+      }
+
+      function showCurrentFrameImmediately() {
+        if (state.currentIndex >= state.frames.length) {
+          state.currentIndex = 0;
+        }
+        updatePreview();
+      }
+
+      function stopPlayback() {
+        if (state.timer) {
+          clearInterval(state.timer);
+          state.timer = null;
+        }
+      }
+
+      function startPlayback() {
+        stopPlayback();
+        if (!state.playing || state.frames.length < 2) {
+          return;
+        }
+        state.timer = setInterval(() => {
+          if (!state.frames.length) {
+            return;
+          }
+          state.currentIndex = (state.currentIndex + 1) % state.frames.length;
+          updatePreview();
+        }, frameDelayMs());
+      }
+
+      function syncPlaybackButton() {
+        playPauseButton.textContent = state.playing ? "pause" : "play";
+      }
+
+      function syncFpsReadout() {
+        fpsValue.textContent = `${state.fps} fps`;
+      }
+
+      function restartPlayback() {
+        showCurrentFrameImmediately();
+        startPlayback();
+      }
+
+      function moveFrame(fromIndex, toIndex) {
+        if (
+          fromIndex < 0 ||
+          fromIndex >= state.frames.length ||
+          toIndex < 0 ||
+          toIndex >= state.frames.length ||
+          fromIndex === toIndex
+        ) {
+          return;
+        }
+        const [moved] = state.frames.splice(fromIndex, 1);
+        state.frames.splice(toIndex, 0, moved);
+        state.currentIndex = Math.max(0, Math.min(state.currentIndex, state.frames.length - 1));
+        renderFrameList();
+        restartPlayback();
+      }
+
+      function clearFrames() {
+        state.frames.forEach((frame) => {
+          if (frame && frame.url) {
+            URL.revokeObjectURL(frame.url);
+          }
+        });
+        state.frames = [];
+        state.currentIndex = 0;
+        stopPlayback();
+        renderFrameList();
+        updatePreview();
+        updateButtons();
+      }
+
+      async function addFrames(files) {
+        const list = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+        if (!list.length) {
+          setStatus("no supported image files found");
+          return;
+        }
+        clearStatus();
+        list.forEach((file) => {
+          state.frames.push({
+            name: file.name || "frame",
+            file,
+            url: URL.createObjectURL(file)
+          });
+        });
+        state.currentIndex = 0;
+        renderFrameList();
+        updateButtons();
+        updatePreview();
+        startPlayback();
+      }
+
+      function loadImage(file) {
+        return new Promise((resolve, reject) => {
+          const objectUrl = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+          };
+          image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("image load failed"));
+          };
+          image.src = objectUrl;
+        });
+      }
+
+      async function exportGif() {
+        if (!state.frames.length) {
+          return;
+        }
+        if (typeof GIF !== "function") {
+          setStatus("gif encoder failed to load");
+          return;
+        }
+        exportButton.disabled = true;
+        setStatus("rendering gif...");
+        try {
+          const loadedImages = await Promise.all(state.frames.map((frame) => loadImage(frame.file)));
+          const width = Math.max(1, ...loadedImages.map((image) => image.naturalWidth || image.width || 1));
+          const height = Math.max(1, ...loadedImages.map((image) => image.naturalHeight || image.height || 1));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          if (!context) {
+            throw new Error("canvas unsupported");
+          }
+
+          const gif = new GIF({
+            workers: 2,
+            quality: 8,
+            width,
+            height,
+            workerScript: "https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js"
+          });
+
+          loadedImages.forEach((image) => {
+            context.clearRect(0, 0, width, height);
+            context.drawImage(image, 0, 0, width, height);
+            gif.addFrame(context, { copy: true, delay: frameDelayMs() });
+          });
+
+          const blob = await new Promise((resolve, reject) => {
+            gif.on("finished", resolve);
+            gif.on("abort", () => reject(new Error("render aborted")));
+            gif.render();
+          });
+
+          const outputUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = outputUrl;
+          anchor.download = "loop-maker.gif";
+          anchor.click();
+          URL.revokeObjectURL(outputUrl);
+          setStatus("gif exported");
+        } catch (error) {
+          setStatus("unable to export gif");
+        } finally {
+          exportButton.disabled = state.frames.length === 0;
+        }
+      }
+
+      frameInput.addEventListener("change", async () => {
+        await addFrames(frameInput.files);
+        frameInput.value = "";
+      });
+
+      fpsInput.addEventListener("input", () => {
+        const nextFps = Math.max(1, Math.min(30, Number(fpsInput.value) || 8));
+        state.fps = nextFps;
+        syncFpsReadout();
+        restartPlayback();
+      });
+
+      playPauseButton.addEventListener("click", () => {
+        state.playing = !state.playing;
+        syncPlaybackButton();
+        startPlayback();
+      });
+
+      exportButton.addEventListener("click", async () => {
+        await exportGif();
+      });
+
+      clearButton.addEventListener("click", () => {
+        clearFrames();
+        clearStatus();
+      });
+
+      window.addEventListener("beforeunload", () => {
+        clearFrames();
+      });
+
+      syncPlaybackButton();
+      syncFpsReadout();
+      updateButtons();
+      updatePreview();
+    </script>
+  </body>
+</html>
