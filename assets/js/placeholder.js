@@ -1962,12 +1962,20 @@ async function syncThreeLoopTexture() {
   let partitionSurfaces = null;
   let partitionOrientations = null;
   if (isPartitioned) {
+    const partitionViewportWidths = {
+      left: Math.max(1, Math.round(viewportWidth * (BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH))),
+      curve: Math.max(1, Math.round(viewportWidth * (BILLBOARD_CURVE_WIDTH / BILLBOARD_DESIGN_WIDTH)))
+    };
+    partitionViewportWidths.right = Math.max(1, viewportWidth - partitionViewportWidths.left - partitionViewportWidths.curve);
     partitionSurfaces = {};
     partitionOrientations = {};
     for (const key of PARTITION_KEYS) {
       const orientation = current3dPartitionOrientation(key);
       partitionOrientations[key] = orientation;
-      const surface = await build3dPartitionSurfaceStrip(targetHeight, key, orientation);
+      const partitionTargetHeight = orientation === "vertical"
+        ? Math.max(128, partitionViewportWidths[key] || targetHeight)
+        : targetHeight;
+      const surface = await build3dPartitionSurfaceStrip(partitionTargetHeight, key, orientation);
       if (!surface) {
         return;
       }
