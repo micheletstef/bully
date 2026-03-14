@@ -1537,22 +1537,29 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     return null;
   }
   const meshHeight = Math.max(1, centerTop.point.distanceTo(centerBottom.point));
-  const outwardOffset = Math.max(0.001, meshHeight * 0.0016);
-  const partitionLabelLift = Math.max(0.001, meshHeight * 0.065);
-  const globalUp = centerTop.point.clone().sub(centerBottom.point).normalize();
+  const outwardOffset = Math.max(0.001, meshHeight * 0.001);
+  const partitionLabelLift = Math.max(0.001, meshHeight * 0.018);
+  const worldUp = new THREE.Vector3(0, 1, 0);
   const partitionLabels = [
     { key: "left", text: "7th" },
-    { key: "curve", text: "Curve" },
+    { key: "curve", text: "curve" },
     { key: "right", text: "47th" }
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.985, 0.028);
-    if (!frame) {
+    const frameNearTop = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.985, 0.028);
+    const frameNearBottom = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.015, 0.028);
+    const frame =
+      frameNearTop && frameNearBottom
+        ? frameNearTop.point.y >= frameNearBottom.point.y
+          ? frameNearTop
+          : frameNearBottom
+        : frameNearTop || frameNearBottom;
+    if (!frame || !frame.normal) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.max(0.001, meshHeight * 0.028),
+      worldHeight: Math.max(0.001, meshHeight * 0.022),
       color: "#111111",
       fontSize: 24
     });
@@ -1562,7 +1569,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     sprite.position.copy(
       frame.point
         .clone()
-        .add(globalUp.clone().multiplyScalar(partitionLabelLift))
+        .add(worldUp.clone().multiplyScalar(partitionLabelLift))
         .add(frame.normal.clone().multiplyScalar(outwardOffset * 1.2))
     );
     sprite.frustumCulled = false;
