@@ -1356,7 +1356,7 @@ function create3dTextSprite(THREE, text, options = {}) {
     map: texture,
     transparent: true,
     depthWrite: false,
-    depthTest: true
+    depthTest: false
   });
   const sprite = new THREE.Sprite(material);
   const worldHeight = Math.max(90, Number(options.worldHeight) || 180);
@@ -1365,34 +1365,77 @@ function create3dTextSprite(THREE, text, options = {}) {
   return sprite;
 }
 
-function build3dPartitionAnnotations(THREE) {
+function sampleMeshLocalPointByUv(THREE, mesh, uTarget, vTarget) {
+  if (!THREE || !mesh || !mesh.geometry) {
+    return null;
+  }
+  const geometry = mesh.geometry;
+  const uvAttr = geometry.attributes && geometry.attributes.uv ? geometry.attributes.uv : null;
+  const posAttr = geometry.attributes && geometry.attributes.position ? geometry.attributes.position : null;
+  if (!uvAttr || !posAttr || uvAttr.count !== posAttr.count || uvAttr.count <= 0) {
+    return null;
+  }
+  let bestIndex = 0;
+  let bestScore = Infinity;
+  for (let i = 0; i < uvAttr.count; i += 1) {
+    const du = uvAttr.getX(i) - uTarget;
+    const dv = uvAttr.getY(i) - vTarget;
+    const score = du * du + dv * dv * 1.2;
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+  return new THREE.Vector3(posAttr.getX(bestIndex), posAttr.getY(bestIndex), posAttr.getZ(bestIndex));
+}
+
+function build3dPartitionAnnotationsForMesh(THREE, mesh) {
+  if (!THREE || !mesh || !mesh.geometry) {
+    return null;
+  }
   const group = new THREE.Group();
   group.name = "partition-annotations";
-  const topY = BILLBOARD_DESIGN_HEIGHT * 0.5 + 80;
-  const lineHeight = 360;
-  const labelHeight = topY + lineHeight + 140;
-  const dividerColor = 0x121212;
+  const centerTop = sampleMeshLocalPointByUv(THREE, mesh, 0.5, 1);
+  const centerMid = sampleMeshLocalPointByUv(THREE, mesh, 0.5, 0.5);
+  if (!centerTop || !centerMid) {
+    return null;
+  }
+  const upDirection = centerTop.clone().sub(centerMid).normalize();
+  if (!Number.isFinite(upDirection.x) || !Number.isFinite(upDirection.y) || !Number.isFinite(upDirection.z)) {
+    return null;
+  }
+  const meshHeight = Math.max(1, centerTop.distanceTo(centerMid) * 2);
+  const lineStartOffset = meshHeight * 0.01;
+  const lineHeight = meshHeight * 0.14;
+  const dividerLabelOffset = meshHeight * 0.035;
+  const partitionLabelOffset = meshHeight * 0.11;
   const dividerMaterial = new THREE.LineBasicMaterial({
-    color: dividerColor,
+    color: 0x121212,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.9,
+    depthTest: false,
+    depthWrite: false
   });
-  [BILLBOARD_LEFT_WIDTH, BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH].forEach((distance, idx) => {
-    const sample = computeBillboardCurveSample(distance);
-    const x = sample.x - BILLBOARD_CURVE_CENTER.x;
-    const z = sample.z - BILLBOARD_CURVE_CENTER.z;
-    const points = [new THREE.Vector3(x, topY, z), new THREE.Vector3(x, topY + lineHeight, z)];
+  [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
+    .forEach((uBoundary, idx) => {
+    const anchorTop = sampleMeshLocalPointByUv(THREE, mesh, uBoundary, 1);
+    if (!anchorTop) {
+      return;
+    }
+    const lineStart = anchorTop.clone().add(upDirection.clone().multiplyScalar(lineStartOffset));
+    const lineEnd = lineStart.clone().add(upDirection.clone().multiplyScalar(lineHeight));
+    const points = [lineStart, lineEnd];
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, dividerMaterial.clone());
     line.name = idx === 0 ? "divider-1820" : "divider-2840";
     group.add(line);
     const dividerLabel = create3dTextSprite(THREE, idx === 0 ? "1820px" : "2840px", {
-      worldHeight: 110,
+      worldHeight: Math.max(84, meshHeight * 0.03),
       color: "#111111",
       fontSize: 44
     });
     if (dividerLabel) {
-      dividerLabel.position.set(x, topY + lineHeight + 70, z);
+      dividerLabel.position.copy(lineEnd.clone().add(upDirection.clone().multiplyScalar(dividerLabelOffset)));
       group.add(dividerLabel);
     }
   });
@@ -1402,24 +1445,48 @@ function build3dPartitionAnnotations(THREE) {
     { key: "right", text: "47th" }
   ];
   partitionLabels.forEach(({ key, text }) => {
-    const centerDistance = BILLBOARD_PARTITION_CENTERS[key];
-    const sample = computeBillboardCurveSample(centerDistance);
+    const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
+    const sample = sampleMeshLocalPointByUv(THREE, mesh, centerDistance, 1);
+    if (!sample) {
+      return;
+    }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: 150,
+      worldHeight: Math.max(108, meshHeight * 0.04),
       color: "#111111",
       fontSize: 56
     });
     if (!sprite) {
       return;
     }
-    sprite.position.set(
-      sample.x - BILLBOARD_CURVE_CENTER.x,
-      labelHeight,
-      sample.z - BILLBOARD_CURVE_CENTER.z
-    );
+    sprite.position.copy(sample.clone().add(upDirection.clone().multiplyScalar(lineHeight + partitionLabelOffset)));
     group.add(sprite);
   });
   return group;
+}
+
+function attach3dPartitionAnnotations(THREE, mesh) {
+  const previous = preview3dThreeState.annotationGroup;
+  if (previous) {
+    if (previous.parent) {
+      previous.parent.remove(previous);
+    }
+    previous.traverse((node) => {
+      if (node.material && typeof node.material.dispose === "function") {
+        node.material.dispose();
+      }
+      if (node.material && node.material.map && typeof node.material.map.dispose === "function") {
+        node.material.map.dispose();
+      }
+      if (node.geometry && typeof node.geometry.dispose === "function") {
+        node.geometry.dispose();
+      }
+    });
+  }
+  const next = build3dPartitionAnnotationsForMesh(THREE, mesh);
+  if (next && mesh && typeof mesh.add === "function") {
+    mesh.add(next);
+  }
+  preview3dThreeState.annotationGroup = next || null;
 }
 
 function projectBillboardVertex(x, y, z) {
@@ -2123,6 +2190,7 @@ function tryLoadBillboardModel() {
       projectionMaterial.needsUpdate = true;
       selectedMesh.material = projectionMaterial;
       preview3dThreeState.mesh = selectedMesh;
+      attach3dPartitionAnnotations(THREE, selectedMesh);
       PARTITION_KEYS.forEach((partitionKey) => {
         const part = preview3dThreeState.partitionMeshes[partitionKey];
         if (part && part.parent) {
@@ -2285,15 +2353,11 @@ function ensureThreePreviewSetup() {
     partitionMeshes[partitionKey] = partitionMesh;
     scene.add(partitionMesh);
   });
-  const annotationGroup = build3dPartitionAnnotations(THREE);
-  if (annotationGroup) {
-    scene.add(annotationGroup);
-  }
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
-  preview3dThreeState.annotationGroup = annotationGroup;
+  attach3dPartitionAnnotations(THREE, mesh);
   preview3dThreeState.partitionMeshes = partitionMeshes;
   syncCameraControlVisibility();
   tryLoadBillboardModel();
