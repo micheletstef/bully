@@ -680,6 +680,16 @@ function applyColorToSvgText(svgText, color) {
   if (!svg) {
     return "";
   }
+  const styleNodes = [...svg.querySelectorAll("style")];
+  styleNodes.forEach((styleNode) => {
+    const css = String(styleNode.textContent || "");
+    if (!css) {
+      return;
+    }
+    styleNode.textContent = css
+      .replace(/fill\s*:\s*[^;}{!]+(!important)?/gi, `fill:${color}$1`)
+      .replace(/stroke\s*:\s*[^;}{!]+(!important)?/gi, `stroke:${color}$1`);
+  });
   const paintableTags = new Set([
     "path",
     "rect",
@@ -699,10 +709,12 @@ function applyColorToSvgText(svgText, color) {
     }
     const fill = node.getAttribute("fill");
     const stroke = node.getAttribute("stroke");
-    if (!fill || String(fill).toLowerCase() !== "none") {
+    const fillValue = String(fill || "").toLowerCase();
+    const strokeValue = String(stroke || "").toLowerCase();
+    if ((!fill || fillValue !== "none") && !fillValue.startsWith("url(")) {
       node.setAttribute("fill", color);
     }
-    if (stroke && String(stroke).toLowerCase() !== "none") {
+    if (stroke && strokeValue !== "none" && !strokeValue.startsWith("url(")) {
       node.setAttribute("stroke", color);
     }
     const style = node.getAttribute("style");
