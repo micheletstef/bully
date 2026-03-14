@@ -1558,9 +1558,11 @@ function sampleMeshUvFrame(THREE, mesh, u, v, sampleStep = 0.02) {
     return {
       point: center,
       up: new THREE.Vector3(0, 1, 0),
-      normal: new THREE.Vector3(0, 0, 1)
+      normal: new THREE.Vector3(0, 0, 1),
+      tangentU: new THREE.Vector3(1, 0, 0)
     };
   }
+  const tangentUNormalized = tangentU.clone().normalize();
   const up = tangentV.clone().normalize();
   let normal = tangentU.clone().cross(up).normalize();
   if (normal.lengthSq() <= 1e-8) {
@@ -1569,7 +1571,8 @@ function sampleMeshUvFrame(THREE, mesh, u, v, sampleStep = 0.02) {
   return {
     point: center,
     up,
-    normal
+    normal,
+    tangentU: tangentUNormalized
   };
 }
 
@@ -1625,12 +1628,17 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     if (normal.lengthSq() <= 1e-8) {
       normal = new THREE.Vector3(0, 0, 1);
     }
-    let right = normal.clone().cross(up).normalize();
+    let right =
+      frame.tangentU && frame.tangentU.lengthSq() > 1e-8
+        ? frame.tangentU.clone().normalize()
+        : normal.clone().cross(up).normalize();
     if (right.lengthSq() <= 1e-8) {
       right = new THREE.Vector3(1, 0, 0);
     }
+    const orthogonalUp = normal.clone().cross(right).normalize();
+    const safeUp = orthogonalUp.lengthSq() > 1e-8 ? orthogonalUp : up;
     const basis = new THREE.Matrix4();
-    basis.makeBasis(right, up, normal);
+    basis.makeBasis(right, safeUp, normal);
     labelMesh.quaternion.setFromRotationMatrix(basis);
     labelMesh.renderOrder = 1000;
     group.add(labelMesh);
