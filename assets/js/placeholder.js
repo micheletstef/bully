@@ -49,6 +49,7 @@ const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
 const loopActiveWindowSecondary = document.getElementById("loopActiveWindowSecondary");
 const loopElapsedTime = document.getElementById("loopElapsedTime");
+const themeToggleButton = document.getElementById("themeToggleButton");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
   padTB: "billboard.loopPadTopBottom",
@@ -73,6 +74,7 @@ const STORAGE_KEYS = {
   projectionGlare: "billboard.preview3dProjectionGlare",
   cameraViewPreset: "billboard.preview3dCameraViewPreset",
   cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
+  themeMode: "billboard.themeMode",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks"
@@ -2425,6 +2427,25 @@ function normalizePreviewViewMode(value) {
   return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
 }
 
+function normalizeThemeMode(value) {
+  return String(value || "").toLowerCase() === "dark" ? "dark" : "light";
+}
+
+function applyThemeMode(mode) {
+  const normalized = normalizeThemeMode(mode);
+  document.body.classList.toggle("dark-mode", normalized === "dark");
+  if (themeToggleButton) {
+    themeToggleButton.textContent = normalized === "dark" ? "☾" : "☀";
+    themeToggleButton.setAttribute(
+      "aria-label",
+      normalized === "dark" ? "Switch to light mode" : "Switch to dark mode"
+    );
+    themeToggleButton.title = normalized === "dark" ? "light mode" : "dark mode";
+  }
+  writeStorage(STORAGE_KEYS.themeMode, normalized);
+  return normalized;
+}
+
 function readStorage(key) {
   try {
     return localStorage.getItem(key);
@@ -4450,6 +4471,7 @@ function renderDirectory(directions) {
 }
 
 async function init() {
+  applyThemeMode(readStorage(STORAGE_KEYS.themeMode) || "light");
   restoreSpeed();
   restoreLoopLayoutSettings();
   restorePreview3dSettings();
@@ -4548,6 +4570,13 @@ async function init() {
       });
     });
     syncViewModeToggleStates();
+  }
+
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener("click", () => {
+      const isDark = document.body.classList.contains("dark-mode");
+      applyThemeMode(isDark ? "light" : "dark");
+    });
   }
 
   if (cameraYawControl) {

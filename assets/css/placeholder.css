@@ -17,6 +17,41 @@ body {
   background: #fff;
 }
 
+.theme-toggle-button {
+  position: fixed;
+  right: 14px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 30;
+}
+
+.theme-toggle-button:hover,
+.theme-toggle-button:focus {
+  text-decoration: underline;
+  outline: none;
+}
+
+body.dark-mode {
+  background: #000;
+}
+
+body.dark-mode .app-shell {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+body.dark-mode .theme-toggle-button {
+  border-color: #fff;
+  background: #000;
+  color: #fff;
+}
+
 .app-shell {
   position: relative;
   min-height: 100vh;
