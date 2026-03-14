@@ -228,6 +228,11 @@
         padding: 4px;
       }
 
+      .item.active {
+        border-color: rgba(255, 98, 98, 0.95);
+        background: rgba(255, 98, 98, 0.12);
+      }
+
       .item img {
         width: 36px;
         height: 24px;
@@ -292,6 +297,24 @@
         min-height: 16px;
         font-size: 11px;
         opacity: 0.9;
+      }
+
+      .now-playing {
+        position: absolute;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        min-width: 180px;
+        max-width: calc(100% - 24px);
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.55);
+        text-align: center;
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: none;
       }
 
       @media (max-width: 920px) {
@@ -359,6 +382,15 @@
           </div>
 
           <div class="row">
+            <label for="normalizeScaleInput">normalize subject size</label>
+            <div class="fps-line">
+              <input id="normalizeScaleInput" type="checkbox" />
+              <span id="normalizeScaleValue">off</span>
+            </div>
+            <div class="timing">matches detected visible-pixel height across frames</div>
+          </div>
+
+          <div class="row">
             <label>crop (percent)</label>
             <div class="crop-grid">
               <div class="fps-line">
@@ -414,6 +446,7 @@
             </div>
           </div>
           <div id="emptyState" class="empty">add multiple images to preview your loop</div>
+          <div id="nowPlayingLabel" class="now-playing"></div>
         </div>
       </section>
     </main>
@@ -432,6 +465,8 @@
       const autoCenterValue = document.getElementById("autoCenterValue");
       const stabilizeInput = document.getElementById("stabilizeInput");
       const stabilizeValue = document.getElementById("stabilizeValue");
+      const normalizeScaleInput = document.getElementById("normalizeScaleInput");
+      const normalizeScaleValue = document.getElementById("normalizeScaleValue");
       const cropTopInput = document.getElementById("cropTopInput");
       const cropRightInput = document.getElementById("cropRightInput");
       const cropBottomInput = document.getElementById("cropBottomInput");
@@ -449,6 +484,7 @@
       const cropOverlay = document.getElementById("cropOverlay");
       const cropBox = document.getElementById("cropBox");
       const emptyState = document.getElementById("emptyState");
+      const nowPlayingLabel = document.getElementById("nowPlayingLabel");
       const status = document.getElementById("status");
 
       const state = {
@@ -459,6 +495,7 @@
         frameStep: 1,
         autoCenterContent: false,
         stabilizationStrength: 0,
+        normalizeSubjectScale: false,
         cropTop: 0,
         cropRight: 0,
         cropBottom: 0,
@@ -476,6 +513,11 @@
         key: "",
         offsetsByFrameId: new Map()
       };
+      let scaleNormalizationCache = {
+        key: "",
+        scalesByFrameId: new Map()
+      };
+      let currentPlayingFrameId = "";
 
       function setStatus(message) {
         status.textContent = String(message || "");
@@ -528,7 +570,9 @@
         if (!frame || !image || !cropRect) {
           return {
             cx: cropRect ? cropRect.sw * 0.5 : 0,
-            cy: cropRect ? cropRect.sh * 0.5 : 0
+            cy: cropRect ? cropRect.sh * 0.5 : 0,
+            width: cropRect ? cropRect.sw : 1,
+            height: cropRect ? cropRect.sh : 1
           };
         }
         if (!frame.boundsCache || typeof frame.boundsCache !== "object") {
@@ -541,7 +585,12 @@
         }
         const context = getBoundsContext(cropRect.sw, cropRect.sh);
         if (!context) {
-          const fallback = { cx: cropRect.sw * 0.5, cy: cropRect.sh * 0.5 };
+          const fallback = {
+            cx: cropRect.sw * 0.5,
+            cy: cropRect.sh * 0.5,
+            width: cropRect.sw,
+            height: cropRect.sh
+          };
           frame.boundsCache[cacheKey] = fallback;
           return fallback;
         }
@@ -575,13 +624,46 @@
           }
         }
         const bounds = maxX < 0 || maxY < 0
-          ? { cx: cropRect.sw * 0.5, cy: cropRect.sh * 0.5 }
+          ? {
+              cx: cropRect.sw * 0.5,
+              cy: cropRect.sh * 0.5,
+              width: cropRect.sw,
+              height: cropRect.sh
+            }
           : {
               cx: (minX + maxX + 1) * 0.5,
-              cy: (minY + maxY + 1) * 0.5
+              cy: (minY + maxY + 1) * 0.5,
+              width: Math.max(1, maxX - minX + 1),
+              height: Math.max(1, maxY - minY + 1)
             };
         frame.boundsCache[cacheKey] = bounds;
         return bounds;
+      }
+
+      function resetProcessingCaches() {
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
+        scaleNormalizationCache = {
+          key: "",
+          scalesByFrameId: new Map()
+        };
+      }
+
+      function median(values) {
+        const numbers = values
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .sort((a, b) => a - b);
+        if (!numbers.length) {
+          return 1;
+        }
+        const mid = Math.floor(numbers.length * 0.5);
+        if (numbers.length % 2 === 1) {
+          return numbers[mid];
+        }
+        return (numbers[mid - 1] + numbers[mid]) * 0.5;
       }
 
       function autoCenterShiftPx(frame, image, cropRect, destWidth, destHeight) {
@@ -682,11 +764,84 @@
         return offsets;
       }
 
+      async function computeScaleNormalization(frames) {
+        if (!state.normalizeSubjectScale || !frames.length) {
+          return new Map();
+        }
+        const crop = getEffectiveCropRatios();
+        const cacheKey = [
+          processingKeyForFrames(frames),
+          `ct:${crop.top.toFixed(4)}`,
+          `cr:${crop.right.toFixed(4)}`,
+          `cb:${crop.bottom.toFixed(4)}`,
+          `cl:${crop.left.toFixed(4)}`,
+          "normalize:1"
+        ].join(";");
+        if (scaleNormalizationCache.key === cacheKey) {
+          return scaleNormalizationCache.scalesByFrameId;
+        }
+
+        const heights = [];
+        const heightByFrameId = new Map();
+        for (let index = 0; index < frames.length; index += 1) {
+          const frame = frames[index];
+          const image = await ensureFrameImage(frame);
+          if (!image) {
+            continue;
+          }
+          const cropRect = cropRectForImage(image);
+          const bounds = detectFrameContentBounds(frame, image, cropRect);
+          const normalizedHeight = bounds.height / Math.max(1, cropRect.sh);
+          heights.push(normalizedHeight);
+          heightByFrameId.set(frameKey(frame, index), normalizedHeight);
+        }
+
+        const targetHeight = median(heights);
+        const scales = new Map();
+        for (let index = 0; index < frames.length; index += 1) {
+          const frame = frames[index];
+          const key = frameKey(frame, index);
+          const normalizedHeight = heightByFrameId.get(key);
+          if (!Number.isFinite(normalizedHeight) || normalizedHeight <= 0) {
+            scales.set(key, 1);
+            continue;
+          }
+          const rawScale = targetHeight / normalizedHeight;
+          const clampedScale = Math.max(0.6, Math.min(1.8, rawScale));
+          scales.set(key, clampedScale);
+        }
+
+        scaleNormalizationCache = {
+          key: cacheKey,
+          scalesByFrameId: scales
+        };
+        return scales;
+      }
+
       function updateButtons() {
         const hasFrames = state.frames.length > 0;
         playPauseButton.disabled = !hasFrames;
         exportButton.disabled = !hasFrames;
         clearButton.disabled = !hasFrames;
+      }
+
+      function frameDisplayName(frame, index = 0) {
+        if (frame && typeof frame.name === "string" && frame.name.trim()) {
+          return frame.name.trim();
+        }
+        return `frame ${index + 1}`;
+      }
+
+      function updateNowPlayingLabel(frame, index = 0) {
+        if (!frame || !state.frames.length) {
+          nowPlayingLabel.style.display = "none";
+          nowPlayingLabel.textContent = "";
+          return;
+        }
+        const step = Math.max(1, Math.round(state.frameStep));
+        const labelPrefix = step > 1 ? `playing (every ${step}): ` : "playing: ";
+        nowPlayingLabel.textContent = `${labelPrefix}${frameDisplayName(frame, index)}`;
+        nowPlayingLabel.style.display = "block";
       }
 
       function getEffectiveCropRatios() {
@@ -750,7 +905,7 @@
         return { cssWidth, cssHeight, dpr };
       }
 
-      function drawPreviewFrame(frame, image, normalizedOffset = null) {
+      function drawPreviewFrame(frame, image, normalizedOffset = null, scaleFactor = 1) {
         const context = previewCanvas.getContext("2d", { willReadFrequently: true });
         if (!context) {
           return;
@@ -770,12 +925,17 @@
         }
         const dx = (cssWidth - dw) * 0.5;
         const dy = (cssHeight - dh) * 0.5;
+        const appliedScale = Math.max(0.6, Math.min(1.8, Number(scaleFactor) || 1));
+        const scaledDw = dw * appliedScale;
+        const scaledDh = dh * appliedScale;
+        const baseDx = dx + (dw - scaledDw) * 0.5;
+        const baseDy = dy + (dh - scaledDh) * 0.5;
         const offset = normalizedOffset
           ? {
-              x: normalizedOffset.oxNorm * dw,
-              y: normalizedOffset.oyNorm * dh
+              x: normalizedOffset.oxNorm * scaledDw,
+              y: normalizedOffset.oyNorm * scaledDh
             }
-          : autoCenterShiftPx(frame, image, cropRect, dw, dh);
+          : autoCenterShiftPx(frame, image, cropRect, scaledDw, scaledDh);
         context.imageSmoothingEnabled = true;
         context.drawImage(
           image,
@@ -783,18 +943,18 @@
           cropRect.sy,
           cropRect.sw,
           cropRect.sh,
-          dx + offset.x,
-          dy + offset.y,
-          dw,
-          dh
+          baseDx + offset.x,
+          baseDy + offset.y,
+          scaledDw,
+          scaledDh
         );
         previewFrameMetrics = {
           imageWidth: Math.max(1, image.naturalWidth || image.width || 1),
           imageHeight: Math.max(1, image.naturalHeight || image.height || 1),
-          drawX: dx,
-          drawY: dy,
-          drawWidth: dw,
-          drawHeight: dh
+          drawX: baseDx,
+          drawY: baseDy,
+          drawWidth: scaledDw,
+          drawHeight: scaledDh
         };
         syncCropOverlay();
       }
@@ -831,6 +991,9 @@
         if (!state.frames.length) {
           previewCanvas.style.display = "none";
           emptyState.style.display = "block";
+          currentPlayingFrameId = "";
+          updateNowPlayingLabel(null);
+          renderFrameList();
           return;
         }
         const token = ++previewRenderToken;
@@ -839,14 +1002,20 @@
           state.currentIndex = 0;
         }
         const frame = frames[state.currentIndex] || frames[0];
+        currentPlayingFrameId = frameKey(frame, state.currentIndex);
+        updateNowPlayingLabel(frame, state.currentIndex);
+        renderFrameList();
         const image = await ensureFrameImage(frame);
         const offsets = await computeStabilizedOffsets(frames);
-        const normalizedOffset = offsets.get(frameKey(frame, state.currentIndex)) || null;
+        const scales = await computeScaleNormalization(frames);
+        const key = frameKey(frame, state.currentIndex);
+        const normalizedOffset = offsets.get(key) || null;
+        const scaleFactor = scales.get(key) || 1;
         if (token !== previewRenderToken || !image) {
           return;
         }
         previewCanvas.style.display = "block";
-        drawPreviewFrame(frame, image, normalizedOffset);
+        drawPreviewFrame(frame, image, normalizedOffset, scaleFactor);
         emptyState.style.display = "none";
       }
 
@@ -855,6 +1024,9 @@
         state.frames.forEach((frame, index) => {
           const item = document.createElement("div");
           item.className = "item";
+          const itemFrameKey = frameKey(frame, index);
+          const isActive = itemFrameKey === currentPlayingFrameId;
+          item.classList.toggle("active", isActive);
 
           const thumb = document.createElement("img");
           thumb.src = frame.url;
@@ -953,6 +1125,10 @@
         stabilizeValue.textContent = `${Math.round(state.stabilizationStrength)}%`;
       }
 
+      function syncNormalizeScaleReadout() {
+        normalizeScaleValue.textContent = state.normalizeSubjectScale ? "on" : "off";
+      }
+
       function syncCropReadout() {
         cropTopValue.textContent = `top ${state.cropTop}%`;
         cropRightValue.textContent = `right ${state.cropRight}%`;
@@ -972,6 +1148,7 @@
         syncFrameStepReadout();
         syncAutoCenterReadout();
         syncStabilizeReadout();
+        syncNormalizeScaleReadout();
         syncCropReadout();
       }
 
@@ -1001,15 +1178,13 @@
         state.frames = [];
         state.currentIndex = 0;
         previewFrameMetrics = null;
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
         stopPlayback();
         renderFrameList();
         updatePreview();
         updateButtons();
         syncCropOverlay();
+        updateNowPlayingLabel(null);
       }
 
       async function addFrames(files) {
@@ -1029,10 +1204,7 @@
             id: `frame-${frameIdCounter++}`
           });
         });
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
         state.currentIndex = 0;
         renderFrameList();
         updateButtons();
@@ -1070,6 +1242,7 @@
           const frames = steppedFrames();
           const loadedImages = await Promise.all(frames.map((frame) => loadImage(frame.file)));
           const offsets = await computeStabilizedOffsets(frames);
+          const scales = await computeScaleNormalization(frames);
           const firstImage = loadedImages[0];
           const baseCropRect = cropRectForImage(firstImage);
           const width = Math.max(1, baseCropRect.sw);
@@ -1094,9 +1267,15 @@
             const frame = frames[index];
             const cropRect = cropRectForImage(image);
             const normalizedOffset = offsets.get(frameKey(frame, index));
+            const scaleFactor = scales.get(frameKey(frame, index)) || 1;
+            const appliedScale = Math.max(0.6, Math.min(1.8, Number(scaleFactor) || 1));
+            const scaledWidth = width * appliedScale;
+            const scaledHeight = height * appliedScale;
+            const baseX = (width - scaledWidth) * 0.5;
+            const baseY = (height - scaledHeight) * 0.5;
             const offset = normalizedOffset
-              ? { x: normalizedOffset.oxNorm * width, y: normalizedOffset.oyNorm * height }
-              : autoCenterShiftPx(frame, image, cropRect, width, height);
+              ? { x: normalizedOffset.oxNorm * scaledWidth, y: normalizedOffset.oyNorm * scaledHeight }
+              : autoCenterShiftPx(frame, image, cropRect, scaledWidth, scaledHeight);
             context.clearRect(0, 0, width, height);
             context.drawImage(
               image,
@@ -1104,10 +1283,10 @@
               cropRect.sy,
               cropRect.sw,
               cropRect.sh,
-              offset.x,
-              offset.y,
-              width,
-              height
+              baseX + offset.x,
+              baseY + offset.y,
+              scaledWidth,
+              scaledHeight
             );
             gif.addFrame(context, { copy: true, delay: frameDelayMs() });
           });
@@ -1187,30 +1366,28 @@
       frameStepInput.addEventListener("input", () => {
         state.frameStep = Math.max(1, Math.min(100, Math.round(Number(frameStepInput.value) || 1)));
         state.currentIndex = 0;
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
         updateAllReadouts();
         restartPlayback();
       });
 
       autoCenterInput.addEventListener("change", () => {
         state.autoCenterContent = Boolean(autoCenterInput.checked);
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
         updateAllReadouts();
         updatePreview();
       });
 
       stabilizeInput.addEventListener("input", () => {
         state.stabilizationStrength = Math.max(0, Math.min(100, Number(stabilizeInput.value) || 0));
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
+        updateAllReadouts();
+        updatePreview();
+      });
+
+      normalizeScaleInput.addEventListener("change", () => {
+        state.normalizeSubjectScale = Boolean(normalizeScaleInput.checked);
+        resetProcessingCaches();
         updateAllReadouts();
         updatePreview();
       });
@@ -1221,10 +1398,7 @@
           state.cropRight = Math.max(0, Math.min(45, Number(cropRightInput.value) || 0));
           state.cropBottom = Math.max(0, Math.min(45, Number(cropBottomInput.value) || 0));
           state.cropLeft = Math.max(0, Math.min(45, Number(cropLeftInput.value) || 0));
-          stabilizationCache = {
-            key: "",
-            offsetsByFrameId: new Map()
-          };
+          resetProcessingCaches();
           updateAllReadouts();
           updatePreview();
         });
@@ -1288,10 +1462,7 @@
         }
         setCropFromRatios(next);
         syncCropInputsFromState();
-        stabilizationCache = {
-          key: "",
-          offsetsByFrameId: new Map()
-        };
+        resetProcessingCaches();
         updateAllReadouts();
         updatePreview();
       }
@@ -1328,6 +1499,7 @@
       syncCropInputsFromState();
       autoCenterInput.checked = state.autoCenterContent;
       stabilizeInput.value = String(state.stabilizationStrength);
+      normalizeScaleInput.checked = state.normalizeSubjectScale;
       updateAllReadouts();
       updateButtons();
       updatePreview();
