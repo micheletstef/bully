@@ -118,6 +118,8 @@
     <script>
       const loopFill = document.getElementById("loopFill");
       const loopStage = document.getElementById("loopStage");
+      const BILLBOARD_DESIGN_WIDTH = 5900;
+      const BILLBOARD_DESIGN_HEIGHT = 3480;
       const state = {
         seconds: 16,
         artworks: ["../../assets/linear-loop-strip.png"],
@@ -166,14 +168,24 @@
           Number(document.documentElement.clientHeight) || 0,
           Number(window.innerHeight) || 0
         );
+        const viewportWidth = Math.max(
+          1,
+          Number(document.documentElement.clientWidth) || 0,
+          Number(window.innerWidth) || 0
+        );
+        const padTopBottomDesign = Math.max(0, Number(state.padTopBottom) || 0);
+        const padLeftRightDesign = Math.max(0, Number(state.padLeftRight) || 0);
+        const appliedPadTopBottomRaw = (padTopBottomDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
+        const appliedPadLeftRightRaw = (padLeftRightDesign / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
         const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
-        const appliedPadTopBottom = Math.min(Math.max(0, Number(state.padTopBottom) || 0), maxPadTopBottom);
+        const appliedPadTopBottom = Math.min(appliedPadTopBottomRaw, maxPadTopBottom);
+        const appliedPadLeftRight = Math.max(0, appliedPadLeftRightRaw);
 
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["../../assets/linear-loop-strip.png"];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
-        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const sidePadding = appliedPadLeftRight;
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
