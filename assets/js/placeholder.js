@@ -4331,14 +4331,23 @@ function updateActiveWindow() {
   if (loopElapsedTime) {
     loopElapsedTime.style.display = "block";
     loopElapsedTime.textContent = `${traverseElapsed.toFixed(1)}s/${traverseDuration.toFixed(1)}s`;
-    const centeredLeft = loopVisualization.offsetLeft + loopVisualization.clientWidth / 2;
+    let activeCenterX = loopVisualization.clientWidth / 2;
+    if (mainWidth > 0 || overflowWidth > 0) {
+      const primaryCenter = drawX + mainWidth / 2;
+      const secondaryCenter = baseX + overflowWidth / 2;
+      if (mainWidth > 0 && overflowWidth > 0) {
+        activeCenterX = mainWidth >= overflowWidth ? primaryCenter : secondaryCenter;
+      } else if (mainWidth > 0) {
+        activeCenterX = primaryCenter;
+      } else {
+        activeCenterX = secondaryCenter;
+      }
+    }
+    const centeredLeft = loopVisualization.offsetLeft + activeCenterX;
     const outsideBottomTop = loopVisualization.offsetTop + frameHeight + 6;
     loopElapsedTime.style.left = `${centeredLeft}px`;
     loopElapsedTime.style.top = `${outsideBottomTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
-  }
-  if (previewViewMode === "3d") {
-    update3dPreviewAnimation();
   }
 }
 
