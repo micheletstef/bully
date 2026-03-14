@@ -46,6 +46,13 @@ body.dark-mode .app-shell {
   filter: invert(1) hue-rotate(180deg);
 }
 
+body.dark-mode #billboardPreview,
+body.dark-mode .billboard-3d-canvas,
+body.dark-mode .loop-preview-item img,
+body.dark-mode .partition-preview-item img {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 body.dark-mode .theme-toggle-button {
   border-color: #fff;
   background: #000;
