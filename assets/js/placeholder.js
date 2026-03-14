@@ -989,6 +989,9 @@ function syncDirectionModeUI() {
     viewControlsToggleButton.style.display = loopMaker ? "none" : "";
   }
   if (loopMaker) {
+    if (previewViewMode !== "flat") {
+      applyPreviewViewMode("flat");
+    }
     setSettingsPanelVisibility(false);
     setViewControlsPanelVisibility(false);
   }
@@ -1535,31 +1538,8 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   }
   const meshHeight = Math.max(1, centerTop.point.distanceTo(centerBottom.point));
   const outwardOffset = Math.max(0.001, meshHeight * 0.0016);
-  const partitionLabelLift = Math.max(0.001, meshHeight * 0.055);
-  const dividerMaterial = new THREE.LineBasicMaterial({
-    color: 0x121212,
-    transparent: true,
-    opacity: 0.82,
-    depthTest: true,
-    depthWrite: false
-  });
-  [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
-    .forEach((uBoundary, idx) => {
-    const frameTop = sampleMeshUvFrame(THREE, mesh, uBoundary, 0.97, 0.028);
-    const frameBottom = sampleMeshUvFrame(THREE, mesh, uBoundary, 0.03, 0.028);
-    if (!frameTop || !frameBottom) {
-      return;
-    }
-    const lineStart = frameBottom.point.clone().add(frameBottom.normal.clone().multiplyScalar(outwardOffset));
-    const lineEnd = frameTop.point.clone().add(frameTop.normal.clone().multiplyScalar(outwardOffset));
-    const points = [lineStart, lineEnd];
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(lineGeometry, dividerMaterial.clone());
-    line.name = idx === 0 ? "divider-1820" : "divider-2840";
-    line.frustumCulled = false;
-    line.renderOrder = 999;
-    group.add(line);
-  });
+  const partitionLabelLift = Math.max(0.001, meshHeight * 0.065);
+  const globalUp = centerTop.point.clone().sub(centerBottom.point).normalize();
   const partitionLabels = [
     { key: "left", text: "7th" },
     { key: "curve", text: "Curve" },
@@ -1567,7 +1547,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.95, 0.028);
+    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.985, 0.028);
     if (!frame) {
       return;
     }
@@ -1582,7 +1562,7 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     sprite.position.copy(
       frame.point
         .clone()
-        .add(frame.up.clone().multiplyScalar(partitionLabelLift))
+        .add(globalUp.clone().multiplyScalar(partitionLabelLift))
         .add(frame.normal.clone().multiplyScalar(outwardOffset * 1.2))
     );
     sprite.frustumCulled = false;

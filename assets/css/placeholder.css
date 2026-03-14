@@ -566,6 +566,36 @@ body.dark-mode .orientation-choice.inactive {
   display: none !important;
 }
 
+.app-shell.loop-maker-mode .workspace {
+  overflow: hidden;
+}
+
+.app-shell.loop-maker-mode .billboard-wrap {
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell.loop-maker-mode .billboard-frame {
+  width: 100%;
+  height: calc(100vh - 36px);
+  min-height: 520px;
+  aspect-ratio: auto;
+  background: transparent;
+}
+
+.app-shell.loop-maker-mode #billboardPreview {
+  display: block !important;
+}
+
+.app-shell.loop-maker-mode .billboard-preview-3d,
+.app-shell.loop-maker-mode .empty-state {
+  display: none !important;
+}
+
 .partition-settings-tabs {
   display: none;
   align-items: center;

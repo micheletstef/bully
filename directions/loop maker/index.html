@@ -87,7 +87,7 @@
       .drop-zone {
         display: grid;
         place-items: center;
-        min-height: 74px;
+        min-height: 108px;
         border: 1px dashed rgba(255, 255, 255, 0.5);
         padding: 10px;
         font-size: 11px;
@@ -126,6 +126,11 @@
         margin: 0;
         font-size: 11px;
         opacity: 0.8;
+      }
+
+      .timing {
+        font-size: 11px;
+        opacity: 0.85;
       }
 
       .list {
@@ -230,6 +235,15 @@
           </div>
 
           <div class="row">
+            <label>playback speed</label>
+            <div class="fps-line">
+              <input id="speedInput" type="range" min="0.25" max="3" step="0.05" value="1" />
+              <span id="speedValue">1.00x</span>
+            </div>
+            <div id="timingValue" class="timing">effective: 8.00 fps (125 ms/frame)</div>
+          </div>
+
+          <div class="row">
             <button id="playPauseButton" type="button" disabled>pause</button>
           </div>
 
@@ -260,6 +274,9 @@
       const frameInput = document.getElementById("frameInput");
       const fpsInput = document.getElementById("fpsInput");
       const fpsValue = document.getElementById("fpsValue");
+      const speedInput = document.getElementById("speedInput");
+      const speedValue = document.getElementById("speedValue");
+      const timingValue = document.getElementById("timingValue");
       const playPauseButton = document.getElementById("playPauseButton");
       const exportButton = document.getElementById("exportButton");
       const clearButton = document.getElementById("clearButton");
@@ -273,6 +290,7 @@
         frames: [],
         currentIndex: 0,
         fps: 8,
+        speedMultiplier: 1,
         playing: true,
         timer: null
       };
@@ -286,7 +304,8 @@
       }
 
       function frameDelayMs() {
-        return Math.max(1, Math.round(1000 / Math.max(1, state.fps)));
+        const effectiveFps = Math.max(0.01, state.fps * state.speedMultiplier);
+        return Math.max(1, Math.round(1000 / effectiveFps));
       }
 
       function updateButtons() {
@@ -382,9 +401,24 @@
         fpsValue.textContent = `${state.fps} fps`;
       }
 
+      function syncSpeedReadout() {
+        speedValue.textContent = `${state.speedMultiplier.toFixed(2)}x`;
+      }
+
+      function syncTimingReadout() {
+        const effectiveFps = Math.max(0.01, state.fps * state.speedMultiplier);
+        timingValue.textContent = `effective: ${effectiveFps.toFixed(2)} fps (${frameDelayMs()} ms/frame)`;
+      }
+
       function restartPlayback() {
         showCurrentFrameImmediately();
         startPlayback();
+      }
+
+      function updateAllReadouts() {
+        syncFpsReadout();
+        syncSpeedReadout();
+        syncTimingReadout();
       }
 
       function moveFrame(fromIndex, toIndex) {
@@ -516,28 +550,50 @@
         frameInput.value = "";
       });
 
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          dropZone.classList.add("drag-over");
+      function bindDropTarget(target) {
+        ["dragenter", "dragover"].forEach((eventName) => {
+          target.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dropZone.classList.add("drag-over");
+          });
         });
+
+        ["dragleave", "dragend", "drop"].forEach((eventName) => {
+          target.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (eventName === "drop") {
+              const files = event.dataTransfer ? event.dataTransfer.files : null;
+              addFrames(files);
+            }
+            dropZone.classList.remove("drag-over");
+          });
+        });
+      }
+
+      bindDropTarget(dropZone);
+      bindDropTarget(document.body);
+
+      window.addEventListener("dragover", (event) => {
+        event.preventDefault();
       });
 
-      ["dragleave", "dragend", "drop"].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          if (eventName === "drop") {
-            const files = event.dataTransfer ? event.dataTransfer.files : null;
-            addFrames(files);
-          }
-          dropZone.classList.remove("drag-over");
-        });
+      window.addEventListener("drop", (event) => {
+        event.preventDefault();
       });
 
       fpsInput.addEventListener("input", () => {
         const nextFps = Math.max(1, Math.min(30, Number(fpsInput.value) || 8));
         state.fps = nextFps;
-        syncFpsReadout();
+        updateAllReadouts();
+        restartPlayback();
+      });
+
+      speedInput.addEventListener("input", () => {
+        const nextSpeed = Math.max(0.25, Math.min(3, Number(speedInput.value) || 1));
+        state.speedMultiplier = nextSpeed;
+        updateAllReadouts();
         restartPlayback();
       });
 
@@ -561,7 +617,7 @@
       });
 
       syncPlaybackButton();
-      syncFpsReadout();
+      updateAllReadouts();
       updateButtons();
       updatePreview();
     </script>
