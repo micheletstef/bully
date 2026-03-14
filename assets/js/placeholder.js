@@ -3680,6 +3680,31 @@ function syncVisualizationBackground() {
   }
 }
 
+function computeEffectiveLoopPaddingPx() {
+  const padTBDesign = Math.max(0, Number(currentPadTopBottom()) || 0);
+  const padLRDesign = Math.max(0, Number(currentPadLeftRight()) || 0);
+  const viewportWidthRaw = billboardPreview
+    ? Math.max(0, billboardPreview.clientWidth || 0, billboardPreview.getBoundingClientRect().width || 0)
+    : 0;
+  const viewportHeightRaw = billboardPreview
+    ? Math.max(0, billboardPreview.clientHeight || 0, billboardPreview.getBoundingClientRect().height || 0)
+    : 0;
+  const viewportWidth = viewportWidthRaw > 1 ? viewportWidthRaw : BILLBOARD_DESIGN_WIDTH;
+  const viewportHeight = viewportHeightRaw > 1 ? viewportHeightRaw : BILLBOARD_DESIGN_HEIGHT;
+  const padTBPxRaw = (padTBDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
+  const maxPadTBPx = Math.max(0, (viewportHeight - 1) / 2);
+  return {
+    padTB: Math.min(Math.max(0, padTBPxRaw), maxPadTBPx),
+    padLR: Math.max(0, (padLRDesign / BILLBOARD_DESIGN_WIDTH) * viewportWidth)
+  };
+}
+
+function syncEffectiveLoopPadding() {
+  const effective = computeEffectiveLoopPaddingPx();
+  loopPadTopBottom = effective.padTB;
+  loopPadLeftRight = effective.padLR;
+}
+
 function getPartitionPreviewScale() {
   const targetHeight = 54;
   const stageHeight = Math.max(1, loopStageHeight);
@@ -4469,7 +4494,7 @@ async function init() {
   if (padTBControl) {
     padTBControl.addEventListener("input", () => {
       savePadTopBottom(currentPadTopBottom());
-      loopPadTopBottom = currentPadTopBottom();
+      syncEffectiveLoopPadding();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
       syncPartitionEditorVisuals();
@@ -4481,7 +4506,7 @@ async function init() {
   if (padLRControl) {
     padLRControl.addEventListener("input", () => {
       savePadLeftRight(currentPadLeftRight());
-      loopPadLeftRight = currentPadLeftRight();
+      syncEffectiveLoopPadding();
       syncVisualizationPaddingScaled();
       syncVisualizationGeometry();
       syncPartitionEditorVisuals();
@@ -4827,8 +4852,7 @@ async function init() {
         partitionLoopDistances[key] = loopDistanceSource;
       });
     }
-    loopPadTopBottom = currentPadTopBottom();
-    loopPadLeftRight = currentPadLeftRight();
+    syncEffectiveLoopPadding();
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
     syncPartitionEditorVisuals();
@@ -4841,6 +4865,7 @@ async function init() {
   });
 
   window.addEventListener("resize", () => {
+    syncEffectiveLoopPadding();
     syncVisualizationPaddingScaled();
     syncVisualizationGapScaled();
     syncPartitionEditorVisuals();
@@ -4881,8 +4906,7 @@ async function init() {
   setup3dCanvasInteraction();
   syncVisualizationBackground();
   loopAssetGap = currentAssetGap();
-  loopPadTopBottom = currentPadTopBottom();
-  loopPadLeftRight = currentPadLeftRight();
+  syncEffectiveLoopPadding();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncPartitionEditorVisuals();
