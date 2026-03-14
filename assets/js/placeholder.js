@@ -3683,12 +3683,20 @@ function syncVisualizationBackground() {
 function computeEffectiveLoopPaddingPx() {
   const padTBDesign = Math.max(0, Number(currentPadTopBottom()) || 0);
   const padLRDesign = Math.max(0, Number(currentPadLeftRight()) || 0);
-  const viewportWidthRaw = billboardPreview
-    ? Math.max(0, billboardPreview.clientWidth || 0, billboardPreview.getBoundingClientRect().width || 0)
-    : 0;
-  const viewportHeightRaw = billboardPreview
-    ? Math.max(0, billboardPreview.clientHeight || 0, billboardPreview.getBoundingClientRect().height || 0)
-    : 0;
+  const frameEl =
+    (billboardPreview && billboardPreview.closest(".billboard-frame")) ||
+    (billboardPreview3d && billboardPreview3d.closest(".billboard-frame")) ||
+    null;
+  const viewportWidthRaw = frameEl
+    ? Math.max(0, frameEl.clientWidth || 0, frameEl.getBoundingClientRect().width || 0)
+    : billboardPreview
+      ? Math.max(0, billboardPreview.clientWidth || 0, billboardPreview.getBoundingClientRect().width || 0)
+      : 0;
+  const viewportHeightRaw = frameEl
+    ? Math.max(0, frameEl.clientHeight || 0, frameEl.getBoundingClientRect().height || 0)
+    : billboardPreview
+      ? Math.max(0, billboardPreview.clientHeight || 0, billboardPreview.getBoundingClientRect().height || 0)
+      : 0;
   const viewportWidth = viewportWidthRaw > 1 ? viewportWidthRaw : BILLBOARD_DESIGN_WIDTH;
   const viewportHeight = viewportHeightRaw > 1 ? viewportHeightRaw : BILLBOARD_DESIGN_HEIGHT;
   const padTBPxRaw = (padTBDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
