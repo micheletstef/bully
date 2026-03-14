@@ -629,7 +629,7 @@ function syncDirectionModeUI() {
     partitionEditors.style.display = partitioned ? "grid" : "none";
   }
   if (settingsTitle) {
-    const base = activeDirectionName || "linear loop";
+    const base = activeDirectionName || "single";
     settingsTitle.textContent = `${base} settings`;
   }
   if (linearOrientationRow) {
@@ -761,7 +761,7 @@ async function load3dImage(src) {
   return promise;
 }
 
-async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation) {
+async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation, options = {}) {
   if (!sources.length) {
     return null;
   }
@@ -770,6 +770,8 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation)
     return null;
   }
 
+  const preserveInlineWhenVertical = options && options.preserveInlineWhenVertical === true;
+  const rotateAssetsInStrip = orientation === "vertical" && !preserveInlineWhenVertical;
   const padLRDesign = Math.max(0, Number(currentPadLeftRight()) || 0);
   const padTBDesign = Math.max(0, Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(currentPadTopBottom()) || 0));
   const gapDesign = Math.max(0, Number(currentAssetGap()) || 0);
@@ -783,7 +785,7 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation)
   const widthsDesign = images.map((img) => {
     const sourceWidth = Math.max(1, img.naturalWidth || img.width || 1);
     const sourceHeight = Math.max(1, img.naturalHeight || img.height || 1);
-    if (orientation === "vertical") {
+    if (rotateAssetsInStrip) {
       return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign);
     }
     return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign);
@@ -809,7 +811,7 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation)
     let cursor = startX + padLRPx;
     images.forEach((img, idx) => {
       const drawWidth = widths[idx];
-      if (orientation === "vertical") {
+      if (rotateAssetsInStrip) {
         stripCtx.save();
         stripCtx.translate(cursor + drawWidth / 2, padTBPx + artworkHeightPx / 2);
         stripCtx.rotate(-Math.PI / 2);
@@ -836,10 +838,13 @@ async function build3dSurfaceStrip(targetHeight) {
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation);
 }
 
-async function build3dPartitionSurfaceStrip(targetHeight, partitionKey) {
+async function build3dPartitionSurfaceStrip(targetHeight, partitionKey, orientationOverride = null) {
   const sources = current3dPartitionSources(partitionKey);
-  const orientation = current3dPartitionOrientation(partitionKey);
-  return build3dSurfaceStripFromConfig(targetHeight, sources, orientation);
+  const orientation = orientationOverride || current3dPartitionOrientation(partitionKey);
+  return build3dSurfaceStripFromConfig(targetHeight, sources, orientation, {
+    // Keep partition artwork inline in vertical mode; rotate only at draw time.
+    preserveInlineWhenVertical: true
+  });
 }
 
 function buildTopViewSpine() {
@@ -1955,10 +1960,14 @@ async function syncThreeLoopTexture() {
 
   let linearSurface = null;
   let partitionSurfaces = null;
+  let partitionOrientations = null;
   if (isPartitioned) {
     partitionSurfaces = {};
+    partitionOrientations = {};
     for (const key of PARTITION_KEYS) {
-      const surface = await build3dPartitionSurfaceStrip(targetHeight, key);
+      const orientation = current3dPartitionOrientation(key);
+      partitionOrientations[key] = orientation;
+      const surface = await build3dPartitionSurfaceStrip(targetHeight, key, orientation);
       if (!surface) {
         return;
       }
@@ -2000,7 +2009,8 @@ async function syncThreeLoopTexture() {
     frameCanvas,
     frameCtx,
     linearSurface,
-    partitionSurfaces
+    partitionSurfaces,
+    partitionOrientations
   };
   preview3dThreeState.mesh.material.map = texture;
   tuneProjectionMaterial(preview3dThreeState.mesh.material);
@@ -2056,6 +2066,40 @@ function drawSurfaceViewportWindow(ctx, surface, progress, destX, destY, destWid
   }
 }
 
+function drawSurfaceViewportWindowVertical(ctx, surface, progress, destX, destY, destWidth, destHeight) {
+  if (!ctx || !surface || !surface.canvas || !surface.sequenceWidth || destWidth <= 0 || destHeight <= 0) {
+    return;
+  }
+  const sequenceWidth = Math.max(1, Math.round(surface.sequenceWidth));
+  let srcX = ((progress * sequenceWidth) % sequenceWidth + sequenceWidth) % sequenceWidth;
+  let remaining = Math.max(1, Math.round(destHeight));
+  let dx = 0;
+
+  ctx.save();
+  ctx.translate(Math.round(destX), Math.round(destY + destHeight));
+  // Rotate inline strip so movement is bottom -> top.
+  ctx.rotate(-Math.PI / 2);
+  while (remaining > 0) {
+    const available = sequenceWidth - srcX;
+    const drawWidth = Math.max(1, Math.min(remaining, available));
+    ctx.drawImage(
+      surface.canvas,
+      srcX,
+      0,
+      drawWidth,
+      surface.stripHeight,
+      dx,
+      0,
+      drawWidth,
+      Math.round(destWidth)
+    );
+    remaining -= drawWidth;
+    dx += drawWidth;
+    srcX = (srcX + drawWidth) % sequenceWidth;
+  }
+  ctx.restore();
+}
+
 function paintThreeLoopTextureFrame(progress) {
   const texture = preview3dThreeState.texture;
   const state = preview3dThreeState.loopTextureState;
@@ -2072,20 +2116,25 @@ function paintThreeLoopTextureFrame(progress) {
       curve: Math.max(1, Math.round(frameCanvas.width * (BILLBOARD_CURVE_WIDTH / BILLBOARD_DESIGN_WIDTH)))
     };
     widths.right = Math.max(1, frameCanvas.width - widths.left - widths.curve);
+    const partitionOrientations = state.partitionOrientations || {};
+    const drawPartition = (partitionKey, cursorX, width) => {
+      const surface = state.partitionSurfaces[partitionKey];
+      if (!surface) {
+        return;
+      }
+      const orientation = partitionOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+      if (orientation === "vertical") {
+        drawSurfaceViewportWindowVertical(frameCtx, surface, progress, cursorX, 0, width, frameCanvas.height);
+      } else {
+        drawSurfaceViewportWindow(frameCtx, surface, progress, cursorX, 0, width, frameCanvas.height);
+      }
+    };
     let cursor = 0;
-    drawSurfaceViewportWindow(frameCtx, state.partitionSurfaces.left, progress, cursor, 0, widths.left, frameCanvas.height);
+    drawPartition("left", cursor, widths.left);
     cursor += widths.left;
-    drawSurfaceViewportWindow(frameCtx, state.partitionSurfaces.curve, progress, cursor, 0, widths.curve, frameCanvas.height);
+    drawPartition("curve", cursor, widths.curve);
     cursor += widths.curve;
-    drawSurfaceViewportWindow(
-      frameCtx,
-      state.partitionSurfaces.right,
-      progress,
-      cursor,
-      0,
-      widths.right,
-      frameCanvas.height
-    );
+    drawPartition("right", cursor, widths.right);
   } else {
     drawSurfaceViewportWindow(frameCtx, state.linearSurface, progress, 0, 0, frameCanvas.width, frameCanvas.height);
   }
@@ -2268,7 +2317,7 @@ function loadOutputSnapshot(snapshot) {
       ? snapshot.directionName.trim()
       : normalizedConfig && normalizedConfig.directionMode === "partitioned"
         ? "partitioned"
-        : "linear loop";
+        : "single";
   syncDirectionModeUI();
   setSettingsPanelVisibility(false);
   applyPreviewViewMode(previewViewMode);
@@ -2509,7 +2558,7 @@ function getCurrentDirectionName() {
   if (activeButton && activeButton.dataset.directionName) {
     return activeButton.dataset.directionName;
   }
-  return restoreSelectedDirection() || "linear loop";
+  return restoreSelectedDirection() || "single";
 }
 
 function getCurrentLoopConfig() {
@@ -4404,7 +4453,7 @@ function renderDirectory(directions) {
   directionsSection.className = "directory-section";
 
   const directionsTitle = document.createElement("h2");
-  directionsTitle.textContent = "directions";
+  directionsTitle.textContent = "setups";
   directionsSection.appendChild(directionsTitle);
 
   const savedDirection = restoreSelectedDirection();
@@ -4443,7 +4492,7 @@ function renderDirectory(directions) {
   const outputsSection = document.createElement("section");
   outputsSection.className = "directory-section";
   const outputsTitle = document.createElement("h2");
-  outputsTitle.textContent = "outputs ";
+  outputsTitle.textContent = "saved";
   outputsSection.appendChild(outputsTitle);
 
   const outputs = sharedOutputs;
@@ -4530,14 +4579,14 @@ async function init() {
     }
 
     if (!directions.length) {
-      throw new Error("No directions found");
+      throw new Error("No setups found");
     }
 
     knownDirections = [...directions];
     sharedOutputs = await fetchOutputsFromServer();
     renderDirectory(directions);
   } catch (error) {
-    emptyState.textContent = "No directions found. Check directions/manifest.json.";
+    emptyState.textContent = "No setups found. Check directions/manifest.json.";
   }
 
   syncSpeedReadout();
