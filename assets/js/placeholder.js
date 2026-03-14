@@ -3865,7 +3865,7 @@ function renderLoopPreview() {
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
 
-  loopArtworks.forEach((item) => {
+  loopArtworks.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
     tile.dataset.index = String(index);
