@@ -1405,15 +1405,15 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   }
   const topY = box.max.y;
   const meshHeight = Math.max(1, box.max.y - box.min.y);
-  const lineStartOffset = Math.min(32, Math.max(8, meshHeight * 0.01));
-  const lineHeight = Math.min(180, Math.max(56, meshHeight * 0.07));
-  const dividerLabelOffset = Math.min(56, Math.max(18, meshHeight * 0.02));
-  const partitionLabelOffset = Math.min(120, Math.max(34, meshHeight * 0.045));
+  const lineStartOffset = Math.min(120, Math.max(24, meshHeight * 0.02));
+  const lineHeight = Math.min(520, Math.max(140, meshHeight * 0.12));
+  const dividerLabelOffset = Math.min(120, Math.max(30, meshHeight * 0.03));
+  const partitionLabelOffset = Math.min(240, Math.max(80, meshHeight * 0.065));
   const dividerMaterial = new THREE.LineBasicMaterial({
     color: 0x121212,
     transparent: true,
-    opacity: 0.9,
-    depthTest: true,
+    opacity: 0.82,
+    depthTest: false,
     depthWrite: false
   });
   [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
@@ -1428,14 +1428,18 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(lineGeometry, dividerMaterial.clone());
     line.name = idx === 0 ? "divider-1820" : "divider-2840";
+    line.frustumCulled = false;
+    line.renderOrder = 999;
     group.add(line);
     const dividerLabel = create3dTextSprite(THREE, idx === 0 ? "1820px" : "2840px", {
-      worldHeight: Math.min(64, Math.max(28, meshHeight * 0.02)),
+      worldHeight: Math.min(180, Math.max(72, meshHeight * 0.038)),
       color: "#111111",
-      fontSize: 28
+      fontSize: 36
     });
     if (dividerLabel) {
       dividerLabel.position.set(anchor.x, topY + lineStartOffset + lineHeight + dividerLabelOffset, anchor.z);
+      dividerLabel.frustumCulled = false;
+      dividerLabel.renderOrder = 1000;
       group.add(dividerLabel);
     }
   });
@@ -1451,16 +1455,19 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.min(80, Math.max(34, meshHeight * 0.028)),
+      worldHeight: Math.min(240, Math.max(90, meshHeight * 0.05)),
       color: "#111111",
-      fontSize: 34
+      fontSize: 44
     });
     if (!sprite) {
       return;
     }
     sprite.position.set(sample.x, topY + lineStartOffset + lineHeight + partitionLabelOffset, sample.z);
+    sprite.frustumCulled = false;
+    sprite.renderOrder = 1000;
     group.add(sprite);
   });
+  group.renderOrder = 998;
   return group;
 }
 
