@@ -43,14 +43,61 @@ body.dark-mode {
 }
 
 body.dark-mode .app-shell {
-  filter: invert(1) hue-rotate(180deg);
+  background: #000;
+  color: #fff;
 }
 
-body.dark-mode #billboardPreview,
-body.dark-mode .billboard-3d-canvas,
-body.dark-mode .loop-preview-item img,
-body.dark-mode .partition-preview-item img {
-  filter: invert(1) hue-rotate(180deg);
+body.dark-mode .sidebar,
+body.dark-mode .workspace,
+body.dark-mode .settings-panel,
+body.dark-mode .view-controls-panel,
+body.dark-mode .billboard-info,
+body.dark-mode .spec-table,
+body.dark-mode .directory-section h2,
+body.dark-mode .direction-item,
+body.dark-mode .settings-hint,
+body.dark-mode .settings-inline-field > span,
+body.dark-mode .view-control-value,
+body.dark-mode .partition-drop-hint,
+body.dark-mode .artwork-index,
+body.dark-mode .artwork-suffix {
+  color: #fff;
+}
+
+body.dark-mode .action-button,
+body.dark-mode .settings-row input[type="number"],
+body.dark-mode .settings-row select {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+}
+
+body.dark-mode .settings-row input[type="color"] {
+  border-color: #fff;
+}
+
+body.dark-mode .loop-preview-item,
+body.dark-mode .partition-preview-item {
+  outline-color: rgba(255, 255, 255, 0.35);
+}
+
+body.dark-mode .loop-active-window,
+body.dark-mode .partition-active-window {
+  border-color: #fff;
+}
+
+body.dark-mode .anno-top-line,
+body.dark-mode .anno-right-line {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+body.dark-mode .anno-top-line::before,
+body.dark-mode .anno-top-line::after,
+body.dark-mode .anno-right-line::before,
+body.dark-mode .anno-right-line::after,
+body.dark-mode .anno-marker {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 body.dark-mode .theme-toggle-button {
