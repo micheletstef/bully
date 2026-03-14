@@ -1559,9 +1559,9 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.max(0.001, meshHeight * 0.022),
+      worldHeight: Math.max(0.001, meshHeight * 0.044),
       color: "#111111",
-      fontSize: 24
+      fontSize: 48
     });
     if (!sprite) {
       return;

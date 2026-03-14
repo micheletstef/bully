@@ -138,6 +138,81 @@
         gap: 6px;
       }
 
+      .crop-overlay {
+        position: absolute;
+        inset: 14px;
+        pointer-events: none;
+        display: none;
+      }
+
+      .crop-box {
+        position: absolute;
+        border: 2px solid rgba(255, 64, 64, 0.95);
+        background: rgba(255, 64, 64, 0.12);
+        pointer-events: auto;
+        cursor: move;
+      }
+
+      .crop-handle {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border: 1px solid #fff;
+        background: #ff4747;
+      }
+
+      .crop-handle[data-handle="nw"] {
+        left: -6px;
+        top: -6px;
+        cursor: nwse-resize;
+      }
+
+      .crop-handle[data-handle="ne"] {
+        right: -6px;
+        top: -6px;
+        cursor: nesw-resize;
+      }
+
+      .crop-handle[data-handle="sw"] {
+        left: -6px;
+        bottom: -6px;
+        cursor: nesw-resize;
+      }
+
+      .crop-handle[data-handle="se"] {
+        right: -6px;
+        bottom: -6px;
+        cursor: nwse-resize;
+      }
+
+      .crop-handle[data-handle="n"] {
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        cursor: ns-resize;
+      }
+
+      .crop-handle[data-handle="s"] {
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        cursor: ns-resize;
+      }
+
+      .crop-handle[data-handle="w"] {
+        left: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: ew-resize;
+      }
+
+      .crop-handle[data-handle="e"] {
+        right: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: ew-resize;
+      }
+
       .list {
         display: grid;
         gap: 6px;
@@ -188,6 +263,7 @@
         display: grid;
         place-items: center;
         padding: 14px;
+        position: relative;
       }
 
       .preview-image {
@@ -250,29 +326,37 @@
           <div class="row">
             <label>playback speed</label>
             <div class="fps-line">
-              <input id="speedInput" type="range" min="0.25" max="3" step="0.05" value="1" />
+              <input id="speedInput" type="range" min="0.25" max="20" step="0.25" value="1" />
               <span id="speedValue">1.00x</span>
             </div>
             <div id="timingValue" class="timing">effective: 8.00 fps (125 ms/frame)</div>
           </div>
 
           <div class="row">
+            <label>frame sampling</label>
+            <div class="fps-line">
+              <input id="frameStepInput" type="range" min="1" max="12" step="1" value="1" />
+              <span id="frameStepValue">every frame</span>
+            </div>
+          </div>
+
+          <div class="row">
             <label>crop (percent)</label>
             <div class="crop-grid">
               <div class="fps-line">
-                <input id="cropTopInput" type="range" min="0" max="45" step="1" value="0" />
+                <input id="cropTopInput" type="range" min="0" max="45" step="0.1" value="0" />
                 <span id="cropTopValue">top 0%</span>
               </div>
               <div class="fps-line">
-                <input id="cropRightInput" type="range" min="0" max="45" step="1" value="0" />
+                <input id="cropRightInput" type="range" min="0" max="45" step="0.1" value="0" />
                 <span id="cropRightValue">right 0%</span>
               </div>
               <div class="fps-line">
-                <input id="cropBottomInput" type="range" min="0" max="45" step="1" value="0" />
+                <input id="cropBottomInput" type="range" min="0" max="45" step="0.1" value="0" />
                 <span id="cropBottomValue">bottom 0%</span>
               </div>
               <div class="fps-line">
-                <input id="cropLeftInput" type="range" min="0" max="45" step="1" value="0" />
+                <input id="cropLeftInput" type="range" min="0" max="45" step="0.1" value="0" />
                 <span id="cropLeftValue">left 0%</span>
               </div>
             </div>
@@ -299,6 +383,18 @@
       <section class="preview-wrap">
         <div class="preview-inner">
           <canvas id="previewCanvas" class="preview-canvas" style="display: none"></canvas>
+          <div id="cropOverlay" class="crop-overlay">
+            <div id="cropBox" class="crop-box" data-handle="move">
+              <span class="crop-handle" data-handle="nw"></span>
+              <span class="crop-handle" data-handle="n"></span>
+              <span class="crop-handle" data-handle="ne"></span>
+              <span class="crop-handle" data-handle="e"></span>
+              <span class="crop-handle" data-handle="se"></span>
+              <span class="crop-handle" data-handle="s"></span>
+              <span class="crop-handle" data-handle="sw"></span>
+              <span class="crop-handle" data-handle="w"></span>
+            </div>
+          </div>
           <div id="emptyState" class="empty">add multiple images to preview your loop</div>
         </div>
       </section>
@@ -312,6 +408,8 @@
       const speedInput = document.getElementById("speedInput");
       const speedValue = document.getElementById("speedValue");
       const timingValue = document.getElementById("timingValue");
+      const frameStepInput = document.getElementById("frameStepInput");
+      const frameStepValue = document.getElementById("frameStepValue");
       const cropTopInput = document.getElementById("cropTopInput");
       const cropRightInput = document.getElementById("cropRightInput");
       const cropBottomInput = document.getElementById("cropBottomInput");
@@ -326,6 +424,8 @@
       const dropZone = document.getElementById("dropZone");
       const frameList = document.getElementById("frameList");
       const previewCanvas = document.getElementById("previewCanvas");
+      const cropOverlay = document.getElementById("cropOverlay");
+      const cropBox = document.getElementById("cropBox");
       const emptyState = document.getElementById("emptyState");
       const status = document.getElementById("status");
 
@@ -334,6 +434,7 @@
         currentIndex: 0,
         fps: 8,
         speedMultiplier: 1,
+        frameStep: 1,
         cropTop: 0,
         cropRight: 0,
         cropBottom: 0,
@@ -342,6 +443,8 @@
         timer: null
       };
       let previewRenderToken = 0;
+      let previewFrameMetrics = null;
+      let cropDragState = null;
 
       function setStatus(message) {
         status.textContent = String(message || "");
@@ -354,6 +457,12 @@
       function frameDelayMs() {
         const effectiveFps = Math.max(0.01, state.fps * state.speedMultiplier);
         return Math.max(1, Math.round(1000 / effectiveFps));
+      }
+
+      function steppedFrames() {
+        const step = Math.max(1, Math.round(Number(state.frameStep) || 1));
+        const result = state.frames.filter((_, index) => index % step === 0);
+        return result.length ? result : state.frames.slice(0, 1);
       }
 
       function updateButtons() {
@@ -383,6 +492,20 @@
         return { top, right, bottom, left };
       }
 
+      function setCropFromRatios(ratios) {
+        state.cropTop = Math.max(0, Math.min(45, ratios.top * 100));
+        state.cropRight = Math.max(0, Math.min(45, ratios.right * 100));
+        state.cropBottom = Math.max(0, Math.min(45, ratios.bottom * 100));
+        state.cropLeft = Math.max(0, Math.min(45, ratios.left * 100));
+      }
+
+      function syncCropInputsFromState() {
+        cropTopInput.value = String(state.cropTop);
+        cropRightInput.value = String(state.cropRight);
+        cropBottomInput.value = String(state.cropBottom);
+        cropLeftInput.value = String(state.cropLeft);
+      }
+
       function cropRectForImage(image) {
         const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
         const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
@@ -399,13 +522,15 @@
       function ensurePreviewCanvasSize() {
         const dpr = Math.max(1, window.devicePixelRatio || 1);
         const rect = previewCanvas.getBoundingClientRect();
-        const width = Math.max(1, Math.round(rect.width * dpr));
-        const height = Math.max(1, Math.round(rect.height * dpr));
+        const cssWidth = Math.max(1, rect.width);
+        const cssHeight = Math.max(1, rect.height);
+        const width = Math.max(1, Math.round(cssWidth * dpr));
+        const height = Math.max(1, Math.round(cssHeight * dpr));
         if (previewCanvas.width !== width || previewCanvas.height !== height) {
           previewCanvas.width = width;
           previewCanvas.height = height;
         }
-        return { width, height, dpr };
+        return { cssWidth, cssHeight, dpr };
       }
 
       function drawPreviewFrame(image) {
@@ -413,20 +538,21 @@
         if (!context) {
           return;
         }
-        const { width, height } = ensurePreviewCanvasSize();
-        context.clearRect(0, 0, width, height);
+        const { cssWidth, cssHeight, dpr } = ensurePreviewCanvasSize();
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        context.clearRect(0, 0, cssWidth, cssHeight);
         const cropRect = cropRectForImage(image);
         const sourceAspect = cropRect.sw / cropRect.sh;
-        const destAspect = width / height;
-        let dw = width;
-        let dh = height;
+        const destAspect = cssWidth / cssHeight;
+        let dw = cssWidth;
+        let dh = cssHeight;
         if (sourceAspect > destAspect) {
-          dh = width / sourceAspect;
+          dh = cssWidth / sourceAspect;
         } else {
-          dw = height * sourceAspect;
+          dw = cssHeight * sourceAspect;
         }
-        const dx = (width - dw) * 0.5;
-        const dy = (height - dh) * 0.5;
+        const dx = (cssWidth - dw) * 0.5;
+        const dy = (cssHeight - dh) * 0.5;
         context.imageSmoothingEnabled = true;
         context.drawImage(
           image,
@@ -439,6 +565,32 @@
           dw,
           dh
         );
+        previewFrameMetrics = {
+          imageWidth: Math.max(1, image.naturalWidth || image.width || 1),
+          imageHeight: Math.max(1, image.naturalHeight || image.height || 1),
+          drawX: dx,
+          drawY: dy,
+          drawWidth: dw,
+          drawHeight: dh
+        };
+        syncCropOverlay();
+      }
+
+      function syncCropOverlay() {
+        if (!previewFrameMetrics || !state.frames.length) {
+          cropOverlay.style.display = "none";
+          return;
+        }
+        const crop = getEffectiveCropRatios();
+        const x = previewFrameMetrics.drawX + previewFrameMetrics.drawWidth * crop.left;
+        const y = previewFrameMetrics.drawY + previewFrameMetrics.drawHeight * crop.top;
+        const width = previewFrameMetrics.drawWidth * Math.max(0.01, 1 - crop.left - crop.right);
+        const height = previewFrameMetrics.drawHeight * Math.max(0.01, 1 - crop.top - crop.bottom);
+        cropBox.style.left = `${x}px`;
+        cropBox.style.top = `${y}px`;
+        cropBox.style.width = `${width}px`;
+        cropBox.style.height = `${height}px`;
+        cropOverlay.style.display = "block";
       }
 
       async function ensureFrameImage(frame) {
@@ -459,7 +611,11 @@
           return;
         }
         const token = ++previewRenderToken;
-        const frame = state.frames[state.currentIndex] || state.frames[0];
+        const frames = steppedFrames();
+        if (state.currentIndex >= frames.length) {
+          state.currentIndex = 0;
+        }
+        const frame = frames[state.currentIndex] || frames[0];
         const image = await ensureFrameImage(frame);
         if (token !== previewRenderToken || !image) {
           return;
@@ -524,13 +680,20 @@
       function startPlayback() {
         stopPlayback();
         if (!state.playing || state.frames.length < 2) {
+          syncCropOverlay();
+          return;
+        }
+        const frames = steppedFrames();
+        if (frames.length < 2) {
+          syncCropOverlay();
           return;
         }
         state.timer = setInterval(() => {
-          if (!state.frames.length) {
+          const activeFrames = steppedFrames();
+          if (!activeFrames.length) {
             return;
           }
-          state.currentIndex = (state.currentIndex + 1) % state.frames.length;
+          state.currentIndex = (state.currentIndex + 1) % activeFrames.length;
           updatePreview();
         }, frameDelayMs());
       }
@@ -552,6 +715,11 @@
         timingValue.textContent = `effective: ${effectiveFps.toFixed(2)} fps (${frameDelayMs()} ms/frame)`;
       }
 
+      function syncFrameStepReadout() {
+        const step = Math.max(1, Math.round(state.frameStep));
+        frameStepValue.textContent = step <= 1 ? "every frame" : `every ${step} frames`;
+      }
+
       function syncCropReadout() {
         cropTopValue.textContent = `top ${state.cropTop}%`;
         cropRightValue.textContent = `right ${state.cropRight}%`;
@@ -568,6 +736,7 @@
         syncFpsReadout();
         syncSpeedReadout();
         syncTimingReadout();
+        syncFrameStepReadout();
         syncCropReadout();
       }
 
@@ -596,10 +765,12 @@
         });
         state.frames = [];
         state.currentIndex = 0;
+        previewFrameMetrics = null;
         stopPlayback();
         renderFrameList();
         updatePreview();
         updateButtons();
+        syncCropOverlay();
       }
 
       async function addFrames(files) {
@@ -651,7 +822,8 @@
         exportButton.disabled = true;
         setStatus("rendering gif...");
         try {
-          const loadedImages = await Promise.all(state.frames.map((frame) => loadImage(frame.file)));
+          const frames = steppedFrames();
+          const loadedImages = await Promise.all(frames.map((frame) => loadImage(frame.file)));
           const firstImage = loadedImages[0];
           const baseCropRect = cropRectForImage(firstImage);
           const width = Math.max(1, baseCropRect.sw);
@@ -755,8 +927,15 @@
       });
 
       speedInput.addEventListener("input", () => {
-        const nextSpeed = Math.max(0.25, Math.min(3, Number(speedInput.value) || 1));
+        const nextSpeed = Math.max(0.25, Math.min(20, Number(speedInput.value) || 1));
         state.speedMultiplier = nextSpeed;
+        updateAllReadouts();
+        restartPlayback();
+      });
+
+      frameStepInput.addEventListener("input", () => {
+        state.frameStep = Math.max(1, Math.min(12, Math.round(Number(frameStepInput.value) || 1)));
+        state.currentIndex = 0;
         updateAllReadouts();
         restartPlayback();
       });
@@ -770,6 +949,73 @@
           updateAllReadouts();
           updatePreview();
         });
+      });
+
+      function startCropDrag(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!previewFrameMetrics || !state.frames.length) {
+          return;
+        }
+        const handleTarget = event.target && event.target.dataset ? event.target.dataset.handle : "";
+        const handle = handleTarget || (event.currentTarget && event.currentTarget.dataset ? event.currentTarget.dataset.handle : "move");
+        cropDragState = {
+          handle: handle || "move",
+          startX: event.clientX,
+          startY: event.clientY,
+          startCrop: getEffectiveCropRatios()
+        };
+        window.addEventListener("pointermove", onCropDragMove);
+        window.addEventListener("pointerup", endCropDrag);
+      }
+
+      function endCropDrag() {
+        cropDragState = null;
+        window.removeEventListener("pointermove", onCropDragMove);
+        window.removeEventListener("pointerup", endCropDrag);
+      }
+
+      function onCropDragMove(event) {
+        if (!cropDragState || !previewFrameMetrics) {
+          return;
+        }
+        const minSize = 0.02;
+        const deltaX = (event.clientX - cropDragState.startX) / Math.max(1, previewFrameMetrics.drawWidth);
+        const deltaY = (event.clientY - cropDragState.startY) / Math.max(1, previewFrameMetrics.drawHeight);
+        const next = { ...cropDragState.startCrop };
+        const handle = cropDragState.handle;
+        if (handle === "move") {
+          const width = 1 - cropDragState.startCrop.left - cropDragState.startCrop.right;
+          const height = 1 - cropDragState.startCrop.top - cropDragState.startCrop.bottom;
+          const left = Math.max(0, Math.min(1 - width, cropDragState.startCrop.left + deltaX));
+          const top = Math.max(0, Math.min(1 - height, cropDragState.startCrop.top + deltaY));
+          next.left = left;
+          next.right = 1 - left - width;
+          next.top = top;
+          next.bottom = 1 - top - height;
+        } else {
+          if (handle.includes("w")) {
+            next.left = Math.max(0, Math.min(1 - minSize - next.right, cropDragState.startCrop.left + deltaX));
+          }
+          if (handle.includes("e")) {
+            next.right = Math.max(0, Math.min(1 - minSize - next.left, cropDragState.startCrop.right - deltaX));
+          }
+          if (handle.includes("n")) {
+            next.top = Math.max(0, Math.min(1 - minSize - next.bottom, cropDragState.startCrop.top + deltaY));
+          }
+          if (handle.includes("s")) {
+            next.bottom = Math.max(0, Math.min(1 - minSize - next.top, cropDragState.startCrop.bottom - deltaY));
+          }
+        }
+        setCropFromRatios(next);
+        syncCropInputsFromState();
+        updateAllReadouts();
+        updatePreview();
+      }
+
+      cropBox.addEventListener("pointerdown", startCropDrag);
+      [...cropBox.querySelectorAll(".crop-handle")].forEach((handle) => {
+        handle.addEventListener("pointerdown", startCropDrag);
       });
 
       playPauseButton.addEventListener("click", () => {
@@ -796,6 +1042,7 @@
       });
 
       syncPlaybackButton();
+      syncCropInputsFromState();
       updateAllReadouts();
       updateButtons();
       updatePreview();
