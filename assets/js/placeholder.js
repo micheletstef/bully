@@ -1394,6 +1394,51 @@ function create3dTextSprite(THREE, text, options = {}) {
   return sprite;
 }
 
+function create3dTextLabelMesh(THREE, text, options = {}) {
+  const label = String(text || "");
+  const fontSize = Math.max(14, Number(options.fontSize) || 36);
+  const paddingX = Math.max(6, Number(options.paddingX) || 18);
+  const paddingY = Math.max(4, Number(options.paddingY) || 10);
+  const fontFamily = options.fontFamily || '"Courier New", Courier, monospace';
+  const fontSpec = `${fontSize}px ${fontFamily}`;
+  const measureCanvas = document.createElement("canvas");
+  const measureCtx = measureCanvas.getContext("2d");
+  if (!measureCtx) {
+    return null;
+  }
+  measureCtx.font = fontSpec;
+  const measured = Math.max(1, Math.ceil(measureCtx.measureText(label).width));
+  const canvas = document.createElement("canvas");
+  canvas.width = measured + paddingX * 2;
+  canvas.height = fontSize + paddingY * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = fontSpec;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = options.color || "#101010";
+  ctx.fillText(label, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.DoubleSide
+  });
+  const worldHeightRaw = Number(options.worldHeight);
+  const worldHeight = Number.isFinite(worldHeightRaw) && worldHeightRaw > 0 ? worldHeightRaw : 20;
+  const aspect = canvas.width / canvas.height;
+  const geometry = new THREE.PlaneGeometry(worldHeight * aspect, worldHeight, 1, 1);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
 function sampleMeshLocalPointByUv(THREE, mesh, uTarget, vTarget) {
   if (!THREE || !mesh || !mesh.geometry) {
     return null;
@@ -1561,23 +1606,34 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     if (!frame || !frame.normal) {
       return;
     }
-    const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.max(0.001, meshHeight * 0.034),
+    const labelMesh = create3dTextLabelMesh(THREE, text, {
+      worldHeight: Math.max(0.001, meshHeight * 0.028),
       color: "#111111",
-      fontSize: 40
+      fontSize: 34
     });
-    if (!sprite) {
+    if (!labelMesh) {
       return;
     }
-    sprite.position.copy(
+    labelMesh.position.copy(
       frame.point
         .clone()
         .add(worldUp.clone().multiplyScalar(partitionLabelLift))
         .add(frame.normal.clone().multiplyScalar(outwardOffset * 1.2))
     );
-    sprite.frustumCulled = false;
-    sprite.renderOrder = 1000;
-    group.add(sprite);
+    const up = frame.up.clone().normalize();
+    let normal = frame.normal.clone().normalize();
+    if (normal.lengthSq() <= 1e-8) {
+      normal = new THREE.Vector3(0, 0, 1);
+    }
+    let right = normal.clone().cross(up).normalize();
+    if (right.lengthSq() <= 1e-8) {
+      right = new THREE.Vector3(1, 0, 0);
+    }
+    const basis = new THREE.Matrix4();
+    basis.makeBasis(right, up, normal);
+    labelMesh.quaternion.setFromRotationMatrix(basis);
+    labelMesh.renderOrder = 1000;
+    group.add(labelMesh);
   });
   group.renderOrder = 998;
   return group;
