@@ -161,6 +161,13 @@
       async function renderLoop() {
         loopFill.innerHTML = "";
         primaryTrack = null;
+        const viewportHeight = Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+        const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
+        const appliedPadTopBottom = Math.min(Math.max(0, Number(state.padTopBottom) || 0), maxPadTopBottom);
 
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
@@ -269,7 +276,7 @@
 
         document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
-        document.documentElement.style.setProperty("--loop-pad-tb", `${state.padTopBottom}px`);
+        document.documentElement.style.setProperty("--loop-pad-tb", `${appliedPadTopBottom}px`);
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${gapSize}px`);
         document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);

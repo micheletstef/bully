@@ -242,11 +242,11 @@
         return (partitionDesignWidth / PARTITION_TOTAL_WIDTH) * viewportWidth;
       }
 
-      async function renderPartition(container, sources, partitionKey) {
+      async function renderPartition(container, sources, partitionKey, appliedPadTopBottom) {
         container.innerHTML = "";
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const verticalSidePadding = Math.max(0, Number(state.padTopBottom) || 0);
+        const verticalSidePadding = Math.max(0, Number(appliedPadTopBottom) || 0);
         const sidePadding = verticalFlow
           ? verticalSidePadding
           : Math.max(0, Number(state.padLeftRight) || 0);
@@ -355,8 +355,15 @@
       }
 
       async function renderLoop() {
+        const viewportHeight = Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+        const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
+        const appliedPadTopBottom = Math.min(Math.max(0, Number(state.padTopBottom) || 0), maxPadTopBottom);
         document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
-        document.documentElement.style.setProperty("--loop-pad-tb", `${state.padTopBottom}px`);
+        document.documentElement.style.setProperty("--loop-pad-tb", `${appliedPadTopBottom}px`);
         document.documentElement.style.setProperty("--loop-pad-lr", `${state.padLeftRight}px`);
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${Math.max(0, Number(state.assetGap) || 0)}px`);
@@ -378,7 +385,7 @@
             ? sourceListRaw
             : [DEFAULT_SOURCE];
           const normalizedSources = sourceList.map(normalizeArtworkSource);
-          const result = await renderPartition(container, normalizedSources, key);
+          const result = await renderPartition(container, normalizedSources, key, appliedPadTopBottom);
           const partitionVerticalFlow = orientationForPartition(key) === "vertical";
           const partitionViewportSize = partitionVerticalFlow
             ? container.clientHeight || 0
