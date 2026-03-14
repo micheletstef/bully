@@ -36,6 +36,7 @@ const orientationChoiceButtons = [...document.querySelectorAll(".orientation-cho
 const saveVersionButton = document.getElementById("saveVersionButton");
 const saveVersionStatus = document.getElementById("saveVersionStatus");
 const settingsPanel = document.querySelector(".settings-panel");
+const viewControlsPanel = document.querySelector(".view-controls-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
 const billboardPreview3d = document.getElementById("billboardPreview3d");
@@ -50,6 +51,8 @@ const loopActiveWindow = document.getElementById("loopActiveWindow");
 const loopActiveWindowSecondary = document.getElementById("loopActiveWindowSecondary");
 const loopElapsedTime = document.getElementById("loopElapsedTime");
 const themeToggleButton = document.getElementById("themeToggleButton");
+const settingsToggleButton = document.getElementById("settingsToggleButton");
+const viewControlsToggleButton = document.getElementById("viewControlsToggleButton");
 const STORAGE_KEYS = {
   speed: "billboard.loopSpeedSeconds",
   padTB: "billboard.loopPadTopBottom",
@@ -137,6 +140,9 @@ let knownDirections = [];
 let sharedOutputs = [];
 let activeSidebarKey = null;
 let activeDirectionName = null;
+let settingsPanelAllowed = true;
+let isSettingsPanelOpen = false;
+let isViewControlsPanelOpen = false;
 let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
@@ -2280,12 +2286,42 @@ function setActiveSidebarItem(button, key) {
   setSettingsPanelVisibility(!String(key || "").startsWith("output:"));
 }
 
-function setSettingsPanelVisibility(isVisible) {
-  if (!settingsPanel) {
-    return;
+function syncPanelToggleButtons() {
+  const settingsVisible = settingsPanelAllowed && isSettingsPanelOpen;
+  if (settingsToggleButton) {
+    settingsToggleButton.classList.toggle("active", settingsVisible);
+    settingsToggleButton.setAttribute("aria-expanded", settingsVisible ? "true" : "false");
   }
-  settingsPanel.style.display = isVisible ? "" : "none";
-  settingsPanel.setAttribute("aria-hidden", isVisible ? "false" : "true");
+  if (viewControlsToggleButton) {
+    viewControlsToggleButton.classList.toggle("active", isViewControlsPanelOpen);
+    viewControlsToggleButton.setAttribute("aria-expanded", isViewControlsPanelOpen ? "true" : "false");
+  }
+}
+
+function syncPanelVisibility() {
+  const settingsVisible = settingsPanelAllowed && isSettingsPanelOpen;
+  if (settingsPanel) {
+    settingsPanel.style.display = settingsVisible ? "" : "none";
+    settingsPanel.setAttribute("aria-hidden", settingsVisible ? "false" : "true");
+  }
+  if (viewControlsPanel) {
+    viewControlsPanel.style.display = isViewControlsPanelOpen ? "" : "none";
+    viewControlsPanel.setAttribute("aria-hidden", isViewControlsPanelOpen ? "false" : "true");
+  }
+  syncPanelToggleButtons();
+}
+
+function setSettingsPanelVisibility(isVisible) {
+  settingsPanelAllowed = Boolean(isVisible);
+  if (!settingsPanelAllowed) {
+    isSettingsPanelOpen = false;
+  }
+  syncPanelVisibility();
+}
+
+function setViewControlsPanelVisibility(isVisible) {
+  isViewControlsPanelOpen = Boolean(isVisible);
+  syncPanelVisibility();
 }
 
 function currentSpeedSeconds() {
@@ -4518,6 +4554,7 @@ async function init() {
   syncDirectionModeUI();
   applyPreviewViewMode(previewViewMode);
   syncViewControlsUI();
+  syncPanelVisibility();
 
   if (speedControl) {
     speedControl.addEventListener("input", () => {
@@ -4583,6 +4620,22 @@ async function init() {
     themeToggleButton.addEventListener("click", () => {
       const isDark = document.body.classList.contains("dark-mode");
       applyThemeMode(isDark ? "light" : "dark");
+    });
+  }
+
+  if (settingsToggleButton) {
+    settingsToggleButton.addEventListener("click", () => {
+      if (!settingsPanelAllowed) {
+        return;
+      }
+      isSettingsPanelOpen = !isSettingsPanelOpen;
+      syncPanelVisibility();
+    });
+  }
+
+  if (viewControlsToggleButton) {
+    viewControlsToggleButton.addEventListener("click", () => {
+      setViewControlsPanelVisibility(!isViewControlsPanelOpen);
     });
   }
 
