@@ -160,6 +160,11 @@ const BILLBOARD_PARTITION_RANGES = {
   curve: [BILLBOARD_LEFT_WIDTH, BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH],
   right: [BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH, BILLBOARD_DESIGN_WIDTH]
 };
+const BILLBOARD_PARTITION_CENTERS = {
+  left: (BILLBOARD_PARTITION_RANGES.left[0] + BILLBOARD_PARTITION_RANGES.left[1]) * 0.5,
+  curve: (BILLBOARD_PARTITION_RANGES.curve[0] + BILLBOARD_PARTITION_RANGES.curve[1]) * 0.5,
+  right: (BILLBOARD_PARTITION_RANGES.right[0] + BILLBOARD_PARTITION_RANGES.right[1]) * 0.5
+};
 let loopRowGap = 0;
 let knownDirections = [];
 let sharedOutputs = [];
@@ -178,6 +183,7 @@ const preview3dThreeState = {
   scene: null,
   camera: null,
   mesh: null,
+  annotationGroup: null,
   partitionMeshes: {
     left: null,
     curve: null,
@@ -208,6 +214,8 @@ let preview3dAnimationFrameId = null;
 let preview3dPlaybackSyncState = {
   hasSample: false,
   elapsedSeconds: 0,
+  elapsedContinuous: 0,
+  lastSampleElapsed: 0,
   durationSeconds: 1,
   syncedAtMs: 0
 };
@@ -763,6 +771,30 @@ async function applyAssetColorToSources(sources, color) {
   return tinted;
 }
 
+function editorAssetColorForPartition(partitionKey = null) {
+  if (currentDirectionIsPartitioned() && partitionKey) {
+    return partitionSettingsForKey(partitionKey).assetColor;
+  }
+  return currentAssetColor();
+}
+
+function applyEditorAssetColorToImage(imageElement, src, partitionKey = null) {
+  if (!imageElement) {
+    return;
+  }
+  const source = String(src || "");
+  imageElement.src = source;
+  const color = editorAssetColorForPartition(partitionKey);
+  const requestKey = `${source}::${color}::${Date.now()}::${Math.random().toString(36).slice(2, 8)}`;
+  imageElement.dataset.colorizeRequestKey = requestKey;
+  colorizeSvgSource(source, color).then((coloredSrc) => {
+    if (imageElement.dataset.colorizeRequestKey !== requestKey) {
+      return;
+    }
+    imageElement.src = coloredSrc;
+  });
+}
+
 function trimSvgElement(svgElement) {
   const sandbox = document.createElement("div");
   sandbox.style.position = "fixed";
@@ -1289,6 +1321,105 @@ function createCurvedBillboardGeometry(THREE, startDistance = 0, endDistance = B
   geometry.computeBoundingSphere();
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function create3dTextSprite(THREE, text, options = {}) {
+  const label = String(text || "");
+  const fontSize = Math.max(18, Number(options.fontSize) || 56);
+  const paddingX = Math.max(8, Number(options.paddingX) || 24);
+  const paddingY = Math.max(6, Number(options.paddingY) || 14);
+  const fontFamily = options.fontFamily || '"Courier New", Courier, monospace';
+  const fontSpec = `${fontSize}px ${fontFamily}`;
+  const measureCanvas = document.createElement("canvas");
+  const measureCtx = measureCanvas.getContext("2d");
+  if (!measureCtx) {
+    return null;
+  }
+  measureCtx.font = fontSpec;
+  const measured = Math.max(1, Math.ceil(measureCtx.measureText(label).width));
+  const canvas = document.createElement("canvas");
+  canvas.width = measured + paddingX * 2;
+  canvas.height = fontSize + paddingY * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = fontSpec;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = options.color || "#101010";
+  ctx.fillText(label, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true
+  });
+  const sprite = new THREE.Sprite(material);
+  const worldHeight = Math.max(90, Number(options.worldHeight) || 180);
+  const aspect = canvas.width / canvas.height;
+  sprite.scale.set(worldHeight * aspect, worldHeight, 1);
+  return sprite;
+}
+
+function build3dPartitionAnnotations(THREE) {
+  const group = new THREE.Group();
+  group.name = "partition-annotations";
+  const topY = BILLBOARD_DESIGN_HEIGHT * 0.5 + 80;
+  const lineHeight = 360;
+  const labelHeight = topY + lineHeight + 140;
+  const dividerColor = 0x121212;
+  const dividerMaterial = new THREE.LineBasicMaterial({
+    color: dividerColor,
+    transparent: true,
+    opacity: 0.9
+  });
+  [BILLBOARD_LEFT_WIDTH, BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH].forEach((distance, idx) => {
+    const sample = computeBillboardCurveSample(distance);
+    const x = sample.x - BILLBOARD_CURVE_CENTER.x;
+    const z = sample.z - BILLBOARD_CURVE_CENTER.z;
+    const points = [new THREE.Vector3(x, topY, z), new THREE.Vector3(x, topY + lineHeight, z)];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, dividerMaterial.clone());
+    line.name = idx === 0 ? "divider-1820" : "divider-2840";
+    group.add(line);
+    const dividerLabel = create3dTextSprite(THREE, idx === 0 ? "1820px" : "2840px", {
+      worldHeight: 110,
+      color: "#111111",
+      fontSize: 44
+    });
+    if (dividerLabel) {
+      dividerLabel.position.set(x, topY + lineHeight + 70, z);
+      group.add(dividerLabel);
+    }
+  });
+  const partitionLabels = [
+    { key: "left", text: "7th" },
+    { key: "curve", text: "curve" },
+    { key: "right", text: "47th" }
+  ];
+  partitionLabels.forEach(({ key, text }) => {
+    const centerDistance = BILLBOARD_PARTITION_CENTERS[key];
+    const sample = computeBillboardCurveSample(centerDistance);
+    const sprite = create3dTextSprite(THREE, text, {
+      worldHeight: 150,
+      color: "#111111",
+      fontSize: 56
+    });
+    if (!sprite) {
+      return;
+    }
+    sprite.position.set(
+      sample.x - BILLBOARD_CURVE_CENTER.x,
+      labelHeight,
+      sample.z - BILLBOARD_CURVE_CENTER.z
+    );
+    group.add(sprite);
+  });
+  return group;
 }
 
 function projectBillboardVertex(x, y, z) {
@@ -2154,10 +2285,15 @@ function ensureThreePreviewSetup() {
     partitionMeshes[partitionKey] = partitionMesh;
     scene.add(partitionMesh);
   });
+  const annotationGroup = build3dPartitionAnnotations(THREE);
+  if (annotationGroup) {
+    scene.add(annotationGroup);
+  }
   preview3dThreeState.renderer = renderer;
   preview3dThreeState.scene = scene;
   preview3dThreeState.camera = camera;
   preview3dThreeState.mesh = mesh;
+  preview3dThreeState.annotationGroup = annotationGroup;
   preview3dThreeState.partitionMeshes = partitionMeshes;
   syncCameraControlVisibility();
   tryLoadBillboardModel();
@@ -2366,7 +2502,7 @@ function computePreview3dLoopProgress() {
   if (!Number.isFinite(preview3dPlaybackSyncState.syncedAtMs) || preview3dPlaybackSyncState.syncedAtMs <= 0) {
     preview3dPlaybackSyncState.syncedAtMs = nowMs;
   }
-  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedSeconds : loopElapsedSeconds;
+  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedContinuous : loopElapsedSeconds;
   const extrapolatedElapsed = elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
   progress = ((extrapolatedElapsed % duration) + duration) / duration;
   progress = ((progress % 1) + 1) % 1;
@@ -2382,7 +2518,7 @@ function computePreview3dElapsedSeconds() {
   if (!Number.isFinite(preview3dPlaybackSyncState.syncedAtMs) || preview3dPlaybackSyncState.syncedAtMs <= 0) {
     preview3dPlaybackSyncState.syncedAtMs = nowMs;
   }
-  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedSeconds : loopElapsedSeconds;
+  const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedContinuous : loopElapsedSeconds;
   return elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
 }
 
@@ -4509,9 +4645,9 @@ function renderLoopPreview() {
     tile.dataset.artworkId = item.id;
 
     const image = document.createElement("img");
-    image.src = item.src;
     image.alt = "";
     image.draggable = false;
+    applyEditorAssetColorToImage(image, item.src);
     tile.appendChild(image);
 
     loopPreviewTrack.appendChild(tile);
@@ -4712,9 +4848,9 @@ function renderPartitionEditor(partitionKey) {
     tile.dataset.artworkId = item.id;
 
     const image = document.createElement("img");
-    image.src = item.src;
     image.alt = "";
     image.draggable = false;
+    applyEditorAssetColorToImage(image, item.src, key);
     tile.appendChild(image);
 
     trackEl.appendChild(tile);
@@ -5268,7 +5404,11 @@ async function init() {
       } else {
         saveAssetColor(currentAssetColor());
       }
-      render3dPreview();
+      if (currentDirectionIsPartitioned()) {
+        renderPartitionEditors();
+      } else {
+        renderLoopPreview();
+      }
       sendLoopConfigToPreview();
     });
   }
@@ -5602,8 +5742,28 @@ async function init() {
       loopPlaybackViewportRatio = viewportRatio;
     }
     if (Number.isFinite(elapsedSeconds)) {
-      loopElapsedSeconds = elapsedSeconds;
+      const durationForUnwrap = Number(preview3dPlaybackSyncState.durationSeconds);
+      if (
+        preview3dPlaybackSyncState.hasSample &&
+        Number.isFinite(preview3dPlaybackSyncState.elapsedContinuous) &&
+        Number.isFinite(preview3dPlaybackSyncState.lastSampleElapsed)
+      ) {
+        let delta = elapsedSeconds - preview3dPlaybackSyncState.lastSampleElapsed;
+        if (Number.isFinite(durationForUnwrap) && durationForUnwrap > 0) {
+          const half = durationForUnwrap * 0.5;
+          if (delta < -half) {
+            delta += durationForUnwrap;
+          } else if (delta > half) {
+            delta -= durationForUnwrap;
+          }
+        }
+        preview3dPlaybackSyncState.elapsedContinuous += delta;
+      } else {
+        preview3dPlaybackSyncState.elapsedContinuous = elapsedSeconds;
+      }
+      preview3dPlaybackSyncState.lastSampleElapsed = elapsedSeconds;
       preview3dPlaybackSyncState.elapsedSeconds = elapsedSeconds;
+      loopElapsedSeconds = preview3dPlaybackSyncState.elapsedContinuous;
       preview3dPlaybackSyncState.syncedAtMs = performance.now();
       preview3dPlaybackSyncState.hasSample = true;
     }
