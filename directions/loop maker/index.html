@@ -326,7 +326,7 @@
           <div class="row">
             <label>playback speed</label>
             <div class="fps-line">
-              <input id="speedInput" type="range" min="0.25" max="20" step="0.25" value="1" />
+              <input id="speedInput" type="range" min="0.01" max="20" step="0.01" value="1" />
               <span id="speedValue">1.00x</span>
             </div>
             <div id="timingValue" class="timing">effective: 8.00 fps (125 ms/frame)</div>
@@ -335,7 +335,7 @@
           <div class="row">
             <label>frame sampling</label>
             <div class="fps-line">
-              <input id="frameStepInput" type="range" min="1" max="12" step="1" value="1" />
+              <input id="frameStepInput" type="range" min="1" max="100" step="1" value="1" />
               <span id="frameStepValue">every frame</span>
             </div>
           </div>
@@ -347,6 +347,15 @@
               <span id="autoCenterValue">off</span>
             </div>
             <div class="timing">detects visible pixel bounds and centers per frame</div>
+          </div>
+
+          <div class="row">
+            <label>stabilize shake</label>
+            <div class="fps-line">
+              <input id="stabilizeInput" type="range" min="0" max="100" step="1" value="0" />
+              <span id="stabilizeValue">0%</span>
+            </div>
+            <div class="timing">smooths frame-to-frame center jitter (works with content centering)</div>
           </div>
 
           <div class="row">
@@ -421,6 +430,8 @@
       const frameStepValue = document.getElementById("frameStepValue");
       const autoCenterInput = document.getElementById("autoCenterInput");
       const autoCenterValue = document.getElementById("autoCenterValue");
+      const stabilizeInput = document.getElementById("stabilizeInput");
+      const stabilizeValue = document.getElementById("stabilizeValue");
       const cropTopInput = document.getElementById("cropTopInput");
       const cropRightInput = document.getElementById("cropRightInput");
       const cropBottomInput = document.getElementById("cropBottomInput");
@@ -447,6 +458,7 @@
         speedMultiplier: 1,
         frameStep: 1,
         autoCenterContent: false,
+        stabilizationStrength: 0,
         cropTop: 0,
         cropRight: 0,
         cropBottom: 0,
@@ -459,6 +471,11 @@
       let cropDragState = null;
       let boundsCanvas = null;
       let boundsContext = null;
+      let frameIdCounter = 1;
+      let stabilizationCache = {
+        key: "",
+        offsetsByFrameId: new Map()
+      };
 
       function setStatus(message) {
         status.textContent = String(message || "");
@@ -497,6 +514,14 @@
 
       function contentBoundsCacheKey(cropRect) {
         return `${cropRect.sx}:${cropRect.sy}:${cropRect.sw}:${cropRect.sh}`;
+      }
+
+      function processingKeyForFrames(frames) {
+        return frames.map((frame, index) => frame.id || `idx-${index}`).join("|");
+      }
+
+      function frameKey(frame, index = 0) {
+        return frame && frame.id ? frame.id : `idx-${index}`;
       }
 
       function detectFrameContentBounds(frame, image, cropRect) {
@@ -576,6 +601,87 @@
         };
       }
 
+      async function computeStabilizedOffsets(frames) {
+        if (!state.autoCenterContent || !frames.length) {
+          return new Map();
+        }
+        const crop = getEffectiveCropRatios();
+        const cacheKey = [
+          processingKeyForFrames(frames),
+          `ct:${crop.top.toFixed(4)}`,
+          `cr:${crop.right.toFixed(4)}`,
+          `cb:${crop.bottom.toFixed(4)}`,
+          `cl:${crop.left.toFixed(4)}`,
+          `s:${state.stabilizationStrength}`
+        ].join(";");
+        if (stabilizationCache.key === cacheKey) {
+          return stabilizationCache.offsetsByFrameId;
+        }
+
+        const centers = [];
+        for (const frame of frames) {
+          const image = await ensureFrameImage(frame);
+          if (!image) {
+            centers.push({ nx: 0.5, ny: 0.5 });
+            continue;
+          }
+          const cropRect = cropRectForImage(image);
+          const bounds = detectFrameContentBounds(frame, image, cropRect);
+          centers.push({
+            nx: Math.max(0, Math.min(1, bounds.cx / Math.max(1, cropRect.sw))),
+            ny: Math.max(0, Math.min(1, bounds.cy / Math.max(1, cropRect.sh)))
+          });
+        }
+
+        const amount = Math.max(0, Math.min(100, Number(state.stabilizationStrength) || 0)) / 100;
+        const alpha = 1 - amount * 0.9;
+        const forward = [];
+        const backward = [];
+        for (let index = 0; index < centers.length; index += 1) {
+          if (index === 0) {
+            forward.push({ ...centers[index] });
+          } else {
+            const previous = forward[index - 1];
+            const current = centers[index];
+            forward.push({
+              nx: previous.nx + alpha * (current.nx - previous.nx),
+              ny: previous.ny + alpha * (current.ny - previous.ny)
+            });
+          }
+        }
+        for (let index = centers.length - 1; index >= 0; index -= 1) {
+          if (index === centers.length - 1) {
+            backward[index] = { ...centers[index] };
+          } else {
+            const previous = backward[index + 1];
+            const current = centers[index];
+            backward[index] = {
+              nx: previous.nx + alpha * (current.nx - previous.nx),
+              ny: previous.ny + alpha * (current.ny - previous.ny)
+            };
+          }
+        }
+
+        const offsets = new Map();
+        frames.forEach((frame, index) => {
+          const blend = amount > 0
+            ? {
+                nx: (forward[index].nx + backward[index].nx) * 0.5,
+                ny: (forward[index].ny + backward[index].ny) * 0.5
+              }
+            : centers[index];
+          offsets.set(frameKey(frame, index), {
+            oxNorm: 0.5 - blend.nx,
+            oyNorm: 0.5 - blend.ny
+          });
+        });
+        stabilizationCache = {
+          key: cacheKey,
+          offsetsByFrameId: offsets
+        };
+        return offsets;
+      }
+
       function updateButtons() {
         const hasFrames = state.frames.length > 0;
         playPauseButton.disabled = !hasFrames;
@@ -644,7 +750,7 @@
         return { cssWidth, cssHeight, dpr };
       }
 
-      function drawPreviewFrame(frame, image) {
+      function drawPreviewFrame(frame, image, normalizedOffset = null) {
         const context = previewCanvas.getContext("2d", { willReadFrequently: true });
         if (!context) {
           return;
@@ -664,7 +770,12 @@
         }
         const dx = (cssWidth - dw) * 0.5;
         const dy = (cssHeight - dh) * 0.5;
-        const offset = autoCenterShiftPx(frame, image, cropRect, dw, dh);
+        const offset = normalizedOffset
+          ? {
+              x: normalizedOffset.oxNorm * dw,
+              y: normalizedOffset.oyNorm * dh
+            }
+          : autoCenterShiftPx(frame, image, cropRect, dw, dh);
         context.imageSmoothingEnabled = true;
         context.drawImage(
           image,
@@ -729,11 +840,13 @@
         }
         const frame = frames[state.currentIndex] || frames[0];
         const image = await ensureFrameImage(frame);
+        const offsets = await computeStabilizedOffsets(frames);
+        const normalizedOffset = offsets.get(frameKey(frame, state.currentIndex)) || null;
         if (token !== previewRenderToken || !image) {
           return;
         }
         previewCanvas.style.display = "block";
-        drawPreviewFrame(frame, image);
+        drawPreviewFrame(frame, image, normalizedOffset);
         emptyState.style.display = "none";
       }
 
@@ -836,6 +949,10 @@
         autoCenterValue.textContent = state.autoCenterContent ? "on" : "off";
       }
 
+      function syncStabilizeReadout() {
+        stabilizeValue.textContent = `${Math.round(state.stabilizationStrength)}%`;
+      }
+
       function syncCropReadout() {
         cropTopValue.textContent = `top ${state.cropTop}%`;
         cropRightValue.textContent = `right ${state.cropRight}%`;
@@ -854,6 +971,7 @@
         syncTimingReadout();
         syncFrameStepReadout();
         syncAutoCenterReadout();
+        syncStabilizeReadout();
         syncCropReadout();
       }
 
@@ -883,6 +1001,10 @@
         state.frames = [];
         state.currentIndex = 0;
         previewFrameMetrics = null;
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
         stopPlayback();
         renderFrameList();
         updatePreview();
@@ -903,9 +1025,14 @@
             file,
             url: URL.createObjectURL(file),
             image: null,
-            boundsCache: Object.create(null)
+            boundsCache: Object.create(null),
+            id: `frame-${frameIdCounter++}`
           });
         });
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
         state.currentIndex = 0;
         renderFrameList();
         updateButtons();
@@ -942,6 +1069,7 @@
         try {
           const frames = steppedFrames();
           const loadedImages = await Promise.all(frames.map((frame) => loadImage(frame.file)));
+          const offsets = await computeStabilizedOffsets(frames);
           const firstImage = loadedImages[0];
           const baseCropRect = cropRectForImage(firstImage);
           const width = Math.max(1, baseCropRect.sw);
@@ -965,7 +1093,10 @@
           loadedImages.forEach((image, index) => {
             const frame = frames[index];
             const cropRect = cropRectForImage(image);
-            const offset = autoCenterShiftPx(frame, image, cropRect, width, height);
+            const normalizedOffset = offsets.get(frameKey(frame, index));
+            const offset = normalizedOffset
+              ? { x: normalizedOffset.oxNorm * width, y: normalizedOffset.oyNorm * height }
+              : autoCenterShiftPx(frame, image, cropRect, width, height);
             context.clearRect(0, 0, width, height);
             context.drawImage(
               image,
@@ -1047,21 +1178,39 @@
       });
 
       speedInput.addEventListener("input", () => {
-        const nextSpeed = Math.max(0.25, Math.min(20, Number(speedInput.value) || 1));
+        const nextSpeed = Math.max(0.01, Math.min(20, Number(speedInput.value) || 1));
         state.speedMultiplier = nextSpeed;
         updateAllReadouts();
         restartPlayback();
       });
 
       frameStepInput.addEventListener("input", () => {
-        state.frameStep = Math.max(1, Math.min(12, Math.round(Number(frameStepInput.value) || 1)));
+        state.frameStep = Math.max(1, Math.min(100, Math.round(Number(frameStepInput.value) || 1)));
         state.currentIndex = 0;
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
         updateAllReadouts();
         restartPlayback();
       });
 
       autoCenterInput.addEventListener("change", () => {
         state.autoCenterContent = Boolean(autoCenterInput.checked);
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
+        updateAllReadouts();
+        updatePreview();
+      });
+
+      stabilizeInput.addEventListener("input", () => {
+        state.stabilizationStrength = Math.max(0, Math.min(100, Number(stabilizeInput.value) || 0));
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
         updateAllReadouts();
         updatePreview();
       });
@@ -1072,6 +1221,10 @@
           state.cropRight = Math.max(0, Math.min(45, Number(cropRightInput.value) || 0));
           state.cropBottom = Math.max(0, Math.min(45, Number(cropBottomInput.value) || 0));
           state.cropLeft = Math.max(0, Math.min(45, Number(cropLeftInput.value) || 0));
+          stabilizationCache = {
+            key: "",
+            offsetsByFrameId: new Map()
+          };
           updateAllReadouts();
           updatePreview();
         });
@@ -1135,6 +1288,10 @@
         }
         setCropFromRatios(next);
         syncCropInputsFromState();
+        stabilizationCache = {
+          key: "",
+          offsetsByFrameId: new Map()
+        };
         updateAllReadouts();
         updatePreview();
       }
@@ -1170,6 +1327,7 @@
       syncPlaybackButton();
       syncCropInputsFromState();
       autoCenterInput.checked = state.autoCenterContent;
+      stabilizeInput.value = String(state.stabilizationStrength);
       updateAllReadouts();
       updateButtons();
       updatePreview();
