@@ -1505,36 +1505,29 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   }
   const group = new THREE.Group();
   group.name = "partition-annotations";
-  const centerTop = sampleMeshUvFrame(THREE, mesh, 0.5, 1, 0.03);
-  if (!centerTop) {
+  const centerTop = sampleMeshUvFrame(THREE, mesh, 0.5, 0.97, 0.03);
+  const centerBottom = sampleMeshUvFrame(THREE, mesh, 0.5, 0.03, 0.03);
+  if (!centerTop || !centerBottom) {
     return null;
   }
-  const centerMid = sampleMeshUvFrame(THREE, mesh, 0.5, 0.5, 0.03);
-  const meshHeight =
-    centerMid && centerMid.point ? Math.max(1, centerTop.point.distanceTo(centerMid.point) * 2) : 3000;
-  const lineStartOffset = Math.min(100, Math.max(18, meshHeight * 0.016));
-  const lineHeight = Math.min(360, Math.max(110, meshHeight * 0.09));
-  const dividerLabelOffset = Math.min(90, Math.max(22, meshHeight * 0.022));
-  const partitionLabelOffset = Math.min(180, Math.max(56, meshHeight * 0.045));
-  const outwardOffset = Math.min(28, Math.max(8, meshHeight * 0.004));
+  const meshHeight = Math.max(1, centerTop.point.distanceTo(centerBottom.point));
+  const outwardOffset = Math.min(12, Math.max(2.5, meshHeight * 0.0025));
   const dividerMaterial = new THREE.LineBasicMaterial({
     color: 0x121212,
     transparent: true,
-    opacity: 0.82,
-    depthTest: true,
+    opacity: 0.76,
+    depthTest: false,
     depthWrite: false
   });
   [BILLBOARD_LEFT_WIDTH / BILLBOARD_DESIGN_WIDTH, (BILLBOARD_LEFT_WIDTH + BILLBOARD_CURVE_WIDTH) / BILLBOARD_DESIGN_WIDTH]
     .forEach((uBoundary, idx) => {
-    const frame = sampleMeshUvFrame(THREE, mesh, uBoundary, 1, 0.028);
-    if (!frame) {
+    const frameTop = sampleMeshUvFrame(THREE, mesh, uBoundary, 0.97, 0.028);
+    const frameBottom = sampleMeshUvFrame(THREE, mesh, uBoundary, 0.03, 0.028);
+    if (!frameTop || !frameBottom) {
       return;
     }
-    const lineStart = frame.point
-      .clone()
-      .add(frame.up.clone().multiplyScalar(lineStartOffset))
-      .add(frame.normal.clone().multiplyScalar(outwardOffset));
-    const lineEnd = lineStart.clone().add(frame.up.clone().multiplyScalar(lineHeight));
+    const lineStart = frameBottom.point.clone().add(frameBottom.normal.clone().multiplyScalar(outwardOffset));
+    const lineEnd = frameTop.point.clone().add(frameTop.normal.clone().multiplyScalar(outwardOffset));
     const points = [lineStart, lineEnd];
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(lineGeometry, dividerMaterial.clone());
@@ -1543,12 +1536,12 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
     line.renderOrder = 999;
     group.add(line);
     const dividerLabel = create3dTextSprite(THREE, idx === 0 ? "1820px" : "2840px", {
-      worldHeight: Math.min(180, Math.max(72, meshHeight * 0.038)),
+      worldHeight: Math.min(120, Math.max(36, meshHeight * 0.024)),
       color: "#111111",
-      fontSize: 36
+      fontSize: 26
     });
     if (dividerLabel) {
-      dividerLabel.position.copy(lineEnd.clone().add(frame.up.clone().multiplyScalar(dividerLabelOffset)));
+      dividerLabel.position.copy(frameTop.point.clone().add(frameTop.normal.clone().multiplyScalar(outwardOffset * 1.4)));
       dividerLabel.frustumCulled = false;
       dividerLabel.renderOrder = 1000;
       group.add(dividerLabel);
@@ -1561,24 +1554,19 @@ function build3dPartitionAnnotationsForMesh(THREE, mesh) {
   ];
   partitionLabels.forEach(({ key, text }) => {
     const centerDistance = BILLBOARD_PARTITION_CENTERS[key] / BILLBOARD_DESIGN_WIDTH;
-    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 1, 0.028);
+    const frame = sampleMeshUvFrame(THREE, mesh, centerDistance, 0.9, 0.028);
     if (!frame) {
       return;
     }
     const sprite = create3dTextSprite(THREE, text, {
-      worldHeight: Math.min(240, Math.max(90, meshHeight * 0.05)),
+      worldHeight: Math.min(140, Math.max(44, meshHeight * 0.03)),
       color: "#111111",
-      fontSize: 44
+      fontSize: 30
     });
     if (!sprite) {
       return;
     }
-    sprite.position.copy(
-      frame.point
-        .clone()
-        .add(frame.up.clone().multiplyScalar(lineStartOffset + lineHeight + partitionLabelOffset))
-        .add(frame.normal.clone().multiplyScalar(outwardOffset))
-    );
+    sprite.position.copy(frame.point.clone().add(frame.normal.clone().multiplyScalar(outwardOffset * 1.35)));
     sprite.frustumCulled = false;
     sprite.renderOrder = 1000;
     group.add(sprite);
