@@ -2928,10 +2928,10 @@ function buildPartitionedSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: rotate(90deg) translateX(calc(-1 * var(--loop-distance))) translateY(-100%);
+          transform: rotate(90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: rotate(90deg) translateX(0) translateY(-100%);
+          transform: rotate(90deg) translateX(0);
         }
       }
 
