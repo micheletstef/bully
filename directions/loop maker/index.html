@@ -153,6 +153,32 @@
         cursor: move;
       }
 
+      .detected-bounds-box {
+        position: absolute;
+        pointer-events: none;
+        display: none;
+      }
+
+      .detected-bounds-box.actual {
+        border: 1px dashed rgba(87, 181, 255, 0.95);
+      }
+
+      .detected-bounds-box.visible {
+        border: 1px solid rgba(130, 255, 120, 0.95);
+      }
+
+      .bounds-legend {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        font-size: 10px;
+        line-height: 1.3;
+        padding: 4px 6px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+      }
+
       .crop-handle {
         position: absolute;
         width: 10px;
@@ -445,6 +471,9 @@
               <span class="crop-handle" data-handle="w"></span>
             </div>
           </div>
+          <div id="actualBoundsBox" class="detected-bounds-box actual"></div>
+          <div id="visibleBoundsBox" class="detected-bounds-box visible"></div>
+          <div id="boundsLegend" class="bounds-legend">blue: frame bounds / green: visible bounds</div>
           <div id="emptyState" class="empty">add multiple images to preview your loop</div>
           <div id="nowPlayingLabel" class="now-playing"></div>
         </div>
@@ -483,6 +512,9 @@
       const previewCanvas = document.getElementById("previewCanvas");
       const cropOverlay = document.getElementById("cropOverlay");
       const cropBox = document.getElementById("cropBox");
+      const actualBoundsBox = document.getElementById("actualBoundsBox");
+      const visibleBoundsBox = document.getElementById("visibleBoundsBox");
+      const boundsLegend = document.getElementById("boundsLegend");
       const emptyState = document.getElementById("emptyState");
       const nowPlayingLabel = document.getElementById("nowPlayingLabel");
       const status = document.getElementById("status");
@@ -507,6 +539,8 @@
       let previewUpdateInFlight = false;
       let previewUpdateQueued = false;
       let previewFrameMetrics = null;
+      let previewContentMetrics = null;
+      let previewVisibleMetrics = null;
       let cropDragState = null;
       let boundsCanvas = null;
       let boundsContext = null;
@@ -521,8 +555,12 @@
       };
       let currentPlayingFrameId = "";
       let previewPipelineWarned = false;
+      let previewOutputAspect = null;
 
       function setStatus(message) {
+        if (!status) {
+          return;
+        }
         status.textContent = String(message || "");
       }
 
@@ -574,6 +612,10 @@
           return {
             cx: cropRect ? cropRect.sw * 0.5 : 0,
             cy: cropRect ? cropRect.sh * 0.5 : 0,
+            minX: 0,
+            minY: 0,
+            maxX: cropRect ? Math.max(0, cropRect.sw - 1) : 0,
+            maxY: cropRect ? Math.max(0, cropRect.sh - 1) : 0,
             width: cropRect ? cropRect.sw : 1,
             height: cropRect ? cropRect.sh : 1
           };
@@ -591,6 +633,10 @@
           const fallback = {
             cx: cropRect.sw * 0.5,
             cy: cropRect.sh * 0.5,
+            minX: 0,
+            minY: 0,
+            maxX: Math.max(0, cropRect.sw - 1),
+            maxY: Math.max(0, cropRect.sh - 1),
             width: cropRect.sw,
             height: cropRect.sh
           };
@@ -630,12 +676,20 @@
           ? {
               cx: cropRect.sw * 0.5,
               cy: cropRect.sh * 0.5,
+              minX: 0,
+              minY: 0,
+              maxX: Math.max(0, cropRect.sw - 1),
+              maxY: Math.max(0, cropRect.sh - 1),
               width: cropRect.sw,
               height: cropRect.sh
             }
           : {
               cx: (minX + maxX + 1) * 0.5,
               cy: (minY + maxY + 1) * 0.5,
+              minX,
+              minY,
+              maxX,
+              maxY,
               width: Math.max(1, maxX - minX + 1),
               height: Math.max(1, maxY - minY + 1)
             };
@@ -836,6 +890,9 @@
       }
 
       function updateNowPlayingLabel(frame, index = 0) {
+        if (!nowPlayingLabel) {
+          return;
+        }
         if (!frame || !state.frames.length) {
           nowPlayingLabel.style.display = "none";
           nowPlayingLabel.textContent = "";
@@ -894,6 +951,25 @@
         return { sx, sy, sw, sh };
       }
 
+      function computeOutputFrameRect(width, height, aspect) {
+        const safeWidth = Math.max(1, width);
+        const safeHeight = Math.max(1, height);
+        const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : safeWidth / safeHeight;
+        let drawWidth = safeWidth;
+        let drawHeight = safeHeight;
+        if (safeAspect > safeWidth / safeHeight) {
+          drawHeight = safeWidth / safeAspect;
+        } else {
+          drawWidth = safeHeight * safeAspect;
+        }
+        return {
+          drawX: (safeWidth - drawWidth) * 0.5,
+          drawY: (safeHeight - drawHeight) * 0.5,
+          drawWidth,
+          drawHeight
+        };
+      }
+
       function ensurePreviewCanvasSize() {
         const dpr = Math.max(1, window.devicePixelRatio || 1);
         const rect = previewCanvas.getBoundingClientRect();
@@ -917,17 +993,14 @@
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.clearRect(0, 0, cssWidth, cssHeight);
         const cropRect = cropRectForImage(image);
-        const sourceAspect = cropRect.sw / cropRect.sh;
-        const destAspect = cssWidth / cssHeight;
-        let dw = cssWidth;
-        let dh = cssHeight;
-        if (sourceAspect > destAspect) {
-          dh = cssWidth / sourceAspect;
-        } else {
-          dw = cssHeight * sourceAspect;
-        }
-        const dx = (cssWidth - dw) * 0.5;
-        const dy = (cssHeight - dh) * 0.5;
+        const outputAspect = Number.isFinite(previewOutputAspect) && previewOutputAspect > 0
+          ? previewOutputAspect
+          : cropRect.sw / cropRect.sh;
+        const outputRect = computeOutputFrameRect(cssWidth, cssHeight, outputAspect);
+        const dw = outputRect.drawWidth;
+        const dh = outputRect.drawHeight;
+        const dx = outputRect.drawX;
+        const dy = outputRect.drawY;
         const appliedScale = Math.max(0.6, Math.min(1.8, Number(scaleFactor) || 1));
         const scaledDw = dw * appliedScale;
         const scaledDh = dh * appliedScale;
@@ -939,6 +1012,8 @@
               y: normalizedOffset.oyNorm * scaledDh
             }
           : autoCenterShiftPx(frame, image, cropRect, scaledDw, scaledDh);
+        const contentX = baseDx + offset.x;
+        const contentY = baseDy + offset.y;
         context.imageSmoothingEnabled = true;
         context.drawImage(
           image,
@@ -946,20 +1021,36 @@
           cropRect.sy,
           cropRect.sw,
           cropRect.sh,
-          baseDx + offset.x,
-          baseDy + offset.y,
+          contentX,
+          contentY,
           scaledDw,
           scaledDh
         );
+        const visibleBounds = detectFrameContentBounds(frame, image, cropRect);
+        const visibleX = contentX + (Math.max(0, visibleBounds.minX) / Math.max(1, cropRect.sw)) * scaledDw;
+        const visibleY = contentY + (Math.max(0, visibleBounds.minY) / Math.max(1, cropRect.sh)) * scaledDh;
+        const visibleW = (Math.max(1, visibleBounds.width) / Math.max(1, cropRect.sw)) * scaledDw;
+        const visibleH = (Math.max(1, visibleBounds.height) / Math.max(1, cropRect.sh)) * scaledDh;
         previewFrameMetrics = {
-          imageWidth: Math.max(1, image.naturalWidth || image.width || 1),
-          imageHeight: Math.max(1, image.naturalHeight || image.height || 1),
-          drawX: baseDx,
-          drawY: baseDy,
+          drawX: outputRect.drawX,
+          drawY: outputRect.drawY,
+          drawWidth: outputRect.drawWidth,
+          drawHeight: outputRect.drawHeight
+        };
+        previewContentMetrics = {
+          drawX: contentX,
+          drawY: contentY,
           drawWidth: scaledDw,
           drawHeight: scaledDh
         };
+        previewVisibleMetrics = {
+          drawX: visibleX,
+          drawY: visibleY,
+          drawWidth: visibleW,
+          drawHeight: visibleH
+        };
         syncCropOverlay();
+        syncDetectedBoundsOverlay();
       }
 
       function syncCropOverlay() {
@@ -979,6 +1070,30 @@
         cropOverlay.style.display = "block";
       }
 
+      function syncDetectedBoundsOverlay() {
+        if (!actualBoundsBox || !visibleBoundsBox || !boundsLegend) {
+          return;
+        }
+        if (!previewContentMetrics || !previewVisibleMetrics || !state.frames.length) {
+          actualBoundsBox.style.display = "none";
+          visibleBoundsBox.style.display = "none";
+          boundsLegend.style.display = "none";
+          return;
+        }
+        actualBoundsBox.style.left = `${previewContentMetrics.drawX}px`;
+        actualBoundsBox.style.top = `${previewContentMetrics.drawY}px`;
+        actualBoundsBox.style.width = `${previewContentMetrics.drawWidth}px`;
+        actualBoundsBox.style.height = `${previewContentMetrics.drawHeight}px`;
+        actualBoundsBox.style.display = "block";
+
+        visibleBoundsBox.style.left = `${previewVisibleMetrics.drawX}px`;
+        visibleBoundsBox.style.top = `${previewVisibleMetrics.drawY}px`;
+        visibleBoundsBox.style.width = `${previewVisibleMetrics.drawWidth}px`;
+        visibleBoundsBox.style.height = `${previewVisibleMetrics.drawHeight}px`;
+        visibleBoundsBox.style.display = "block";
+        boundsLegend.style.display = "block";
+      }
+
       async function ensureFrameImage(frame) {
         if (!frame) {
           return null;
@@ -991,10 +1106,17 @@
       }
 
       async function performPreviewUpdate() {
+        if (!previewCanvas || !emptyState) {
+          return;
+        }
         if (!state.frames.length) {
           previewCanvas.style.display = "none";
           emptyState.style.display = "block";
           currentPlayingFrameId = "";
+          previewFrameMetrics = null;
+          previewContentMetrics = null;
+          previewVisibleMetrics = null;
+          syncDetectedBoundsOverlay();
           updateNowPlayingLabel(null);
           renderFrameList();
           return;
@@ -1005,6 +1127,13 @@
           state.currentIndex = 0;
         }
         const frame = frames[state.currentIndex] || frames[0];
+        if (!Number.isFinite(previewOutputAspect) || previewOutputAspect <= 0) {
+          const referenceImage = await ensureFrameImage(frames[0]);
+          if (referenceImage) {
+            const referenceCropRect = cropRectForImage(referenceImage);
+            previewOutputAspect = referenceCropRect.sw / Math.max(1, referenceCropRect.sh);
+          }
+        }
         currentPlayingFrameId = frameKey(frame, state.currentIndex);
         updateNowPlayingLabel(frame, state.currentIndex);
         renderFrameList();
@@ -1023,16 +1152,22 @@
         if (!needsBatchAnalysis) {
           return;
         }
-
-        const offsets = await computeStabilizedOffsets(frames);
-        const scales = await computeScaleNormalization(frames);
-        const key = frameKey(frame, state.currentIndex);
-        const normalizedOffset = offsets.get(key) || null;
-        const scaleFactor = scales.get(key) || 1;
-        if (token !== previewRenderToken) {
-          return;
-        }
-        drawPreviewFrame(frame, image, normalizedOffset, scaleFactor);
+        const currentToken = token;
+        Promise.resolve()
+          .then(async () => {
+            const offsets = await computeStabilizedOffsets(frames);
+            const scales = await computeScaleNormalization(frames);
+            const key = frameKey(frame, state.currentIndex);
+            const normalizedOffset = offsets.get(key) || null;
+            const scaleFactor = scales.get(key) || 1;
+            if (currentToken !== previewRenderToken) {
+              return;
+            }
+            drawPreviewFrame(frame, image, normalizedOffset, scaleFactor);
+          })
+          .catch(() => {
+            // Keep base preview active even if enhancement pass fails.
+          });
       }
 
       function updatePreview() {
@@ -1061,6 +1196,9 @@
       }
 
       function renderFrameList() {
+        if (!frameList) {
+          return;
+        }
         frameList.innerHTML = "";
         state.frames.forEach((frame, index) => {
           const item = document.createElement("div");
@@ -1219,6 +1357,9 @@
         state.frames = [];
         state.currentIndex = 0;
         previewFrameMetrics = null;
+        previewContentMetrics = null;
+        previewVisibleMetrics = null;
+        previewOutputAspect = null;
         resetProcessingCaches();
         stopPlayback();
         renderFrameList();
@@ -1246,6 +1387,7 @@
           });
         });
         resetProcessingCaches();
+        previewOutputAspect = null;
         state.currentIndex = 0;
         renderFrameList();
         updateButtons();
@@ -1408,6 +1550,7 @@
         state.frameStep = Math.max(1, Math.min(100, Math.round(Number(frameStepInput.value) || 1)));
         state.currentIndex = 0;
         resetProcessingCaches();
+        previewOutputAspect = null;
         updateAllReadouts();
         restartPlayback();
       });
@@ -1440,6 +1583,7 @@
           state.cropBottom = Math.max(0, Math.min(45, Number(cropBottomInput.value) || 0));
           state.cropLeft = Math.max(0, Math.min(45, Number(cropLeftInput.value) || 0));
           resetProcessingCaches();
+          previewOutputAspect = null;
           updateAllReadouts();
           updatePreview();
         });
@@ -1504,6 +1648,7 @@
         setCropFromRatios(next);
         syncCropInputsFromState();
         resetProcessingCaches();
+        previewOutputAspect = null;
         updateAllReadouts();
         updatePreview();
       }
