@@ -520,6 +520,7 @@
         scalesByFrameId: new Map()
       };
       let currentPlayingFrameId = "";
+      let previewPipelineWarned = false;
 
       function setStatus(message) {
         status.textContent = String(message || "");
@@ -1008,17 +1009,30 @@
         updateNowPlayingLabel(frame, state.currentIndex);
         renderFrameList();
         const image = await ensureFrameImage(frame);
+        if (token !== previewRenderToken || !image) {
+          return;
+        }
+
+        // Draw immediately so preview remains responsive while heavier analysis runs.
+        previewCanvas.style.display = "block";
+        drawPreviewFrame(frame, image, null, 1);
+        emptyState.style.display = "none";
+
+        const needsBatchAnalysis =
+          (state.autoCenterContent && state.stabilizationStrength > 0) || state.normalizeSubjectScale;
+        if (!needsBatchAnalysis) {
+          return;
+        }
+
         const offsets = await computeStabilizedOffsets(frames);
         const scales = await computeScaleNormalization(frames);
         const key = frameKey(frame, state.currentIndex);
         const normalizedOffset = offsets.get(key) || null;
         const scaleFactor = scales.get(key) || 1;
-        if (token !== previewRenderToken || !image) {
+        if (token !== previewRenderToken) {
           return;
         }
-        previewCanvas.style.display = "block";
         drawPreviewFrame(frame, image, normalizedOffset, scaleFactor);
-        emptyState.style.display = "none";
       }
 
       function updatePreview() {
@@ -1031,7 +1045,14 @@
           try {
             while (previewUpdateQueued) {
               previewUpdateQueued = false;
-              await performPreviewUpdate();
+              try {
+                await performPreviewUpdate();
+              } catch (error) {
+                if (!previewPipelineWarned) {
+                  previewPipelineWarned = true;
+                  setStatus("preview fallback active (heavy analysis failed once)");
+                }
+              }
             }
           } finally {
             previewUpdateInFlight = false;
