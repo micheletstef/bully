@@ -148,6 +148,12 @@
         overflow: auto;
       }
 
+      .editor-canvas {
+        position: relative;
+        width: max-content;
+        padding-bottom: 30px;
+      }
+
       .visual-editor-block {
         --editor-bg: #ff00ff;
         --asset-color: #1e6cff;
@@ -190,6 +196,42 @@
         flex: 0 0 auto;
         background: var(--asset-color);
         border: 1px solid rgba(0, 0, 0, 0.22);
+        cursor: pointer;
+      }
+
+      .fake-asset-block.is-selected {
+        outline: 2px solid rgba(0, 255, 255, 0.95);
+        outline-offset: -2px;
+      }
+
+      .asset-scale-controls {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        transform: translateX(-50%);
+        display: none;
+        align-items: center;
+        gap: 6px;
+        z-index: 3;
+      }
+
+      .asset-scale-button {
+        width: 18px;
+        height: 18px;
+        border: 1px solid #1f1f1f;
+        background: #fff;
+        color: #1f1f1f;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+        line-height: 1;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      .asset-scale-value {
+        min-width: 42px;
+        text-align: center;
+        font-size: 11px;
       }
     </style>
   </head>
@@ -229,11 +271,19 @@
         </div>
       </aside>
       <main class="editor-stage">
-        <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
+        <div class="editor-canvas">
+          <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
+          <div id="assetScaleControls" class="asset-scale-controls" aria-label="Selected asset scale controls">
+            <button id="assetScaleDownButton" type="button" class="asset-scale-button" aria-label="Decrease selected asset scale">-</button>
+            <span id="assetScaleValue" class="asset-scale-value">100%</span>
+            <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
+          </div>
+        </div>
       </main>
     </div>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
+      let assetIdCounter = 1;
       const fakeAssets = [
         { name: "hero-banner.psd", width: 160, height: 48 },
         { name: "logo-alt.png", width: 110, height: 70 },
@@ -249,6 +299,10 @@
       const paddingLRControl = document.getElementById("paddingLRControl");
       const backgroundColorControl = document.getElementById("backgroundColorControl");
       const assetColorControl = document.getElementById("assetColorControl");
+      const assetScaleControls = document.getElementById("assetScaleControls");
+      const assetScaleDownButton = document.getElementById("assetScaleDownButton");
+      const assetScaleUpButton = document.getElementById("assetScaleUpButton");
+      const assetScaleValue = document.getElementById("assetScaleValue");
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -276,11 +330,20 @@
           const sanitizedAssets = parsedAssets
             .filter((asset) => asset && typeof asset === "object")
             .map((asset) => ({
+              id: typeof asset.id === "string" ? asset.id : "asset-" + assetIdCounter++,
               name: typeof asset.name === "string" ? asset.name : "asset",
               width: Number.isFinite(asset.width) ? asset.width : 100,
               height: Number.isFinite(asset.height) ? asset.height : 60,
+              scalePercent: Number.isFinite(asset.scalePercent) ? asset.scalePercent : 100,
             }))
-            .filter((asset) => asset.width > 0 && asset.height > 0);
+            .filter((asset) => asset.width > 0 && asset.height > 0)
+            .map((asset) => ({
+              id: asset.id,
+              name: asset.name,
+              width: asset.width,
+              height: asset.height,
+              scalePercent: Math.max(10, Math.min(400, asset.scalePercent)),
+            }));
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
@@ -311,8 +374,10 @@
       function appendAssetBlock(asset) {
         const block = document.createElement("div");
         block.className = "fake-asset-block";
+        block.dataset.assetId = asset.id;
         block.dataset.originalWidth = String(asset.width);
         block.dataset.originalHeight = String(asset.height);
+        block.dataset.scalePercent = String(asset.scalePercent);
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
       }
@@ -328,10 +393,14 @@
         if (!Number.isFinite(originalWidth) || !Number.isFinite(originalHeight) || originalWidth <= 0 || originalHeight <= 0) {
           return;
         }
+        const scalePercent = Number(block.dataset.scalePercent) || 100;
+        const userScale = Math.max(0.1, scalePercent / 100);
+        const targetWidth = originalWidth * userScale;
+        const targetHeight = originalHeight * userScale;
         const safeHeight = getSafeAssetHeight();
-        const scale = Math.min(1, safeHeight / originalHeight);
-        const scaledWidth = Math.max(1, Math.round(originalWidth * scale));
-        const scaledHeight = Math.max(1, Math.round(originalHeight * scale));
+        const fitScale = Math.min(1, safeHeight / targetHeight);
+        const scaledWidth = Math.max(1, Math.round(targetWidth * fitScale));
+        const scaledHeight = Math.max(1, Math.round(targetHeight * fitScale));
         block.style.width = scaledWidth + "px";
         block.style.height = scaledHeight + "px";
       }
@@ -340,6 +409,68 @@
         const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
         for (const block of blocks) {
           updateAssetBlockSize(block);
+        }
+        positionScaleControls();
+      }
+
+      function getSelectedAssetBlock() {
+        return visualEditorBlock.querySelector(".fake-asset-block.is-selected");
+      }
+
+      function setScaleControlsVisible(isVisible) {
+        assetScaleControls.style.display = isVisible ? "inline-flex" : "none";
+      }
+
+      function positionScaleControls() {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          return;
+        }
+        const centerX = selectedBlock.offsetLeft + selectedBlock.offsetWidth / 2;
+        assetScaleControls.style.left = centerX + "px";
+      }
+
+      function updateScaleControlsValue() {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          return;
+        }
+        const scalePercent = Number(selectedBlock.dataset.scalePercent) || 100;
+        assetScaleValue.textContent = Math.round(scalePercent) + "%";
+      }
+
+      function selectAssetBlock(block) {
+        const activeBlock = getSelectedAssetBlock();
+        if (activeBlock) {
+          activeBlock.classList.remove("is-selected");
+        }
+        if (!block) {
+          setScaleControlsVisible(false);
+          return;
+        }
+        block.classList.add("is-selected");
+        updateScaleControlsValue();
+        positionScaleControls();
+        setScaleControlsVisible(true);
+      }
+
+      function updateSelectedAssetScale(deltaPercent) {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          return;
+        }
+        const currentPercent = Number(selectedBlock.dataset.scalePercent) || 100;
+        const nextPercent = Math.max(10, Math.min(400, currentPercent + deltaPercent));
+        selectedBlock.dataset.scalePercent = String(nextPercent);
+        updateAssetBlockSize(selectedBlock);
+        updateScaleControlsValue();
+        positionScaleControls();
+
+        const selectedAssetId = selectedBlock.dataset.assetId;
+        const selectedAssetState = editorState.assets.find((asset) => asset.id === selectedAssetId);
+        if (selectedAssetState) {
+          selectedAssetState.scalePercent = nextPercent;
+          saveEditorState();
         }
       }
 
@@ -390,6 +521,14 @@
       }
 
       const editorState = loadEditorState();
+      const existingMaxAssetId = editorState.assets.reduce((maxId, asset) => {
+        const numericPart = Number(String(asset.id).replace("asset-", ""));
+        if (!Number.isFinite(numericPart)) {
+          return maxId;
+        }
+        return Math.max(maxId, numericPart);
+      }, 0);
+      assetIdCounter = existingMaxAssetId + 1;
 
       for (const asset of fakeAssets) {
         const button = document.createElement("button");
@@ -404,12 +543,15 @@
           button.classList.add("active");
 
           const assetSnapshot = {
+            id: "asset-" + assetIdCounter++,
             name: asset.name,
             width: asset.width,
             height: asset.height,
+            scalePercent: 100,
           };
           editorState.assets.push(assetSnapshot);
           appendAssetBlock(assetSnapshot);
+          selectAssetBlock(visualEditorBlock.lastElementChild);
           saveEditorState();
         });
         assetsList.appendChild(button);
@@ -443,12 +585,30 @@
         applyColors(backgroundColorControl.value, assetColorControl.value, true);
       });
 
+      visualEditorBlock.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.classList.contains("fake-asset-block")) {
+          selectAssetBlock(target);
+          return;
+        }
+        selectAssetBlock(null);
+      });
+
+      assetScaleDownButton.addEventListener("click", () => {
+        updateSelectedAssetScale(-10);
+      });
+
+      assetScaleUpButton.addEventListener("click", () => {
+        updateSelectedAssetScale(10);
+      });
+
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
       applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
+      setScaleControlsVisible(false);
     </script>
   </body>
 </html>
