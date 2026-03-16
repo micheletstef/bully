@@ -524,18 +524,10 @@ body.sidebar-resizing {
   height: 116px;
   padding: 0;
   overflow: hidden;
-  background: #f1f1f1;
-  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .loop-visualization::before {
   content: none;
-}
-
-.loop-visualization.drag-over {
-  background: #e6e6e6;
-  outline: 2px dashed #d30000;
-  outline-offset: 2px;
 }
 
 .loop-preview-track {
@@ -550,6 +542,8 @@ body.sidebar-resizing {
   gap: var(--preview-gap, 0px);
   z-index: 1;
   overflow: visible;
+  background: #f1f1f1;
+  border: 1px solid rgba(0, 0, 0, 0.2);
   --preview-guide-color: rgba(32, 103, 220, 0.7);
   background-image:
     linear-gradient(var(--preview-guide-color), var(--preview-guide-color)),
@@ -567,6 +561,12 @@ body.sidebar-resizing {
     calc(100% - var(--preview-safe-right, 0px)) 0,
     0 var(--preview-safe-top, 0px),
     0 calc(var(--preview-safe-top, 0px) + var(--preview-safe-height, 100%));
+}
+
+.loop-preview-track.drag-over {
+  background: #e6e6e6;
+  outline: 2px dashed #d30000;
+  outline-offset: 2px;
 }
 
 .loop-preview-track::after {

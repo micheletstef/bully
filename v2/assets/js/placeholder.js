@@ -5416,10 +5416,10 @@ function sendLoopConfigToPreview() {
 }
 
 function syncVisualizationBackground() {
-  if (!loopVisualization) {
+  if (!loopPreviewTrack) {
     return;
   }
-  loopVisualization.style.backgroundColor = currentBackgroundColor();
+  loopPreviewTrack.style.backgroundColor = currentBackgroundColor();
   if (previewViewMode === "3d") {
     update3dPreviewAnimation();
   }
@@ -7127,11 +7127,15 @@ async function init() {
         return;
       }
       event.preventDefault();
-      loopVisualization.classList.add("drag-over");
+      if (loopPreviewTrack) {
+        loopPreviewTrack.classList.add("drag-over");
+      }
     });
 
     loopVisualization.addEventListener("dragleave", () => {
-      loopVisualization.classList.remove("drag-over");
+      if (loopPreviewTrack) {
+        loopPreviewTrack.classList.remove("drag-over");
+      }
     });
 
     loopVisualization.addEventListener("drop", (event) => {
@@ -7139,7 +7143,9 @@ async function init() {
         return;
       }
       event.preventDefault();
-      loopVisualization.classList.remove("drag-over");
+      if (loopPreviewTrack) {
+        loopPreviewTrack.classList.remove("drag-over");
+      }
       if (!event.dataTransfer || !event.dataTransfer.files) {
         return;
       }
