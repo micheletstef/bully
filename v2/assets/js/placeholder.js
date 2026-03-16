@@ -168,9 +168,6 @@ let loopDurationSeconds = 16;
 let loopTraverseSeconds = 16;
 let loopStageHeight = 3480;
 let loopAssetGap = 0;
-let loopPreviewScaledPadTopBottom = null;
-let loopPreviewScaledPadLeftRight = null;
-let loopPreviewScaledGap = null;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
 let loopDistanceSource = 5900;
@@ -3961,9 +3958,6 @@ function buildSnapshotHtml(config) {
         // Keep editor transform coordinates in billboard design-space.
         const viewportLayoutScale = Math.max(0.001, stageHeight / 3480);
         const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * viewportLayoutScale));
-        state.scaledPadTopBottom = Math.max(0, Number(scaledPadding.padTopBottom) || 0);
-        state.scaledPadLeftRight = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
-        state.scaledGap = Math.max(0, Number(scaledGap) || 0);
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
@@ -4139,9 +4133,6 @@ function buildSnapshotHtml(config) {
             durationSeconds: durationMs / 1000,
             stageHeight,
             assetGap: state.assetGap,
-            scaledPadTopBottom: Number(state.scaledPadTopBottom) || 0,
-            scaledPadLeftRight: Number(state.scaledPadLeftRight) || 0,
-            scaledGap: Number(state.scaledGap) || 0,
             loopDistance: state.loopDistance
           },
           "*"
@@ -5399,8 +5390,24 @@ function syncEffectiveLoopPadding() {
 }
 
 function getPartitionPreviewScale() {
-  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
-  return PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+  return PREVIEW_TILE_FIXED_HEIGHT_PX / BILLBOARD_DESIGN_HEIGHT;
+}
+
+function compute3dLikeTargetHeightFromStage(stageHeight) {
+  const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+  const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+  return Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+}
+
+function computeScaledPaddingFromRendererMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+  const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+  const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+  const scale = Math.max(0.08, safeTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const safePadTBDesign = Math.max(0, Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(padTopBottomDesign) || 0));
+  const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+  const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+  const padLeftRight = Math.max(0, safePadLRDesign * scale);
+  return { padTopBottom, padLeftRight };
 }
 
 function syncPartitionEditorVisuals() {
@@ -5421,9 +5428,31 @@ function syncPartitionEditorVisuals() {
       return;
     }
     const settings = partitionSettingsForKey(partitionKey);
-    const scaledPadTBRaw = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
-    const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
-    const scaledGap = 0;
+    const stageHeight = Math.max(1, Number(loopStageHeight) || BILLBOARD_DESIGN_HEIGHT);
+    const textureTargetHeight = compute3dLikeTargetHeightFromStage(stageHeight);
+    const textureScale = Math.max(0.08, textureTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+    const textureViewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * textureScale));
+    const partitionWidthDesign =
+      partitionKey === "left"
+        ? BILLBOARD_LEFT_WIDTH
+        : partitionKey === "curve"
+          ? BILLBOARD_CURVE_WIDTH
+          : BILLBOARD_RIGHT_WIDTH;
+    const partitionRatio = Math.max(0.0001, Number(partitionWidthDesign) || 0) / BILLBOARD_DESIGN_WIDTH;
+    const partitionTargetHeight = Math.max(128, Math.round(textureViewportWidth * partitionRatio));
+    const orientations = currentPartitionArtworkOrientations();
+    const verticalFlow = orientations[partitionKey] === "vertical";
+    const paddingTargetHeight = verticalFlow ? partitionTargetHeight : textureTargetHeight;
+    const scaledPaddingRender = computeScaledPaddingFromRendererMath(
+      settings.padTopBottom,
+      settings.padLeftRight,
+      paddingTargetHeight,
+      stageHeight
+    );
+    const editorScaleFromViewport = PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+    const scaledPadTBRaw = Math.max(0, Math.round(scaledPaddingRender.padTopBottom * editorScaleFromViewport * 100) / 100);
+    const scaledPadLR = Math.max(0, Math.round(scaledPaddingRender.padLeftRight * editorScaleFromViewport * 100) / 100);
+    const scaledGap = Math.max(0, Math.round((Math.max(0, Number(settings.assetGap) || 0) * scale) * 100) / 100);
     const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
     const maxPadTB = Math.max(0, (trackHeight - 8) * 0.5);
     const scaledPadTB = Math.min(maxPadTB, scaledPadTBRaw);
@@ -5449,27 +5478,16 @@ function syncPartitionEditorVisuals() {
 }
 
 function getPreviewScale() {
-  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
-  return PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+  return PREVIEW_TILE_FIXED_HEIGHT_PX / BILLBOARD_DESIGN_HEIGHT;
 }
 
 function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  let scaledGap = null;
-  if (
-    Number.isFinite(loopPreviewScaledGap) &&
-    Number.isFinite(loopStageHeight) &&
-    loopStageHeight > 0
-  ) {
-    const ratio = PREVIEW_TILE_FIXED_HEIGHT_PX / loopStageHeight;
-    scaledGap = Math.round(Math.max(0, Number(loopPreviewScaledGap) * ratio) * 100) / 100;
-  } else {
-    const scale = getPreviewScale();
-    const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
-    scaledGap = Math.round(scaledGapRaw * 100) / 100;
-  }
+  const scale = getPreviewScale();
+  const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
+  const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
   syncVisualizationGeometry();
 }
@@ -5478,24 +5496,19 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  let scaledPadTBRounded = null;
-  let scaledPadLR = null;
-  if (
-    Number.isFinite(loopPreviewScaledPadTopBottom) &&
-    Number.isFinite(loopPreviewScaledPadLeftRight) &&
-    Number.isFinite(loopStageHeight) &&
-    loopStageHeight > 0
-  ) {
-    const ratio = PREVIEW_TILE_FIXED_HEIGHT_PX / loopStageHeight;
-    scaledPadTBRounded = Math.round(Math.max(0, Number(loopPreviewScaledPadTopBottom) * ratio) * 100) / 100;
-    scaledPadLR = Math.round(Math.max(0, Number(loopPreviewScaledPadLeftRight) * ratio) * 100) / 100;
-  } else {
-    const scale = getPreviewScale();
-    const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
-    const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
-    scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
-    scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
-  }
+  const stageHeight = Math.max(1, Number(loopStageHeight) || BILLBOARD_DESIGN_HEIGHT);
+  const targetHeight = compute3dLikeTargetHeightFromStage(stageHeight);
+  const scaledPaddingRender = computeScaledPaddingFromRendererMath(
+    currentPadTopBottom(),
+    currentPadLeftRight(),
+    targetHeight,
+    stageHeight
+  );
+  const editorScaleFromViewport = PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+  const scaledPadTBRaw = Math.max(0, scaledPaddingRender.padTopBottom * editorScaleFromViewport);
+  const scaledPadLRRaw = Math.max(0, scaledPaddingRender.padLeftRight * editorScaleFromViewport);
+  const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
+  const scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
   const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   const maxPadTB = Math.max(0, (scaledTrackHeight - 8) * 0.5);
   const scaledPadTB = Math.min(maxPadTB, scaledPadTBRounded);
@@ -7074,9 +7087,6 @@ async function init() {
     const durationSeconds = Number(payload.durationSeconds);
     const stageHeight = Number(payload.stageHeight);
     const assetGap = Number(payload.assetGap);
-    const scaledPadTopBottom = Number(payload.scaledPadTopBottom);
-    const scaledPadLeftRight = Number(payload.scaledPadLeftRight);
-    const scaledGap = Number(payload.scaledGap);
     const loopDistance = Number(payload.loopDistance);
     const shouldUpdateViewportMetrics = previewViewMode !== "3d";
 
@@ -7124,15 +7134,6 @@ async function init() {
     if (Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
       loopAssetGap = assetGap;
       shouldRerender3d = true;
-    }
-    if (Number.isFinite(scaledPadTopBottom) && scaledPadTopBottom >= 0) {
-      loopPreviewScaledPadTopBottom = scaledPadTopBottom;
-    }
-    if (Number.isFinite(scaledPadLeftRight) && scaledPadLeftRight >= 0) {
-      loopPreviewScaledPadLeftRight = scaledPadLeftRight;
-    }
-    if (Number.isFinite(scaledGap) && scaledGap >= 0) {
-      loopPreviewScaledGap = scaledGap;
     }
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
