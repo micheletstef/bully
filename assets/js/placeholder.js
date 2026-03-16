@@ -1125,14 +1125,34 @@ async function load3dImage(src) {
   return promise;
 }
 
+function looksLikeGifSource(src) {
+  const value = String(src || "").trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  if (value.startsWith("data:image/gif")) {
+    return true;
+  }
+  const clean = value.split("#")[0].split("?")[0];
+  return clean.endsWith(".gif");
+}
+
 async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation, options = {}) {
   if (!sources.length) {
     return null;
   }
-  const images = (await Promise.all(sources.map((src) => load3dImage(src)))).filter((img) => !!img);
-  if (!images.length) {
+  const loadedEntries = await Promise.all(
+    sources.map(async (src) => ({
+      src,
+      img: await load3dImage(src)
+    }))
+  );
+  const entries = loadedEntries.filter((entry) => !!entry.img);
+  if (!entries.length) {
     return null;
   }
+  const images = entries.map((entry) => entry.img);
+  const hasAnimatedSources = entries.some((entry) => looksLikeGifSource(entry.src));
 
   const preserveInlineWhenVertical = options && options.preserveInlineWhenVertical === true;
   const rotateAssetsInStrip = orientation === "vertical" && !preserveInlineWhenVertical;
@@ -1181,11 +1201,12 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
   if (!stripCtx) {
     return null;
   }
-  stripCtx.imageSmoothingEnabled = true;
-  stripCtx.imageSmoothingQuality = "high";
-  stripCtx.fillStyle = options && options.backgroundColor ? options.backgroundColor : currentBackgroundColor();
-  stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
-
+  const fillBackground = () => {
+    stripCtx.imageSmoothingEnabled = true;
+    stripCtx.imageSmoothingQuality = "high";
+    stripCtx.fillStyle = options && options.backgroundColor ? options.backgroundColor : currentBackgroundColor();
+    stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+  };
   const drawSequence = (startX) => {
     let cursor = startX + padLRPx;
     images.forEach((img, idx) => {
@@ -1205,10 +1226,14 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
       }
     });
   };
-  drawSequence(0);
-  drawSequence(sequenceWidth);
+  const renderStripFrame = () => {
+    fillBackground();
+    drawSequence(0);
+    drawSequence(sequenceWidth);
+  };
+  renderStripFrame();
 
-  return { canvas: stripCanvas, sequenceWidth, stripHeight };
+  return { canvas: stripCanvas, sequenceWidth, stripHeight, hasAnimatedSources, renderStripFrame };
 }
 
 async function build3dSurfaceStrip(targetHeight) {
@@ -2824,6 +2849,16 @@ function paintThreeLoopTextureFrame(progress) {
   const { frameCanvas, frameCtx } = state;
   frameCtx.fillStyle = currentBackgroundColor();
   frameCtx.fillRect(0, 0, frameCanvas.width, frameCanvas.height);
+  if (state.partitioned && state.partitionSurfaces) {
+    PARTITION_KEYS.forEach((key) => {
+      const surface = state.partitionSurfaces[key];
+      if (surface && surface.hasAnimatedSources && typeof surface.renderStripFrame === "function") {
+        surface.renderStripFrame();
+      }
+    });
+  } else if (state.linearSurface && state.linearSurface.hasAnimatedSources && typeof state.linearSurface.renderStripFrame === "function") {
+    state.linearSurface.renderStripFrame();
+  }
 
   if (state.partitioned && state.partitionSurfaces) {
     const widths = {
@@ -4102,11 +4137,14 @@ function buildPartitionedSnapshotHtml(config) {
           partitionHeight
         );
         // Match 3D semantics:
-        // - padTopBottom is panel inset (swapped to left/right when vertical)
+        // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
         const panelInsetTopBottom = verticalFlow ? 0 : scaledPadding.padTopBottom;
-        const panelInsetLeftRight = verticalFlow ? scaledPadding.padTopBottom : 0;
+        const panelInsetLeftRight = 0;
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
+        const verticalArtworkHeight = verticalFlow
+          ? Math.max(1, Math.round(partitionTargetHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2))
+          : null;
         container.style.background = partitionSettings.backgroundColor;
         container.style.setProperty("--loop-row-gap", Math.max(0, Number(partitionSettings.rowGap) || 0) + "px");
         container.style.paddingTop = Math.max(0, Number(panelInsetTopBottom) || 0) + "px";
@@ -4141,6 +4179,9 @@ function buildPartitionedSnapshotHtml(config) {
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            if (verticalFlow && verticalArtworkHeight !== null) {
+              image.style.height = verticalArtworkHeight + "px";
+            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
@@ -4173,6 +4214,7 @@ function buildPartitionedSnapshotHtml(config) {
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
             track.style.height = verticalTrackHeight + "px";
+            track.style.alignItems = "center";
           }
           row.appendChild(track);
           container.appendChild(row);

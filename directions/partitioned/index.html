@@ -452,11 +452,14 @@
           partitionHeight
         );
         // Match 3D semantics:
-        // - padTopBottom is panel inset (swapped to left/right when vertical)
+        // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
         const panelInsetTopBottom = verticalFlow ? 0 : scaledPadding.padTopBottom;
-        const panelInsetLeftRight = verticalFlow ? scaledPadding.padTopBottom : 0;
+        const panelInsetLeftRight = 0;
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
+        const verticalArtworkHeight = verticalFlow
+          ? Math.max(1, Math.round(partitionTargetHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2))
+          : null;
         container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
         container.style.paddingTop = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
         container.style.paddingBottom = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
@@ -489,6 +492,9 @@
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            if (verticalFlow && verticalArtworkHeight !== null) {
+              image.style.height = `${verticalArtworkHeight}px`;
+            }
             track.appendChild(image);
             allImages.push(image);
             nodes.push(image);
@@ -521,6 +527,7 @@
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
             track.style.height = `${verticalTrackHeight}px`;
+            track.style.alignItems = "center";
           }
           row.appendChild(track);
           container.appendChild(row);
