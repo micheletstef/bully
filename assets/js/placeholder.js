@@ -5336,7 +5336,12 @@ function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  // Keep visualization as a fixed artboard width.
+  const availableWidth = Math.max(1, loopVisualization.clientWidth - 8);
+  const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
+  const fitScale = Math.max(0.2, Math.min(1, availableWidth / contentWidth));
+  loopVisualization.style.setProperty("--preview-fit-scale", String(fitScale));
+  loopPreviewTrack.style.transformOrigin = "left top";
+  loopPreviewTrack.style.transform = `scale(${fitScale})`;
 }
 
 function computeLinearEditorLayoutScale() {
@@ -5381,6 +5386,23 @@ function applyArtworkTileTransform(targetEl, item, scaleToPixels) {
   const ty = layout.y * pixelScale;
   targetEl.style.transformOrigin = "center center";
   targetEl.style.transform = `translate(${tx}px, ${ty}px)`;
+}
+
+function applyArtworkTileScale(targetEl, scaleValue) {
+  if (!targetEl) {
+    return;
+  }
+  const baseHeight = Number(targetEl.dataset.baseHeightPx);
+  const scale = Math.max(0.1, Math.min(8, Number(scaleValue) || 1));
+  if (!Number.isFinite(baseHeight) || baseHeight <= 0) {
+    return;
+  }
+  const heightPx = Math.max(8, Math.round(baseHeight * scale));
+  targetEl.style.height = `${heightPx}px`;
+  const image = targetEl.querySelector("img");
+  if (image) {
+    image.style.height = `${heightPx}px`;
+  }
 }
 
 function scheduleArtworkLayoutSync() {
@@ -5579,6 +5601,7 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
       const sy = corner.includes("t") ? -1 : 1;
       const signed = sx * dx + sy * dy;
       next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(signed / 180)));
+      applyArtworkTileScale(state.targetEl, next.scale);
     } else {
       const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
       const rawX = state.startLayout.x + dx / state.scaleToPixels;
@@ -5639,6 +5662,7 @@ function renderLoopPreview() {
     applyEditorAssetColorToImage(image, item.src);
     const itemLayout = sanitizeArtworkLayout(item.layout);
     const itemHeight = Math.max(8, Math.round(baseArtworkHeight * itemLayout.scale * 100) / 100);
+    tile.dataset.baseHeightPx = String(baseArtworkHeight);
     image.style.height = `${itemHeight}px`;
     tile.style.height = `${itemHeight}px`;
     tile.appendChild(image);
@@ -5901,6 +5925,7 @@ function renderPartitionEditor(partitionKey) {
     applyEditorAssetColorToImage(image, item.src, key);
     const itemLayout = sanitizeArtworkLayout(item.layout);
     const itemHeight = Math.max(8, Math.round(baseArtworkHeight * itemLayout.scale * 100) / 100);
+    tile.dataset.baseHeightPx = String(baseArtworkHeight);
     image.style.height = `${itemHeight}px`;
     tile.style.height = `${itemHeight}px`;
     tile.appendChild(image);
@@ -6151,7 +6176,9 @@ function updateActiveWindow() {
   const frameHeight = Math.max(1, loopVisualization.clientHeight);
   const normalizedProgress = computePreview3dLoopProgress();
   const previewScale = getPreviewScale();
-  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
+  const fitScaleRaw = Number.parseFloat(getComputedStyle(loopVisualization).getPropertyValue("--preview-fit-scale"));
+  const fitScale = Number.isFinite(fitScaleRaw) ? Math.max(0.2, Math.min(1, fitScaleRaw)) : 1;
+  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale * fitScale);
   const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
     ? Math.max(0.01, Math.min(1, loopPlaybackViewportRatio))
     : 0.25;
