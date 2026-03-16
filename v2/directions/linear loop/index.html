@@ -199,8 +199,9 @@
           paddingTargetHeight,
           viewportHeight
         );
-        const layoutScale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
-        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * layoutScale));
+        // Keep editor transform coordinates in billboard design-space.
+        const viewportLayoutScale = Math.max(0.001, stageHeight / BILLBOARD_DESIGN_HEIGHT);
+        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * viewportLayoutScale));
         const appliedPadTopBottom = 0;
         const appliedPadLeftRight = scaledPadding.padLeftRight;
 
@@ -238,8 +239,8 @@
             image.style.marginRight = `${scaledGap}px`;
             const layoutRaw = transforms[idx];
             const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
-            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
-            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * viewportLayoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * viewportLayoutScale : 0;
             const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
             image.style.transformOrigin = "center center";
             image.dataset.layoutScale = String(scale);

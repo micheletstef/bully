@@ -399,7 +399,8 @@ function normalizeArtworkItem(item) {
     id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateArtworkId(),
     src,
     name,
-    layout: sanitizeArtworkLayout(null)
+    // Preserve saved editor transform so refresh restores exact placement/scale.
+    layout: sanitizeArtworkLayout(item.layout)
   };
 }
 
@@ -3723,8 +3724,9 @@ function buildSnapshotHtml(config) {
           paddingTargetHeight,
           viewportHeight
         );
-        const layoutScale = Math.max(0.08, paddingTargetHeight / 3480);
-        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * layoutScale));
+        // Keep editor transform coordinates in billboard design-space.
+        const viewportLayoutScale = Math.max(0.001, stageHeight / 3480);
+        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * viewportLayoutScale));
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
@@ -3759,8 +3761,8 @@ function buildSnapshotHtml(config) {
             image.style.marginRight = scaledGap + "px";
             const layoutRaw = transforms[idx];
             const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
-            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
-            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * viewportLayoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * viewportLayoutScale : 0;
             const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
             image.style.transformOrigin = "center center";
             image.dataset.layoutScale = String(scale);
@@ -4335,8 +4337,9 @@ function buildPartitionedSnapshotHtml(config) {
           paddingTargetHeight,
           partitionHeight
         );
-        const layoutScale = Math.max(0.08, paddingTargetHeight / 3480);
-        const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * layoutScale));
+        // Keep editor transform coordinates in billboard design-space.
+        const viewportLayoutScale = Math.max(0.001, partitionHeight / 3480);
+        const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * viewportLayoutScale));
         const transformList =
           state.partitionArtworkTransforms && Array.isArray(state.partitionArtworkTransforms[partitionKey])
             ? state.partitionArtworkTransforms[partitionKey]
@@ -4385,8 +4388,8 @@ function buildPartitionedSnapshotHtml(config) {
             image.style.marginRight = scaledGap + "px";
             const layoutRaw = transformList[idx];
             const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
-            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
-            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * viewportLayoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * viewportLayoutScale : 0;
             const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
             image.style.transformOrigin = "center center";
             image.dataset.layoutScale = String(scale);
@@ -5315,6 +5318,9 @@ function scheduleArtworkLayoutSync() {
   }
   artworkEditorSyncFrameId = requestAnimationFrame(() => {
     artworkEditorSyncFrameId = null;
+    // Persist transform edits continuously so refresh keeps latest drag/scale state.
+    saveArtworks(loopArtworks);
+    savePartitionArtworks(partitionArtworks);
     sendLoopConfigToPreview();
     if (previewViewMode === "3d") {
       render3dPreview();
@@ -5421,6 +5427,7 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
   if (!tileEl) {
     return;
   }
+  const POINTER_MOVE_DEADZONE_PX = 3;
   const dropContainerSelector =
     options && typeof options.dropContainerSelector === "string" ? options.dropContainerSelector : "";
   const onRemove = options && typeof options.onRemove === "function" ? options.onRemove : null;
@@ -5501,6 +5508,9 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     const state = artworkEditorDragState;
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
+    if (Math.hypot(dx, dy) < POINTER_MOVE_DEADZONE_PX) {
+      return;
+    }
     const next = sanitizeArtworkLayout(state.startLayout);
     if (state.mode === "scale") {
       const corner = String(state.corner || "br");
