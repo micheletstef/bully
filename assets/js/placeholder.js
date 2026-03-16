@@ -179,6 +179,8 @@ let previewViewMode = "flat";
 let preview3dSurface = null;
 let preview3dRenderToken = 0;
 const preview3dImageCache = new Map();
+const preview3dAnimatedImageNodes = new Map();
+let preview3dAnimatedImageHost = null;
 let preview3dPrevBaseOffset = null;
 const preview3dThreeState = {
   renderer: null,
@@ -1117,12 +1119,64 @@ async function load3dImage(src) {
   }
   const promise = new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    const gifSource = looksLikeGifSource(src);
+    if (gifSource) {
+      // Keep GIF elements attached so browser animation frames advance for drawImage().
+      attach3dAnimatedImage(src, img);
+    }
+    img.onload = () => {
+      if (gifSource) {
+        attach3dAnimatedImage(src, img);
+      }
+      resolve(img);
+    };
     img.onerror = () => resolve(null);
     img.src = src;
   });
   preview3dImageCache.set(src, promise);
   return promise;
+}
+
+function ensure3dAnimatedImageHost() {
+  if (preview3dAnimatedImageHost && preview3dAnimatedImageHost.isConnected) {
+    return preview3dAnimatedImageHost;
+  }
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  host.style.position = "fixed";
+  host.style.left = "0";
+  host.style.top = "0";
+  host.style.width = "1px";
+  host.style.height = "1px";
+  host.style.overflow = "hidden";
+  host.style.opacity = "0";
+  host.style.pointerEvents = "none";
+  host.style.zIndex = "-2147483648";
+  (document.body || document.documentElement).appendChild(host);
+  preview3dAnimatedImageHost = host;
+  return host;
+}
+
+function attach3dAnimatedImage(src, img) {
+  if (!img || !looksLikeGifSource(src)) {
+    return;
+  }
+  const existing = preview3dAnimatedImageNodes.get(src);
+  if (existing && existing !== img && existing.isConnected) {
+    return;
+  }
+  const host = ensure3dAnimatedImageHost();
+  if (img.parentElement !== host) {
+    host.appendChild(img);
+  }
+  img.style.position = "absolute";
+  img.style.left = "0";
+  img.style.top = "0";
+  img.style.width = "1px";
+  img.style.height = "1px";
+  img.style.opacity = "0";
+  img.style.pointerEvents = "none";
+  preview3dAnimatedImageNodes.set(src, img);
 }
 
 function looksLikeGifSource(src) {
@@ -3556,12 +3610,15 @@ function buildSnapshotHtml(config) {
           paddingTargetHeight,
           viewportHeight
         );
+        const layoutScale = Math.max(0.08, paddingTargetHeight / 3480);
+        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * layoutScale));
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
         const rows = [];
+        const rowImagesByTrack = new Map();
         const allImages = [];
         let firstSequenceNodes = [];
         let firstSequenceStartNode = null;
@@ -3585,8 +3642,12 @@ function buildSnapshotHtml(config) {
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            image.style.marginRight = scaledGap + "px";
             track.appendChild(image);
             allImages.push(image);
+            if (rowImagesByTrack.has(track)) {
+              rowImagesByTrack.get(track).push(image);
+            }
             nodes.push(image);
             if (!startNode) {
               startNode = image;
@@ -3614,12 +3675,15 @@ function buildSnapshotHtml(config) {
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          track.style.gap = "0px";
+          track.style.alignItems = "center";
           if (state.artworkOrientation === "vertical") {
             track.classList.add("vertical-scroll");
           }
           row.appendChild(track);
           loopFill.appendChild(row);
           rows.push(track);
+          rowImagesByTrack.set(track, []);
 
           appendSequence(track, rowIndex === 0);
           const secondStart = appendSequence(track, false);
@@ -3630,9 +3694,20 @@ function buildSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
+        rows.forEach((track) => {
+          const rowHeight = track.parentElement
+            ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+            : Math.max(1, Math.round(loopStage.getBoundingClientRect().height));
+          const artworkHeight = Math.max(1, Math.round(rowHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
+          const rowImages = rowImagesByTrack.get(track) || [];
+          rowImages.forEach((image) => {
+            image.style.height = artworkHeight + "px";
+          });
+        });
+
         const verticalFlow = state.artworkOrientation === "vertical";
 
-        const gapSize = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = scaledGap;
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -3640,8 +3715,9 @@ function buildSnapshotHtml(config) {
           loopDistance = secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
-            + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          const firstRowImages = rows.length ? rowImagesByTrack.get(rows[0]) || [] : [];
+          const imagesWidth = firstRowImages.reduce((sum, image) => sum + image.getBoundingClientRect().width, 0);
+          loopDistance = sidePadding * 2 + imagesWidth + firstRowImages.length * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
@@ -3661,7 +3737,7 @@ function buildSnapshotHtml(config) {
 
         document.documentElement.style.setProperty("--loop-distance", safeDistance + "px");
         document.documentElement.style.setProperty("--loop-duration", state.seconds + "s");
-        document.documentElement.style.setProperty("--loop-pad-tb", Math.max(0, Number(scaledPadding.padTopBottom) || 0) + "px");
+        document.documentElement.style.setProperty("--loop-pad-tb", "0px");
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", gapSize + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
@@ -4136,15 +4212,14 @@ function buildPartitionedSnapshotHtml(config) {
           paddingTargetHeight,
           partitionHeight
         );
+        const layoutScale = Math.max(0.08, paddingTargetHeight / 3480);
+        const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * layoutScale));
         // Match 3D semantics:
         // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
-        const panelInsetTopBottom = verticalFlow ? 0 : scaledPadding.padTopBottom;
+        const panelInsetTopBottom = 0;
         const panelInsetLeftRight = 0;
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
-        const verticalArtworkHeight = verticalFlow
-          ? Math.max(1, Math.round(partitionTargetHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2))
-          : null;
         container.style.background = partitionSettings.backgroundColor;
         container.style.setProperty("--loop-row-gap", Math.max(0, Number(partitionSettings.rowGap) || 0) + "px");
         container.style.paddingTop = Math.max(0, Number(panelInsetTopBottom) || 0) + "px";
@@ -4156,6 +4231,7 @@ function buildPartitionedSnapshotHtml(config) {
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         // Keep artwork inline in all orientations; vertical only changes track rotation/direction.
         const rows = [];
+        const rowImagesByTrack = new Map();
         const allImages = [];
         let firstSequenceNodes = [];
         let firstSequenceStartNode = null;
@@ -4179,11 +4255,12 @@ function buildPartitionedSnapshotHtml(config) {
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
-            if (verticalFlow && verticalArtworkHeight !== null) {
-              image.style.height = verticalArtworkHeight + "px";
-            }
+            image.style.marginRight = scaledGap + "px";
             track.appendChild(image);
             allImages.push(image);
+            if (rowImagesByTrack.has(track)) {
+              rowImagesByTrack.get(track).push(image);
+            }
             nodes.push(image);
             if (!startNode) {
               startNode = image;
@@ -4211,14 +4288,16 @@ function buildPartitionedSnapshotHtml(config) {
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          track.style.gap = "0px";
+          track.style.alignItems = "center";
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
             track.style.height = verticalTrackHeight + "px";
-            track.style.alignItems = "center";
           }
           row.appendChild(track);
           container.appendChild(row);
           rows.push(track);
+          rowImagesByTrack.set(track, []);
 
           appendSequence(track, rowIndex === 0);
           const secondStart = appendSequence(track, false);
@@ -4229,7 +4308,20 @@ function buildPartitionedSnapshotHtml(config) {
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapSize = Math.max(0, Number(partitionSettings.assetGap) || 0);
+        rows.forEach((track) => {
+          const rowCrossSize = verticalFlow
+            ? Math.max(1, Math.round(verticalTrackHeight || partitionWidth || 1))
+            : track.parentElement
+              ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+              : Math.max(1, Math.round(container.getBoundingClientRect().height));
+          const artworkHeight = Math.max(1, Math.round(rowCrossSize - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
+          const rowImages = rowImagesByTrack.get(track) || [];
+          rowImages.forEach((image) => {
+            image.style.height = artworkHeight + "px";
+          });
+        });
+
+        const gapSize = scaledGap;
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -4237,8 +4329,9 @@ function buildPartitionedSnapshotHtml(config) {
           loopDistance = secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
-            + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          const firstRowImages = rows.length ? rowImagesByTrack.get(rows[0]) || [] : [];
+          const imagesWidth = firstRowImages.reduce((sum, image) => sum + image.getBoundingClientRect().width, 0);
+          loopDistance = sidePadding * 2 + imagesWidth + firstRowImages.length * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
@@ -4252,7 +4345,7 @@ function buildPartitionedSnapshotHtml(config) {
           track.style.setProperty("--loop-vertical-shift", rowHeight + "px");
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.animationDuration = partitionSettings.seconds + "s";
-          track.style.gap = Math.max(0, Number(partitionSettings.assetGap) || 0) + "px";
+          track.style.gap = "0px";
           track.style.setProperty("--loop-distance", safeDistance + "px");
           track.style.setProperty("--loop-row-direction", "normal");
         });

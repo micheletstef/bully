@@ -451,15 +451,14 @@
           paddingTargetHeight,
           partitionHeight
         );
+        const layoutScale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * layoutScale));
         // Match 3D semantics:
         // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
-        const panelInsetTopBottom = verticalFlow ? 0 : scaledPadding.padTopBottom;
+        const panelInsetTopBottom = 0;
         const panelInsetLeftRight = 0;
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
-        const verticalArtworkHeight = verticalFlow
-          ? Math.max(1, Math.round(partitionTargetHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2))
-          : null;
         container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
         container.style.paddingTop = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
         container.style.paddingBottom = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
@@ -469,6 +468,7 @@
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         const rows = [];
+        const rowImagesByTrack = new Map();
         const allImages = [];
         let firstSequenceNodes = [];
         let firstSequenceStartNode = null;
@@ -492,11 +492,12 @@
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
-            if (verticalFlow && verticalArtworkHeight !== null) {
-              image.style.height = `${verticalArtworkHeight}px`;
-            }
+            image.style.marginRight = `${scaledGap}px`;
             track.appendChild(image);
             allImages.push(image);
+            if (rowImagesByTrack.has(track)) {
+              rowImagesByTrack.get(track).push(image);
+            }
             nodes.push(image);
             if (!startNode) {
               startNode = image;
@@ -524,14 +525,16 @@
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          track.style.gap = "0px";
+          track.style.alignItems = "center";
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
             track.style.height = `${verticalTrackHeight}px`;
-            track.style.alignItems = "center";
           }
           row.appendChild(track);
           container.appendChild(row);
           rows.push(track);
+          rowImagesByTrack.set(track, []);
 
           appendSequence(track, rowIndex === 0);
           const secondStart = appendSequence(track, false);
@@ -542,7 +545,20 @@
 
         await Promise.all(allImages.map(waitForImage));
 
-        const gapSize = Math.max(0, Number(partitionSettings.assetGap) || 0);
+        rows.forEach((track) => {
+          const rowCrossSize = verticalFlow
+            ? Math.max(1, Math.round(verticalTrackHeight || partitionWidth || 1))
+            : track.parentElement
+              ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+              : Math.max(1, Math.round(container.getBoundingClientRect().height));
+          const artworkHeight = Math.max(1, Math.round(rowCrossSize - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
+          const rowImages = rowImagesByTrack.get(track) || [];
+          rowImages.forEach((image) => {
+            image.style.height = `${artworkHeight}px`;
+          });
+        });
+
+        const gapSize = scaledGap;
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -550,10 +566,9 @@
           loopDistance = secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce(
-            (sum, node) => sum + node.getBoundingClientRect().width,
-            0
-          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          const firstRowImages = rows.length ? rowImagesByTrack.get(rows[0]) || [] : [];
+          const imagesWidth = firstRowImages.reduce((sum, image) => sum + image.getBoundingClientRect().width, 0);
+          loopDistance = sidePadding * 2 + imagesWidth + firstRowImages.length * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
 
@@ -568,7 +583,7 @@
           track.style.setProperty("--loop-vertical-shift", `${rowHeight}px`);
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.animationDuration = `${partitionSettings.seconds}s`;
-          track.style.gap = `${Math.max(0, Number(partitionSettings.assetGap) || 0)}px`;
+          track.style.gap = "0px";
           track.style.setProperty("--loop-distance", `${safeDistance}px`);
           track.style.setProperty("--loop-row-direction", "normal");
         });

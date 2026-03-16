@@ -198,7 +198,9 @@
           paddingTargetHeight,
           viewportHeight
         );
-        const appliedPadTopBottom = scaledPadding.padTopBottom;
+        const layoutScale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * layoutScale));
+        const appliedPadTopBottom = 0;
         const appliedPadLeftRight = scaledPadding.padLeftRight;
 
         const sources = state.artworks.length
@@ -207,6 +209,7 @@
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = appliedPadLeftRight;
         const rows = [];
+        const rowImagesByTrack = new Map();
         const allImages = [];
         let firstSequenceNodes = [];
         let firstSequenceStartNode = null;
@@ -230,8 +233,12 @@
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
+            image.style.marginRight = `${scaledGap}px`;
             track.appendChild(image);
             allImages.push(image);
+            if (rowImagesByTrack.has(track)) {
+              rowImagesByTrack.get(track).push(image);
+            }
             nodes.push(image);
             if (!startNode) {
               startNode = image;
@@ -259,6 +266,8 @@
           row.className = "loop-row";
           const track = document.createElement("div");
           track.className = "loop-row-track";
+          track.style.gap = "0px";
+          track.style.alignItems = "center";
           const verticalFlow = state.artworkOrientation === "vertical";
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
@@ -266,6 +275,7 @@
           row.appendChild(track);
           loopFill.appendChild(row);
           rows.push(track);
+          rowImagesByTrack.set(track, []);
 
           appendSequence(track, rowIndex === 0);
           const secondStart = appendSequence(track, false);
@@ -276,8 +286,19 @@
 
         await Promise.all(allImages.map(waitForImage));
 
+        rows.forEach((track) => {
+          const rowHeight = track.parentElement
+            ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+            : Math.max(1, Math.round(loopStage.getBoundingClientRect().height));
+          const artworkHeight = Math.max(1, Math.round(rowHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
+          const rowImages = rowImagesByTrack.get(track) || [];
+          rowImages.forEach((image) => {
+            image.style.height = `${artworkHeight}px`;
+          });
+        });
+
         const verticalFlow = state.artworkOrientation === "vertical";
-        const gapSize = Math.max(0, Number(state.assetGap) || 0);
+        const gapSize = scaledGap;
         let loopDistance = 0;
         if (firstSequenceStartNode && secondSequenceStartNode) {
           const firstRect = firstSequenceStartNode.getBoundingClientRect();
@@ -287,11 +308,9 @@
             : secondRect.left - firstRect.left;
         }
         if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
-          loopDistance = firstSequenceNodes.reduce(
-            (sum, node) =>
-              sum + (verticalFlow ? node.getBoundingClientRect().height : node.getBoundingClientRect().width),
-            0
-          ) + Math.max(0, firstSequenceNodes.length - 1) * gapSize;
+          const firstRowImages = rows.length ? rowImagesByTrack.get(rows[0]) || [] : [];
+          const imagesWidth = firstRowImages.reduce((sum, image) => sum + image.getBoundingClientRect().width, 0);
+          loopDistance = sidePadding * 2 + imagesWidth + firstRowImages.length * gapSize;
         }
         const safeDistance = loopDistance > 0 ? loopDistance : 1;
         state.loopDistance = safeDistance;
