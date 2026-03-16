@@ -137,6 +137,10 @@
         margin-bottom: 3px;
       }
 
+      .settings-row.marquee-advanced[hidden] {
+        display: none;
+      }
+
       .settings-label {
         text-transform: lowercase;
       }
@@ -165,6 +169,34 @@
 
       .alignment-button:hover,
       .alignment-button:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
+      .marquee-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .marquee-choice {
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 0;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .marquee-choice.inactive {
+        color: #5d5d5d;
+        text-decoration: line-through;
+      }
+
+      .marquee-choice:hover,
+      .marquee-choice:focus {
         text-decoration: underline;
         outline: none;
       }
@@ -287,6 +319,22 @@
         padding-bottom: var(--safe-bottom);
         padding-left: var(--safe-left);
         padding-right: var(--safe-right);
+      }
+
+      .visual-editor-block.marquee-active {
+        width: calc(var(--editor-height) * 5900 / 3480);
+        min-width: calc(var(--editor-height) * 5900 / 3480);
+        overflow: hidden;
+      }
+
+      .visual-editor-block.marquee-vertical {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .marquee-copy {
+        pointer-events: none;
+        user-select: none;
       }
 
       .fake-asset-block {
@@ -620,6 +668,27 @@
           </div>
         </div>
         <div class="settings-row">
+          <span class="settings-label">marquee</span>
+          <div id="marqueeToggle" class="marquee-toggle" role="radiogroup" aria-label="Marquee mode">
+            <button type="button" class="marquee-choice inactive" data-value="off" role="radio" aria-checked="false">off</button>
+            <span>/</span>
+            <button type="button" class="marquee-choice" data-value="on" role="radio" aria-checked="true">on</button>
+          </div>
+        </div>
+        <div id="marqueeSpeedRow" class="settings-row marquee-advanced">
+          <label class="settings-label" for="marqueeSpeedControl">speed</label>
+          <input id="marqueeSpeedControl" class="settings-input settings-input-compact" type="number" min="5" max="600" step="1" value="80" />
+        </div>
+        <div id="marqueeDirectionRow" class="settings-row marquee-advanced">
+          <label class="settings-label" for="marqueeDirectionControl">direction</label>
+          <select id="marqueeDirectionControl" class="settings-input">
+            <option value="rtl">right to left</option>
+            <option value="ltr">left to right</option>
+            <option value="btt">bottom to top</option>
+            <option value="ttb">top to bottom</option>
+          </select>
+        </div>
+        <div class="settings-row">
           <span class="settings-label">padding</span>
           <div class="padding-inline-controls">
             <label class="padding-inline-field" for="paddingTBControl">
@@ -689,6 +758,11 @@
 
       const assetsList = document.getElementById("assetsList");
       const alignmentSettings = document.getElementById("alignmentSettings");
+      const marqueeToggle = document.getElementById("marqueeToggle");
+      const marqueeSpeedRow = document.getElementById("marqueeSpeedRow");
+      const marqueeDirectionRow = document.getElementById("marqueeDirectionRow");
+      const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
+      const marqueeDirectionControl = document.getElementById("marqueeDirectionControl");
       const editorStage = document.getElementById("editorStage");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const flatBillboard = document.getElementById("flatBillboard");
@@ -707,6 +781,8 @@
       const svgColorUrlCache = new Map();
       let draggingAssetId = null;
       let cropDragState = null;
+      let marqueeAnimationRaf = null;
+      let marqueeLastTimestamp = 0;
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -723,6 +799,9 @@
           assets: [],
           settings: {
             verticalAlignment: "top",
+            marqueeEnabled: false,
+            marqueeSpeed: 80,
+            marqueeDirection: "rtl",
             paddingTB: 0,
             paddingLR: 0,
             assetGap: 8,
@@ -766,6 +845,11 @@
             }));
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
+          const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
+          const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
+          const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
+          const marqueeDirection = ["rtl", "ltr", "btt", "ttb"].includes(savedMarqueeDirection) ? savedMarqueeDirection : "rtl";
+          const marqueeSpeed = Number.isFinite(savedMarqueeSpeed) ? Math.max(5, Math.min(600, savedMarqueeSpeed)) : 80;
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
           const savedPaddingLR = Number(parsed?.settings?.paddingLR);
           const savedAssetGap = Number(parsed?.settings?.assetGap);
@@ -778,6 +862,9 @@
             assets: sanitizedAssets,
             settings: {
               verticalAlignment,
+              marqueeEnabled: savedMarqueeEnabled,
+              marqueeSpeed,
+              marqueeDirection,
               paddingTB,
               paddingLR,
               assetGap,
@@ -1198,6 +1285,9 @@
 
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
+        if (editorState.settings.marqueeEnabled) {
+          buildMarqueeCopies();
+        }
         syncBillboardPaddingFromEditorPreview();
       }
 
@@ -1296,16 +1386,19 @@
       }
 
       function updateAllAssetBlockSizes() {
-        const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
+        const blocks = getPrimaryAssetBlocks();
         for (const block of blocks) {
           updateAssetBlockSize(block);
+        }
+        if (editorState.settings.marqueeEnabled) {
+          buildMarqueeCopies();
         }
         updateScaleControlButtons();
         positionScaleControls();
       }
 
       function getSelectedAssetBlocks() {
-        return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block.is-selected"));
+        return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block.is-selected:not(.marquee-copy)"));
       }
 
       function getSelectedAssetBlock() {
@@ -1482,9 +1575,170 @@
           return null;
         }
         if (target.classList.contains("fake-asset-block")) {
+          if (target.classList.contains("marquee-copy")) {
+            return null;
+          }
           return target;
         }
-        return target.closest(".fake-asset-block");
+        const found = target.closest(".fake-asset-block");
+        if (found && found.classList.contains("marquee-copy")) {
+          return null;
+        }
+        return found;
+      }
+
+      function getPrimaryAssetBlocks() {
+        return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block:not(.marquee-copy)"));
+      }
+
+      function clearMarqueeCopies() {
+        const copies = visualEditorBlock.querySelectorAll(".marquee-copy");
+        for (const copy of copies) {
+          copy.remove();
+        }
+      }
+
+      function configureMarqueeLayout() {
+        const direction = editorState.settings.marqueeDirection;
+        const isVertical = direction === "btt" || direction === "ttb";
+        visualEditorBlock.classList.toggle("marquee-vertical", isVertical);
+      }
+
+      function buildMarqueeCopies() {
+        clearMarqueeCopies();
+        if (!editorState.settings.marqueeEnabled) {
+          return;
+        }
+        const originals = getPrimaryAssetBlocks();
+        for (const original of originals) {
+          const clone = original.cloneNode(true);
+          clone.classList.remove("is-selected", "is-cropping", "is-dragging");
+          clone.classList.add("marquee-copy");
+          clone.removeAttribute("draggable");
+          const handles = clone.querySelectorAll(".asset-crop-handle");
+          for (const handle of handles) {
+            handle.remove();
+          }
+          visualEditorBlock.appendChild(clone);
+        }
+      }
+
+      function marqueeCycleLength() {
+        const originals = getPrimaryAssetBlocks();
+        if (!originals.length) {
+          return 0;
+        }
+        const direction = editorState.settings.marqueeDirection;
+        const horizontal = direction === "rtl" || direction === "ltr";
+        const first = originals[0];
+        const last = originals[originals.length - 1];
+        if (horizontal) {
+          return Math.max(1, last.offsetLeft + last.offsetWidth - first.offsetLeft);
+        }
+        return Math.max(1, last.offsetTop + last.offsetHeight - first.offsetTop);
+      }
+
+      function stepMarquee(now) {
+        if (!editorState.settings.marqueeEnabled) {
+          return;
+        }
+        if (!marqueeLastTimestamp) {
+          marqueeLastTimestamp = now;
+        }
+        const dt = Math.max(0, (now - marqueeLastTimestamp) / 1000);
+        marqueeLastTimestamp = now;
+        const cycle = marqueeCycleLength();
+        if (cycle > 0) {
+          const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
+          const delta = speed * dt;
+          const direction = editorState.settings.marqueeDirection;
+          if (direction === "rtl") {
+            visualEditorBlock.scrollLeft += delta;
+            if (visualEditorBlock.scrollLeft >= cycle) {
+              visualEditorBlock.scrollLeft -= cycle;
+            }
+          } else if (direction === "ltr") {
+            visualEditorBlock.scrollLeft -= delta;
+            if (visualEditorBlock.scrollLeft <= 0) {
+              visualEditorBlock.scrollLeft += cycle;
+            }
+          } else if (direction === "btt") {
+            visualEditorBlock.scrollTop += delta;
+            if (visualEditorBlock.scrollTop >= cycle) {
+              visualEditorBlock.scrollTop -= cycle;
+            }
+          } else if (direction === "ttb") {
+            visualEditorBlock.scrollTop -= delta;
+            if (visualEditorBlock.scrollTop <= 0) {
+              visualEditorBlock.scrollTop += cycle;
+            }
+          }
+        }
+        marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+      }
+
+      function stopMarqueeAnimation() {
+        if (marqueeAnimationRaf) {
+          window.cancelAnimationFrame(marqueeAnimationRaf);
+          marqueeAnimationRaf = null;
+        }
+        marqueeLastTimestamp = 0;
+      }
+
+      function startMarqueeAnimation() {
+        stopMarqueeAnimation();
+        marqueeLastTimestamp = 0;
+        marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+      }
+
+      function applyMarqueeSettings(enabled, speed, direction, shouldPersist) {
+        const normalizedEnabled = !!enabled;
+        const normalizedSpeed = Math.max(5, Math.min(600, Number(speed) || 80));
+        const normalizedDirection = ["rtl", "ltr", "btt", "ttb"].includes(direction) ? direction : "rtl";
+
+        editorState.settings.marqueeEnabled = normalizedEnabled;
+        editorState.settings.marqueeSpeed = normalizedSpeed;
+        editorState.settings.marqueeDirection = normalizedDirection;
+
+        marqueeSpeedControl.value = String(normalizedSpeed);
+        marqueeDirectionControl.value = normalizedDirection;
+        marqueeSpeedRow.hidden = !normalizedEnabled;
+        marqueeDirectionRow.hidden = !normalizedEnabled;
+
+        const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
+        for (const button of toggleButtons) {
+          const isOn = button.dataset.value === "on";
+          const isSelected = normalizedEnabled ? isOn : !isOn;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-checked", isSelected ? "true" : "false");
+        }
+
+        visualEditorBlock.classList.toggle("marquee-active", normalizedEnabled);
+        configureMarqueeLayout();
+        buildMarqueeCopies();
+
+        const cycle = marqueeCycleLength();
+        if (normalizedEnabled && cycle > 0) {
+          if (normalizedDirection === "ltr" || normalizedDirection === "ttb") {
+            if (normalizedDirection === "ltr") {
+              visualEditorBlock.scrollLeft = cycle;
+            } else {
+              visualEditorBlock.scrollTop = cycle;
+            }
+          } else {
+            visualEditorBlock.scrollLeft = 0;
+            visualEditorBlock.scrollTop = 0;
+          }
+          startMarqueeAnimation();
+        } else {
+          stopMarqueeAnimation();
+          visualEditorBlock.scrollLeft = 0;
+          visualEditorBlock.scrollTop = 0;
+        }
+        syncFlatBillboardArtworks();
+        if (shouldPersist) {
+          saveEditorState();
+        }
       }
 
       function beginCropDrag(event, handle) {
@@ -1601,7 +1855,7 @@
       }
 
       function syncAssetOrderFromDom() {
-        const orderedIds = Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block")).map((block) => block.dataset.assetId);
+        const orderedIds = getPrimaryAssetBlocks().map((block) => block.dataset.assetId);
         const rankById = new Map();
         for (let index = 0; index < orderedIds.length; index += 1) {
           rankById.set(orderedIds[index], index);
@@ -1624,6 +1878,9 @@
         }
         editorState.assets = editorState.assets.filter((asset) => !selectedIds.has(asset.id));
         clearAssetSelection();
+        if (editorState.settings.marqueeEnabled) {
+          buildMarqueeCopies();
+        }
         syncBillboardPaddingFromEditorPreview();
         saveEditorState();
         return selectedBlocks.length;
@@ -1669,6 +1926,9 @@
         visualEditorBlock.style.setProperty("--asset-gap", normalizedGap + "px");
         assetGapControl.value = String(normalizedGap);
         editorState.settings.assetGap = normalizedGap;
+        if (editorState.settings.marqueeEnabled) {
+          buildMarqueeCopies();
+        }
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -1732,7 +1992,7 @@
         flatBillboardTrack.style.alignItems = align;
 
         flatBillboardTrack.innerHTML = "";
-        const orderedBlocks = Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block"));
+        const orderedBlocks = getPrimaryAssetBlocks();
         for (const sourceBlock of orderedBlocks) {
           const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
           if (!editorMetrics) {
@@ -1834,6 +2094,26 @@
         setVerticalAlignment(alignKey, true);
       });
 
+      marqueeToggle.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) {
+          return;
+        }
+        const value = target.dataset.value;
+        if (value !== "on" && value !== "off") {
+          return;
+        }
+        applyMarqueeSettings(value === "on", marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+      });
+
+      marqueeSpeedControl.addEventListener("input", () => {
+        applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+      });
+
+      marqueeDirectionControl.addEventListener("change", () => {
+        applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+      });
+
       paddingTBControl.addEventListener("input", () => {
         applyPaddingGuides(paddingTBControl.value, paddingLRControl.value, true);
       });
@@ -1888,6 +2168,10 @@
       });
 
       visualEditorBlock.addEventListener("dragstart", (event) => {
+        if (editorState.settings.marqueeEnabled) {
+          event.preventDefault();
+          return;
+        }
         if (cropDragState) {
           event.preventDefault();
           return;
@@ -1938,6 +2222,9 @@
           return;
         }
         syncAssetOrderFromDom();
+        if (editorState.settings.marqueeEnabled) {
+          buildMarqueeCopies();
+        }
         saveEditorState();
         positionScaleControls();
       });
@@ -1998,6 +2285,10 @@
         }
       });
 
+      window.addEventListener("beforeunload", () => {
+        stopMarqueeAnimation();
+      });
+
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
       applyAssetGap(editorState.settings.assetGap, false);
@@ -2005,6 +2296,7 @@
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
+      applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
       updateScaleControlsAnchorTop();
       setScaleControlsVisible(false);
       updateScaleControlButtons();
