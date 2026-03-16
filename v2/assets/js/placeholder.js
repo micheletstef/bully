@@ -107,6 +107,18 @@ const PREVIEW_TILE_FIXED_HEIGHT_PX = 96;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 680;
+const BUNDLED_ANIMATION_ASSET_PATHS = [
+  "assets/animations/SM_Wrestler_01_30FPS_15FS_0.24X_CENTRED-eba75b18-fc17-4728-9cb9-a0683a7c7be1.png",
+  "assets/animations/SM_Wrestler_01_30FPS_15FS_0.24X-80c2fd3d-ad3a-4538-b21c-507dcfb752d7.png",
+  "assets/animations/SM_Wrestler_03_SHORT_1FPS_C_NS-4c61f173-ac77-48d5-90cb-086bfc7b6c01.png",
+  "assets/animations/SM_Wrestler_02_30FPS_15FS_0.24X_CENTRED-30945901-fdc2-4f6c-babb-7cc502acf284.png",
+  "assets/animations/SM_Wrestler_03_30FPS_15FS_0.24X_CENTRED-63349e82-6375-42bd-91b0-adc653539a0d.png",
+  "assets/animations/SM_Wrestler_01_30FPS_1X_CENTRED-c6f755f1-f1ef-4502-a5a8-08eb746fe062.png",
+  "assets/animations/SM_Wrestler_02_30FPS_15FS_0.24X-584a008f-7c44-4493-83d9-30d5127b308a.png",
+  "assets/animations/SM_Wrestler_02_30FPS_1X_CENTRED-ddce180f-4d25-416a-8b67-e4009ebdce76.png",
+  "assets/animations/SM_Wrestler_02_30FPS_1X-cdbda60b-210a-4cea-8b74-5a1847395563.png",
+  "assets/animations/SM_Wrestler_03_30FPS_1X_CENTRED-be4f88ce-fc25-4e5c-86b6-de027691ae1a.png"
+];
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 const DEFAULT_PARTITION_ARTWORKS = {
   left: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
@@ -427,7 +439,9 @@ function cloneArtworkItems(items) {
 function inferAssetLibraryGroup(name, src) {
   const lowerName = String(name || "").toLowerCase();
   const lowerSrc = String(src || "").toLowerCase();
+  const isWrestlerSequence = lowerName.startsWith("sm_wrestler_") || /\/assets\/animations\/sm_wrestler_/i.test(lowerSrc);
   if (
+    isWrestlerSequence ||
     lowerName.endsWith(".gif") ||
     lowerSrc.startsWith("data:image/gif") ||
     /\.gif([?#].*)?$/.test(lowerSrc)
@@ -506,6 +520,12 @@ function syncAssetLibraryFromCurrentArtworks() {
         addAssetToLibrary(item.src, item.name || artworkFileName(item.src));
       }
     });
+  });
+}
+
+function seedBundledAnimationAssets() {
+  BUNDLED_ANIMATION_ASSET_PATHS.forEach((src) => {
+    addAssetToLibrary(src, artworkFileName(src));
   });
 }
 
@@ -5336,14 +5356,15 @@ function syncEffectiveLoopPadding() {
 }
 
 function getPartitionPreviewScale() {
-  return computeLinearEditorLayoutScale();
+  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
+  return PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
 }
 
 function syncPartitionEditorVisuals() {
   if (!partitionEditors) {
     return;
   }
-  const scale = computeLinearEditorLayoutScale();
+  const scale = getPartitionPreviewScale();
   const baseArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   partitionEditors.style.setProperty("--partition-preview-art-height", `${baseArtHeight}px`);
   partitionEditors.style.setProperty("--partition-preview-pad-tb", "0px");
@@ -5385,14 +5406,15 @@ function syncPartitionEditorVisuals() {
 }
 
 function getPreviewScale() {
-  return computeLinearEditorLayoutScale();
+  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
+  return PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
 }
 
 function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = computeLinearEditorLayoutScale();
+  const scale = getPreviewScale();
   const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
   const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
@@ -5403,7 +5425,7 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = computeLinearEditorLayoutScale();
+  const scale = getPreviewScale();
   const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
   const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
   const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
@@ -6524,6 +6546,7 @@ async function init() {
   partitionArtworks = restorePartitionArtworks();
   partitionSettingsByKey = restorePartitionSettings();
   assetLibrary = restoreAssetLibrary();
+  seedBundledAnimationAssets();
   syncAssetLibraryFromCurrentArtworks();
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
   loopDurationSeconds = currentSpeedSeconds();
