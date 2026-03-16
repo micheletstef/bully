@@ -258,6 +258,7 @@ let preview3dAnimationFrameId = null;
 let assetLibrary = [];
 let pickedLibraryAssetId = "";
 let pickedAssetCursorEl = null;
+let gifPlaybackSyncNonce = Date.now();
 let preview3dPlaybackSyncState = {
   hasSample: false,
   elapsedSeconds: 0,
@@ -897,6 +898,47 @@ function fileExtension(name) {
   return lowered.slice(dotIndex + 1);
 }
 
+function isGifArtworkSource(source) {
+  const value = String(source || "").trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  if (value.startsWith("data:image/gif")) {
+    return true;
+  }
+  const clean = value.split("#")[0].split("?")[0];
+  return clean.endsWith(".gif");
+}
+
+function withGifPlaybackSyncSource(source) {
+  const value = String(source || "").trim();
+  if (!value || !isGifArtworkSource(value) || value.startsWith("data:") || value.startsWith("blob:")) {
+    return value;
+  }
+  const hashIndex = value.indexOf("#");
+  const pathAndQuery = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
+  const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
+  const queryIndex = pathAndQuery.indexOf("?");
+  const basePath = queryIndex >= 0 ? pathAndQuery.slice(0, queryIndex) : pathAndQuery;
+  const query = queryIndex >= 0 ? pathAndQuery.slice(queryIndex + 1) : "";
+  const params = new URLSearchParams(query);
+  params.set("gif_sync", String(gifPlaybackSyncNonce));
+  const nextQuery = params.toString();
+  return `${basePath}${nextQuery ? `?${nextQuery}` : ""}${hash}`;
+}
+
+function refreshGifPlaybackSyncNonce() {
+  gifPlaybackSyncNonce = Date.now();
+}
+
+function syncGifPlaybackAcrossViews() {
+  refreshGifPlaybackSyncNonce();
+  renderLoopPreview();
+  if (currentDirectionIsPartitioned()) {
+    renderPartitionEditors();
+  }
+}
+
 function isSupportedArtworkFile(file) {
   const extension = fileExtension(file.name);
   return ["svg", "png", "jpg", "jpeg", "jpt", "gif", "pdf"].includes(extension);
@@ -1153,7 +1195,7 @@ function applyEditorAssetColorToImage(imageElement, src, partitionKey = null) {
   if (!imageElement) {
     return;
   }
-  const source = String(src || "");
+  const source = withGifPlaybackSyncSource(String(src || ""));
   imageElement.src = source;
   const color = editorAssetColorForPartition(partitionKey);
   const requestKey = `${source}::${color}::${Date.now()}::${Math.random().toString(36).slice(2, 8)}`;
@@ -5573,7 +5615,8 @@ function sendLoopConfigToPreview() {
     artworkOrientation: currentArtworkOrientation(),
     rowCount: currentDirectionIsPartitioned() ? activePartitionSettings.rowCount : currentRowCount(),
     rowOffset: currentDirectionIsPartitioned() ? activePartitionSettings.rowOffset : currentRowOffset(),
-    rowGap: currentDirectionIsPartitioned() ? activePartitionSettings.rowGap : currentRowGap()
+    rowGap: currentDirectionIsPartitioned() ? activePartitionSettings.rowGap : currentRowGap(),
+    gifSyncNonce: gifPlaybackSyncNonce
   };
   if (currentDirectionIsPartitioned()) {
     payload.artworksByPartition = {
@@ -7853,6 +7896,7 @@ async function init() {
       partitionLoopDistances[key] = 1;
     });
     updatePartitionActiveWindows();
+    syncGifPlaybackAcrossViews();
     sendLoopConfigToPreview();
     if (previewViewMode === "3d") {
       render3dPreview();
@@ -7874,6 +7918,7 @@ async function init() {
   syncVisualizationGapScaled();
   syncPartitionEditorVisuals();
   syncVisualizationGeometry();
+  syncGifPlaybackAcrossViews();
   sendLoopConfigToPreview();
   window.requestAnimationFrame(() => {
     sendLoopConfigToPreview();

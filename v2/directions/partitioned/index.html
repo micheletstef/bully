@@ -182,7 +182,8 @@
         },
         rowCount: 1,
         rowOffset: 0,
-        rowGap: 0
+        rowGap: 0,
+        gifSyncNonce: ""
       };
       const DEFAULT_PARTITION_SETTINGS = {
         seconds: 16,
@@ -221,6 +222,35 @@
           return `../../${path}`;
         }
         return path;
+      }
+
+      function isGifArtworkSource(path) {
+        const value = String(path || "").trim().toLowerCase();
+        if (!value) {
+          return false;
+        }
+        if (value.startsWith("data:image/gif")) {
+          return true;
+        }
+        const clean = value.split("#")[0].split("?")[0];
+        return clean.endsWith(".gif");
+      }
+
+      function withGifSyncNonce(path) {
+        const value = String(path || "").trim();
+        if (!value || !state.gifSyncNonce || !isGifArtworkSource(value) || value.startsWith("data:") || value.startsWith("blob:")) {
+          return value;
+        }
+        const hashIndex = value.indexOf("#");
+        const pathAndQuery = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
+        const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
+        const queryIndex = pathAndQuery.indexOf("?");
+        const basePath = queryIndex >= 0 ? pathAndQuery.slice(0, queryIndex) : pathAndQuery;
+        const query = queryIndex >= 0 ? pathAndQuery.slice(queryIndex + 1) : "";
+        const params = new URLSearchParams(query);
+        params.set("gif_sync", String(state.gifSyncNonce));
+        const nextQuery = params.toString();
+        return `${basePath}${nextQuery ? `?${nextQuery}` : ""}${hash}`;
       }
 
       function waitForImage(img) {
@@ -500,7 +530,7 @@
           sources.forEach((src, idx) => {
             const image = document.createElement("img");
             image.className = "loop-artwork";
-            image.src = src;
+            image.src = withGifSyncNonce(src);
             image.alt = "";
             image.style.marginRight = `${scaledGap}px`;
             const layoutRaw = transformList[idx];
@@ -830,6 +860,13 @@
         const rowGap = Number(payload.rowGap);
         if (Number.isFinite(rowGap) && rowGap >= 0) {
           state.rowGap = rowGap;
+        }
+
+        if (
+          typeof payload.gifSyncNonce === "string" ||
+          (Number.isFinite(Number(payload.gifSyncNonce)) && String(payload.gifSyncNonce).trim())
+        ) {
+          state.gifSyncNonce = String(payload.gifSyncNonce);
         }
 
         if (payload.partitionSettings && typeof payload.partitionSettings === "object") {
