@@ -242,7 +242,7 @@
       }
 
       .asset-scale-value {
-        min-width: 42px;
+        min-width: 34px;
         text-align: center;
         font-size: 11px;
       }
@@ -293,6 +293,7 @@
           <button id="assetScaleDownButton" type="button" class="asset-scale-button" aria-label="Decrease selected asset scale">-</button>
           <span id="assetScaleValue" class="asset-scale-value">100%</span>
           <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
+          <button id="assetRotateButton" type="button" class="asset-scale-button" aria-label="Rotate selected asset">rot</button>
         </div>
       </main>
     </div>
@@ -319,6 +320,7 @@
       const assetScaleDownButton = document.getElementById("assetScaleDownButton");
       const assetScaleUpButton = document.getElementById("assetScaleUpButton");
       const assetScaleValue = document.getElementById("assetScaleValue");
+      const assetRotateButton = document.getElementById("assetRotateButton");
       let draggingAssetId = null;
       const alignmentMap = {
         top: "flex-start",
@@ -352,6 +354,7 @@
               width: Number.isFinite(asset.width) ? asset.width : 100,
               height: Number.isFinite(asset.height) ? asset.height : 60,
               scalePercent: Number.isFinite(asset.scalePercent) ? asset.scalePercent : 100,
+              rotationTurns: Number.isFinite(asset.rotationTurns) ? asset.rotationTurns : 0,
             }))
             .filter((asset) => asset.width > 0 && asset.height > 0)
             .map((asset) => ({
@@ -360,6 +363,7 @@
               width: asset.width,
               height: asset.height,
               scalePercent: Math.max(10, Math.min(400, asset.scalePercent)),
+              rotationTurns: ((Math.trunc(asset.rotationTurns) % 4) + 4) % 4,
             }));
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
@@ -396,8 +400,20 @@
         block.dataset.originalWidth = String(asset.width);
         block.dataset.originalHeight = String(asset.height);
         block.dataset.scalePercent = String(asset.scalePercent);
+        block.dataset.rotationTurns = String(asset.rotationTurns || 0);
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
+      }
+
+      function getEffectiveDimensions(block) {
+        const originalWidth = Number(block.dataset.originalWidth);
+        const originalHeight = Number(block.dataset.originalHeight);
+        const rotationTurns = Number(block.dataset.rotationTurns) || 0;
+        const isQuarterTurn = Math.abs(rotationTurns % 2) === 1;
+        return {
+          width: isQuarterTurn ? originalHeight : originalWidth,
+          height: isQuarterTurn ? originalWidth : originalHeight,
+        };
       }
 
       function getSafeAssetHeight() {
@@ -406,15 +422,14 @@
       }
 
       function updateAssetBlockSize(block) {
-        const originalWidth = Number(block.dataset.originalWidth);
-        const originalHeight = Number(block.dataset.originalHeight);
-        if (!Number.isFinite(originalWidth) || !Number.isFinite(originalHeight) || originalWidth <= 0 || originalHeight <= 0) {
+        const effective = getEffectiveDimensions(block);
+        if (!Number.isFinite(effective.width) || !Number.isFinite(effective.height) || effective.width <= 0 || effective.height <= 0) {
           return;
         }
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const targetWidth = originalWidth * userScale;
-        const targetHeight = originalHeight * userScale;
+        const targetWidth = effective.width * userScale;
+        const targetHeight = effective.height * userScale;
         const safeHeight = getSafeAssetHeight();
         const fitScale = Math.min(1, safeHeight / targetHeight);
         const scaledWidth = Math.max(1, Math.round(targetWidth * fitScale));
@@ -459,9 +474,9 @@
       }
 
       function getScaleLimits(block) {
-        const originalHeight = Number(block.dataset.originalHeight);
+        const effective = getEffectiveDimensions(block);
         const safeHeight = getSafeAssetHeight();
-        const maxByHeight = Math.floor((safeHeight / originalHeight) * 100);
+        const maxByHeight = Math.floor((safeHeight / effective.height) * 100);
         const maxPercent = Math.max(10, Math.min(400, maxByHeight));
         return {
           minPercent: 10,
@@ -520,6 +535,27 @@
         const selectedAssetState = editorState.assets.find((asset) => asset.id === selectedAssetId);
         if (selectedAssetState) {
           selectedAssetState.scalePercent = nextPercent;
+          saveEditorState();
+        }
+      }
+
+      function rotateSelectedAsset() {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          return;
+        }
+        const currentTurns = Number(selectedBlock.dataset.rotationTurns) || 0;
+        const nextTurns = (currentTurns + 1) % 4;
+        selectedBlock.dataset.rotationTurns = String(nextTurns);
+        updateAssetBlockSize(selectedBlock);
+        updateScaleControlsValue();
+        updateScaleControlButtons();
+        positionScaleControls();
+
+        const selectedAssetId = selectedBlock.dataset.assetId;
+        const selectedAssetState = editorState.assets.find((asset) => asset.id === selectedAssetId);
+        if (selectedAssetState) {
+          selectedAssetState.rotationTurns = nextTurns;
           saveEditorState();
         }
       }
@@ -668,6 +704,7 @@
             width: asset.width,
             height: asset.height,
             scalePercent: 100,
+            rotationTurns: 0,
           };
           editorState.assets.push(assetSnapshot);
           appendAssetBlock(assetSnapshot);
@@ -781,6 +818,10 @@
 
       assetScaleUpButton.addEventListener("click", () => {
         updateSelectedAssetScale(10);
+      });
+
+      assetRotateButton.addEventListener("click", () => {
+        rotateSelectedAsset();
       });
 
       editorStage.addEventListener("scroll", () => {
