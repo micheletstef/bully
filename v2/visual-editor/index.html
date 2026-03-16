@@ -429,6 +429,11 @@
         border: 1px solid transparent;
       }
 
+      .flat-billboard-asset.is-selected {
+        outline: 2px solid rgba(0, 255, 255, 0.95);
+        outline-offset: -2px;
+      }
+
       .flat-billboard-asset.no-preview {
         background: var(--asset-color);
       }
@@ -1293,6 +1298,7 @@
         if (selectedBlocks.length !== 1) {
           setScaleControlsVisible(false);
           updateScaleControlButtons();
+          syncFlatBillboardSelectionState();
           return;
         }
         const block = selectedBlocks[0];
@@ -1300,6 +1306,7 @@
         updateScaleControlButtons();
         positionScaleControls();
         setScaleControlsVisible(true);
+        syncFlatBillboardSelectionState();
       }
 
       function clearAssetSelection() {
@@ -1600,6 +1607,18 @@
         flatBillboardTrack.style.transform = "translateX(" + offsetX + "px)";
       }
 
+      function syncFlatBillboardSelectionState() {
+        if (!flatBillboardTrack) {
+          return;
+        }
+        const selectedIds = new Set(getSelectedAssetBlocks().map((block) => block.dataset.assetId));
+        const mirroredAssets = flatBillboardTrack.querySelectorAll(".flat-billboard-asset");
+        for (const mirroredAsset of mirroredAssets) {
+          const assetId = mirroredAsset.dataset.assetId || "";
+          mirroredAsset.classList.toggle("is-selected", selectedIds.has(assetId));
+        }
+      }
+
       function syncFlatBillboardArtworks() {
         if (!flatBillboardTrack) {
           return;
@@ -1628,6 +1647,7 @@
 
           const targetBlock = document.createElement("div");
           targetBlock.className = "flat-billboard-asset";
+          targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
           targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
           targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
 
@@ -1658,6 +1678,7 @@
 
           flatBillboardTrack.appendChild(targetBlock);
         }
+        syncFlatBillboardSelectionState();
         syncFlatBillboardViewportOffset();
       }
 
