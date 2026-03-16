@@ -631,6 +631,32 @@
         }
       }
 
+      function applyGifTransparencyKey(context, width, height, transparentHex = 0xff00ff, alphaThreshold = 110) {
+        const imageData = context.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        const keyR = (transparentHex >> 16) & 0xff;
+        const keyG = (transparentHex >> 8) & 0xff;
+        const keyB = transparentHex & 0xff;
+        for (let index = 0; index < data.length; index += 4) {
+          const alpha = data[index + 3];
+          if (alpha <= alphaThreshold) {
+            data[index] = keyR;
+            data[index + 1] = keyG;
+            data[index + 2] = keyB;
+            data[index + 3] = 255;
+            continue;
+          }
+          if (alpha < 255) {
+            const unpremultiply = 255 / alpha;
+            data[index] = Math.max(0, Math.min(255, Math.round(data[index] * unpremultiply)));
+            data[index + 1] = Math.max(0, Math.min(255, Math.round(data[index + 1] * unpremultiply)));
+            data[index + 2] = Math.max(0, Math.min(255, Math.round(data[index + 2] * unpremultiply)));
+            data[index + 3] = 255;
+          }
+        }
+        context.putImageData(imageData, 0, 0);
+      }
+
       async function resolveGifWorkerScriptUrl() {
         if (gifWorkerScriptUrlCache) {
           return gifWorkerScriptUrlCache;
@@ -1567,8 +1593,8 @@
             workerScript: workerScriptUrl,
             // GIF supports single-color transparency. Use a chroma key
             // color unlikely to appear in artwork and mark it transparent.
-            background: "#01ff01",
-            transparent: 0x01ff01
+            background: "#ff00ff",
+            transparent: 0xff00ff
           });
 
           setStatus("building gif frames...");
@@ -1588,8 +1614,6 @@
               ? { x: normalizedOffset.oxNorm * scaledWidth, y: normalizedOffset.oyNorm * scaledHeight }
               : autoCenterShiftPx(frame, image, cropRect, scaledWidth, scaledHeight);
             context.clearRect(0, 0, exportWidth, exportHeight);
-            context.fillStyle = "#01ff01";
-            context.fillRect(0, 0, exportWidth, exportHeight);
             context.drawImage(
               image,
               cropRect.sx,
@@ -1601,6 +1625,7 @@
               scaledWidth,
               scaledHeight
             );
+            applyGifTransparencyKey(context, exportWidth, exportHeight, 0xff00ff, 110);
             gif.addFrame(context, { copy: true, delay: frameDelayMs() });
             if (index % 3 === 0 || index === frameImagePairs.length - 1) {
               const prepProgress = 0.3 + ((index + 1) / frameImagePairs.length) * 0.5;
