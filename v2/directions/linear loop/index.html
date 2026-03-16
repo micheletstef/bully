@@ -68,6 +68,7 @@
         animation: loop-x var(--loop-duration) linear infinite;
         animation-delay: var(--loop-row-delay, 0s);
         animation-direction: var(--loop-row-direction, normal);
+        animation-play-state: paused;
         opacity: 0.98;
       }
 
@@ -217,6 +218,7 @@
 
       async function renderLoop() {
         const generation = ++renderGeneration;
+        loopFill.style.visibility = "hidden";
         loopFill.innerHTML = "";
         primaryTrack = null;
         const viewportHeight = Math.max(
@@ -388,6 +390,7 @@
           track.style.setProperty("--loop-vertical-shift", `${rowHeight}px`);
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-row-direction", "normal");
+          track.style.animationPlayState = "running";
         });
 
         primaryTrack = rows[0] || null;
@@ -398,6 +401,7 @@
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${gapSize}px`);
         document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);
+        loopFill.style.visibility = "visible";
         emitPlayback();
       }
 

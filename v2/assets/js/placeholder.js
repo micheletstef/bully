@@ -177,6 +177,8 @@ let loopPadLeftRight = 0;
 let loopRendererPadTopBottomPx = null;
 let loopRendererPadLeftRightPx = null;
 let loopDistanceSource = 5900;
+let billboardPreviewPendingReveal = false;
+let billboardPreviewPlaybackSamples = 0;
 let partitionViewportRatios = {
   left: 0.25,
   curve: 0.25,
@@ -3651,6 +3653,9 @@ function applyPreviewViewMode(mode) {
 
 function loadDirection(path, directionName = null) {
   activeDirectionName = directionName || null;
+  billboardPreviewPendingReveal = true;
+  billboardPreviewPlaybackSamples = 0;
+  billboardPreview.style.opacity = "0";
   billboardPreview.removeAttribute("srcdoc");
   billboardPreview.src = path;
   billboardPreview.style.display = "block";
@@ -3673,6 +3678,9 @@ function loadOutputSnapshot(snapshot) {
   if (!renderedHtml.trim()) {
     return;
   }
+  billboardPreviewPendingReveal = true;
+  billboardPreviewPlaybackSamples = 0;
+  billboardPreview.style.opacity = "0";
   billboardPreview.removeAttribute("src");
   billboardPreview.srcdoc = renderedHtml;
   billboardPreview.style.display = "block";
@@ -7770,6 +7778,11 @@ async function init() {
     if (!payload || payload.type !== "loopPlayback") {
       return;
     }
+    billboardPreviewPlaybackSamples += 1;
+    if (billboardPreviewPendingReveal && billboardPreviewPlaybackSamples >= 2) {
+      billboardPreview.style.opacity = "1";
+      billboardPreviewPendingReveal = false;
+    }
 
     const progress = Number(payload.progress);
     const viewportRatio = Number(payload.viewportRatio);
@@ -7883,6 +7896,9 @@ async function init() {
   });
 
   billboardPreview.addEventListener("load", () => {
+    billboardPreviewPendingReveal = true;
+    billboardPreviewPlaybackSamples = 0;
+    billboardPreview.style.opacity = "0";
     loopActiveWindow.style.display = "none";
     if (loopActiveWindowSecondary) {
       loopActiveWindowSecondary.style.display = "none";

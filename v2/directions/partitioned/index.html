@@ -83,6 +83,7 @@
         animation: loop-x var(--loop-duration) linear infinite;
         animation-delay: var(--loop-row-delay, 0s);
         animation-direction: var(--loop-row-direction, normal);
+        animation-play-state: paused;
         opacity: 0.98;
       }
 
@@ -650,6 +651,7 @@
           track.style.gap = "0px";
           track.style.setProperty("--loop-distance", `${safeDistance}px`);
           track.style.setProperty("--loop-row-direction", "normal");
+          track.style.animationPlayState = "running";
         });
 
         return {
@@ -660,6 +662,7 @@
 
       async function renderLoop() {
         const generation = ++renderGeneration;
+        loopStage.style.visibility = "hidden";
         const baseSettings = settingsForPartition("left");
         document.documentElement.style.setProperty("--loop-duration", `${baseSettings.seconds}s`);
         // Partition padding is applied per panel (matching 3D strip build); keep stage inset at zero.
@@ -715,7 +718,7 @@
           }
         }
         document.documentElement.style.setProperty("--loop-distance", `${Math.max(1, primaryDistance)}px`);
-
+        loopStage.style.visibility = "visible";
         emitPlayback();
       }
 
