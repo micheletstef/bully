@@ -3423,10 +3423,10 @@ function buildSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: translateY(100%) rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: rotate(-90deg) translateX(0);
+          transform: translateY(100%) rotate(-90deg) translateX(0);
         }
       }
 
@@ -3755,10 +3755,10 @@ function buildPartitionedSnapshotHtml(config) {
 
       @keyframes loop-y {
         from {
-          transform: rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: translateY(100%) rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: rotate(-90deg) translateX(0);
+          transform: translateY(100%) rotate(-90deg) translateX(0);
         }
       }
 
