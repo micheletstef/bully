@@ -103,6 +103,7 @@ const DIRECTION_DISPLAY_NAMES = {
   "loop maker": "loop maker"
 };
 const SIDEBAR_LABEL_MAX_CHARS = 32;
+const PREVIEW_TILE_MIN_WIDTH_PX = 84;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 680;
@@ -5836,11 +5837,20 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     artworkEditorDragState = {
       item,
       targetEl: tileEl,
-      mode: target && target.classList && target.classList.contains("artwork-anchor") ? "scale" : "move",
+      mode:
+        target && target.classList && target.classList.contains("artwork-width-handle")
+          ? "scale-width"
+          : target && target.classList && target.classList.contains("artwork-anchor")
+            ? "scale"
+            : "move",
       corner:
         target && target.dataset && typeof target.dataset.corner === "string"
           ? target.dataset.corner
           : "br",
+      edge:
+        target && target.dataset && typeof target.dataset.edge === "string"
+          ? target.dataset.edge
+          : "right",
       startX: event.clientX,
       startY: event.clientY,
       startLayout: sanitizeArtworkLayout(item.layout),
@@ -5876,6 +5886,11 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
       const sy = corner.includes("t") ? -1 : 1;
       const signed = sx * dx + sy * dy;
       next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(signed / 180)));
+      applyArtworkTileScale(state.targetEl, next.scale);
+    } else if (state.mode === "scale-width") {
+      const edge = String(state.edge || "right");
+      const signedDx = edge === "left" ? -dx : dx;
+      next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(signedDx / 220)));
       applyArtworkTileScale(state.targetEl, next.scale);
     } else {
       const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
@@ -5923,6 +5938,7 @@ function renderLoopPreview() {
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
     tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
+    tile.style.minWidth = `${PREVIEW_TILE_MIN_WIDTH_PX}px`;
     if (selectedLinearArtworkIds.has(item.id)) {
       tile.classList.add("is-selected");
     }
@@ -5951,8 +5967,16 @@ function renderLoopPreview() {
       anchor.setAttribute("aria-label", "Resize asset");
       tile.appendChild(anchor);
     });
+    ["left", "right"].forEach((edge) => {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "artwork-width-handle";
+      handle.dataset.edge = edge;
+      handle.setAttribute("aria-label", "Resize artwork width");
+      tile.appendChild(handle);
+    });
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor")) {
+      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor, .artwork-width-handle")) {
         return;
       }
       selectOnlyLinearArtwork(item.id);
@@ -6178,6 +6202,7 @@ function renderPartitionEditor(partitionKey) {
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
     tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
+    tile.style.minWidth = `${PREVIEW_TILE_MIN_WIDTH_PX}px`;
     if (selectedPartitionArtworkIds[key].has(item.id)) {
       tile.classList.add("is-selected");
     }
@@ -6206,8 +6231,16 @@ function renderPartitionEditor(partitionKey) {
       anchor.setAttribute("aria-label", "Resize asset");
       tile.appendChild(anchor);
     });
+    ["left", "right"].forEach((edge) => {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "artwork-width-handle";
+      handle.dataset.edge = edge;
+      handle.setAttribute("aria-label", "Resize artwork width");
+      tile.appendChild(handle);
+    });
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor")) {
+      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor, .artwork-width-handle")) {
         return;
       }
       selectOnlyPartitionArtwork(key, item.id);
@@ -6659,9 +6692,18 @@ function renderDirectory(directions) {
     entries.forEach((entry) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "direction-item output-item";
+      button.className = "direction-item output-item asset-library-item";
       const assetLabel = String(entry.name || artworkFileName(entry.src) || "asset");
-      button.textContent = truncateSidebarLabel(assetLabel);
+      const thumb = document.createElement("img");
+      thumb.className = "asset-library-thumb";
+      thumb.alt = "";
+      thumb.draggable = false;
+      applyEditorAssetColorToImage(thumb, entry.src);
+      const label = document.createElement("span");
+      label.className = "asset-library-label";
+      label.textContent = truncateSidebarLabel(assetLabel);
+      button.appendChild(thumb);
+      button.appendChild(label);
       button.title = assetLabel;
       if (entry.id === pickedLibraryAssetId) {
         button.classList.add("active");
