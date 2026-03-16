@@ -1527,10 +1527,10 @@
       }
 
       function syncBillboardPaddingFromEditorPreview() {
-        const editorWidth = Math.max(1, visualEditorBlock.clientWidth || 1);
         const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
         const topRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingTB / editorHeight));
-        const leftRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingLR / editorWidth));
+        const referenceWidthFromHeight = Math.max(1, (editorHeight * 5900) / 3480);
+        const leftRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingLR / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-left-ratio", String(leftRatio));
