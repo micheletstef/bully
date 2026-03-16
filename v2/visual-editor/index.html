@@ -773,6 +773,8 @@
       let cropDragState = null;
       let marqueeAnimationRaf = null;
       let marqueeLastTimestamp = 0;
+      let marqueeProgressPx = 0;
+      let marqueeCyclePx = 0;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1674,31 +1676,24 @@
         }
         const dt = Math.max(0, (now - marqueeLastTimestamp) / 1000);
         marqueeLastTimestamp = now;
-        const cycle = marqueeCycleLength();
+        const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
         if (cycle > 0) {
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
           const delta = speed * dt;
           const direction = editorState.settings.marqueeDirection;
+          marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
           if (direction === "rtl") {
-            billboardMarqueeOffsetX -= delta;
-            if (Math.abs(billboardMarqueeOffsetX) >= cycle) {
-              billboardMarqueeOffsetX += cycle;
-            }
+            billboardMarqueeOffsetX = -marqueeProgressPx;
+            billboardMarqueeOffsetY = 0;
           } else if (direction === "ltr") {
-            billboardMarqueeOffsetX += delta;
-            if (billboardMarqueeOffsetX >= cycle) {
-              billboardMarqueeOffsetX -= cycle;
-            }
+            billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
+            billboardMarqueeOffsetY = 0;
           } else if (direction === "btt") {
-            billboardMarqueeOffsetY -= delta;
-            if (Math.abs(billboardMarqueeOffsetY) >= cycle) {
-              billboardMarqueeOffsetY += cycle;
-            }
+            billboardMarqueeOffsetY = -marqueeProgressPx;
+            billboardMarqueeOffsetX = 0;
           } else if (direction === "ttb") {
-            billboardMarqueeOffsetY += delta;
-            if (billboardMarqueeOffsetY >= cycle) {
-              billboardMarqueeOffsetY -= cycle;
-            }
+            billboardMarqueeOffsetY = -(cycle - marqueeProgressPx);
+            billboardMarqueeOffsetX = 0;
           }
           applyFlatBillboardTrackTransform();
         }
@@ -1711,6 +1706,7 @@
           marqueeAnimationRaf = null;
         }
         marqueeLastTimestamp = 0;
+        marqueeProgressPx = 0;
       }
 
       function startMarqueeAnimation() {
@@ -1750,18 +1746,14 @@
         configureMarqueeLayout();
         billboardMarqueeOffsetX = 0;
         billboardMarqueeOffsetY = 0;
+        marqueeProgressPx = 0;
 
         if (!normalizedEnabled) {
           stopMarqueeAnimation();
         }
         syncFlatBillboardArtworks();
-        const cycle = marqueeCycleLength();
+        const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
         if (normalizedEnabled && cycle > 0) {
-          if (normalizedDirection === "ltr") {
-            billboardMarqueeOffsetX = -cycle;
-          } else if (normalizedDirection === "ttb") {
-            billboardMarqueeOffsetY = -cycle;
-          }
           applyFlatBillboardTrackTransform();
           startMarqueeAnimation();
         }
@@ -2072,6 +2064,7 @@
           flatBillboardTrack.appendChild(targetBlock);
         }
         buildMarqueeCopies();
+        marqueeCyclePx = marqueeCycleLength();
         syncFlatBillboardSelectionState();
         syncFlatBillboardViewportOffset();
       }
