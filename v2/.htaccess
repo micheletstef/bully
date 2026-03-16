@@ -1,7 +1,6 @@
 RewriteEngine On
-RewriteBase /bully/
 
-# Route shared outputs API to PHP backend.
+# Route API endpoints to PHP backend (portable in subdirectories).
 RewriteRule ^api/outputs/?$ api/outputs.php [QSA,L]
 RewriteRule ^api/outputs/(.+)$ api/outputs.php?id=$1 [QSA,L]
 RewriteRule ^api/assets/?$ api/assets.php [QSA,L]
