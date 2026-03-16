@@ -580,7 +580,7 @@ body.sidebar-resizing {
 
 .loop-preview-item {
   position: relative;
-  width: var(--preview-art-width, 168px);
+  width: auto;
   height: var(--preview-art-height, 96px);
   min-width: 0;
   border: 0;
@@ -628,8 +628,8 @@ body.sidebar-resizing {
 
 .loop-preview-item img {
   height: 100%;
-  width: 100%;
-  max-width: 100%;
+  width: auto;
+  max-width: none;
   object-fit: contain;
   display: block;
   pointer-events: none;
@@ -1235,7 +1235,7 @@ body.dark-mode .view-controls-panel {
 .partition-preview-item {
   position: relative;
   flex: 0 0 auto;
-  width: var(--partition-preview-art-width, 168px);
+  width: auto;
   height: var(--partition-preview-art-height, 96px);
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
@@ -1257,7 +1257,7 @@ body.dark-mode .view-controls-panel {
 
 .partition-preview-item img {
   height: 100%;
-  width: 100%;
+  width: auto;
   display: block;
   pointer-events: none;
   user-select: none;

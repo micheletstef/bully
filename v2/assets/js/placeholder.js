@@ -103,7 +103,6 @@ const DIRECTION_DISPLAY_NAMES = {
   "loop maker": "loop maker"
 };
 const SIDEBAR_LABEL_MAX_CHARS = 32;
-const PREVIEW_TILE_FIXED_WIDTH_PX = 168;
 const PREVIEW_TILE_FIXED_HEIGHT_PX = 96;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
@@ -5347,7 +5346,6 @@ function syncPartitionEditorVisuals() {
   const scale = computeLinearEditorLayoutScale();
   const baseArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   partitionEditors.style.setProperty("--partition-preview-art-height", `${baseArtHeight}px`);
-  partitionEditors.style.setProperty("--partition-preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
   partitionEditors.style.setProperty("--partition-preview-pad-tb", "0px");
   partitionEditors.style.setProperty("--partition-preview-pad-lr", "0px");
   partitionEditors.style.setProperty("--partition-preview-gap", "0px");
@@ -5359,11 +5357,13 @@ function syncPartitionEditorVisuals() {
       return;
     }
     const settings = partitionSettingsForKey(partitionKey);
-    const scaledPadTB = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
+    const scaledPadTBRaw = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
     const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
     const scaledGap = 0;
-    const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + scaledPadTB * 2;
-    const trackArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
+    const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
+    const maxPadTB = Math.max(0, (trackHeight - 8) * 0.5);
+    const scaledPadTB = Math.min(maxPadTB, scaledPadTBRaw);
+    const trackArtHeight = Math.max(8, trackHeight - scaledPadTB * 2);
     const safeTop = Math.max(0, scaledPadTB);
     const trackPadTB = 0;
     const trackPadLR = 0;
@@ -5372,7 +5372,6 @@ function syncPartitionEditorVisuals() {
     trackEl.style.setProperty("--partition-preview-art-height", `${trackArtHeight}px`);
     trackEl.style.setProperty("--partition-preview-pad-tb", `${trackPadTB}px`);
     trackEl.style.setProperty("--partition-preview-pad-lr", `${trackPadLR}px`);
-    trackEl.style.setProperty("--partition-preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
     trackEl.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
     trackEl.style.setProperty("--partition-preview-bg", settings.backgroundColor);
     trackEl.style.setProperty("--partition-safe-left", `${spacerWidth}px`);
@@ -5407,21 +5406,22 @@ function syncVisualizationPaddingScaled() {
   const scale = computeLinearEditorLayoutScale();
   const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
   const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
-  const scaledPadTB = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
+  const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
   const scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
-  const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + scaledPadTB * 2;
-  const scaledArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
+  const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
+  const maxPadTB = Math.max(0, (scaledTrackHeight - 8) * 0.5);
+  const scaledPadTB = Math.min(maxPadTB, scaledPadTBRounded);
+  const scaledArtHeight = Math.max(8, scaledTrackHeight - scaledPadTB * 2);
   const safeTop = Math.max(0, scaledPadTB);
   loopVisualization.style.setProperty("--preview-pad-tb", "0px");
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
   loopVisualization.style.setProperty("--preview-art-height", `${scaledArtHeight}px`);
-  loopVisualization.style.setProperty("--preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
   loopVisualization.style.setProperty("--preview-safe-left", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-right", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-top", `${safeTop}px`);
   loopVisualization.style.setProperty("--preview-safe-height", `${scaledArtHeight}px`);
-  loopVisualization.style.height = `${scaledTrackHeight + 8}px`;
+  loopVisualization.style.height = `${PREVIEW_TILE_FIXED_HEIGHT_PX + 8}px`;
   syncPreviewSpacers();
 }
 
