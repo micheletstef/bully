@@ -369,6 +369,77 @@
         text-align: center;
         font-size: 11px;
       }
+
+      .flat-billboard-wrap {
+        margin-top: 36px;
+      }
+
+      .flat-billboard {
+        --editor-height: 200px;
+        --editor-bg: #ff00ff;
+        --safe-guide-color: #00ffff;
+        --safe-top: 0px;
+        --safe-bottom: 0px;
+        --safe-left: 0px;
+        --safe-right: 0px;
+        position: relative;
+        width: min(100%, 900px);
+        aspect-ratio: 5900 / 3480;
+        min-height: 120px;
+        background-color: var(--editor-bg);
+        background-image:
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color));
+        background-size:
+          1px 100%,
+          1px 100%,
+          100% 1px,
+          100% 1px;
+        background-repeat: no-repeat;
+        background-position:
+          var(--safe-left) 0,
+          calc(100% - var(--safe-right)) 0,
+          0 var(--safe-top),
+          0 calc(100% - var(--safe-bottom));
+      }
+
+      .flat-billboard-marker {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-left: 1px solid rgba(0, 255, 255, 0.95);
+      }
+
+      .flat-billboard-marker-1820 {
+        left: 30.8475%;
+      }
+
+      .flat-billboard-marker-2840 {
+        left: 48.1356%;
+      }
+
+      .flat-billboard-label {
+        position: absolute;
+        top: -18px;
+        transform: translateX(-50%);
+        font-size: 11px;
+        color: #1f1f1f;
+        white-space: nowrap;
+      }
+
+      .flat-billboard-label-1820 {
+        left: 30.8475%;
+      }
+
+      .flat-billboard-label-curve {
+        left: 39.49155%;
+      }
+
+      .flat-billboard-label-2840 {
+        left: 48.1356%;
+      }
     </style>
   </head>
   <body>
@@ -423,6 +494,15 @@
           <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
           <button id="assetRotateButton" type="button" class="asset-scale-button" aria-label="Rotate selected asset" title="Rotate selected asset">↻</button>
         </div>
+        <section class="flat-billboard-wrap" aria-label="Original flat billboard">
+          <div id="flatBillboard" class="flat-billboard">
+            <div class="flat-billboard-marker flat-billboard-marker-1820" aria-hidden="true"></div>
+            <div class="flat-billboard-marker flat-billboard-marker-2840" aria-hidden="true"></div>
+            <div class="flat-billboard-label flat-billboard-label-1820">1820px</div>
+            <div class="flat-billboard-label flat-billboard-label-curve">curve</div>
+            <div class="flat-billboard-label flat-billboard-label-2840">2840px</div>
+          </div>
+        </section>
       </main>
     </div>
     <script>
@@ -434,6 +514,7 @@
       const alignmentSettings = document.getElementById("alignmentSettings");
       const editorStage = document.getElementById("editorStage");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
+      const flatBillboard = document.getElementById("flatBillboard");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const backgroundColorControl = document.getElementById("backgroundColorControl");
@@ -1222,6 +1303,10 @@
         visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
         visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
         visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
+        flatBillboard.style.setProperty("--safe-top", normalizedTB + "px");
+        flatBillboard.style.setProperty("--safe-bottom", normalizedTB + "px");
+        flatBillboard.style.setProperty("--safe-left", normalizedLR + "px");
+        flatBillboard.style.setProperty("--safe-right", normalizedLR + "px");
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
         editorState.settings.paddingTB = normalizedTB;
@@ -1235,6 +1320,7 @@
       function applyColors(backgroundColor, assetColor, shouldPersist) {
         visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
         visualEditorBlock.style.setProperty("--asset-color", assetColor);
+        flatBillboard.style.setProperty("--editor-bg", backgroundColor);
         backgroundColorControl.value = backgroundColor;
         assetColorControl.value = assetColor;
         editorState.settings.backgroundColor = backgroundColor;
