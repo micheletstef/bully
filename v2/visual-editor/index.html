@@ -411,6 +411,37 @@
           0 calc(100% - (var(--safe-bottom-ratio) * 100%));
       }
 
+      .flat-billboard-track {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .flat-billboard-asset {
+        flex: 0 0 auto;
+        position: relative;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      .flat-billboard-asset.no-preview {
+        background: var(--asset-color);
+      }
+
+      .flat-billboard-asset-image {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        object-fit: fill;
+        user-select: none;
+        pointer-events: none;
+      }
+
       .flat-billboard-annotations {
         pointer-events: none;
       }
@@ -579,7 +610,9 @@
         </div>
         <section class="flat-billboard-wrap" aria-label="Original flat billboard">
           <div class="flat-billboard-shell">
-            <div id="flatBillboard" class="flat-billboard"></div>
+            <div id="flatBillboard" class="flat-billboard">
+              <div id="flatBillboardTrack" class="flat-billboard-track"></div>
+            </div>
             <div class="flat-billboard-annotations" aria-hidden="true">
               <div class="flat-anno-top-line"></div>
               <div class="flat-anno-top-label">5900px width</div>
@@ -605,6 +638,7 @@
       const editorStage = document.getElementById("editorStage");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const flatBillboard = document.getElementById("flatBillboard");
+      const flatBillboardTrack = document.getElementById("flatBillboardTrack");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const backgroundColorControl = document.getElementById("backgroundColorControl");
@@ -1132,9 +1166,26 @@
       }
 
       function updateAssetBlockSize(block) {
+        const metrics = computeRenderedAssetMetrics(block);
+        if (!metrics) {
+          return;
+        }
+        block.style.width = metrics.scaledWidth + "px";
+        block.style.height = metrics.scaledHeight + "px";
+
+        const previewImage = block.querySelector(".asset-preview-image");
+        if (previewImage instanceof HTMLElement) {
+          previewImage.style.width = metrics.fullScaledWidth + "px";
+          previewImage.style.height = metrics.scaledHeight + "px";
+          previewImage.style.transform = "translateX(" + metrics.offsetX + "px)";
+        }
+        syncBillboardPaddingFromEditorPreview();
+      }
+
+      function computeRenderedAssetMetrics(block) {
         const effective = getEffectiveDimensions(block);
         if (!Number.isFinite(effective.width) || !Number.isFinite(effective.height) || effective.width <= 0 || effective.height <= 0) {
-          return;
+          return null;
         }
         const crop = getCropValues(block);
         block.dataset.cropLeft = String(crop.left);
@@ -1149,19 +1200,14 @@
         const fitScale = Math.min(1, safeHeight / targetHeight);
         const scaledWidth = Math.max(1, Math.round(targetWidth * fitScale));
         const scaledHeight = Math.max(1, Math.round(targetHeight * fitScale));
-        block.style.width = scaledWidth + "px";
-        block.style.height = scaledHeight + "px";
-
-        const previewImage = block.querySelector(".asset-preview-image");
-        if (previewImage instanceof HTMLElement) {
-          const fullScaledWidth = Math.max(1, Math.round(fullTargetWidth * fitScale));
-          // Keep image centered in the container, then offset only by crop asymmetry.
-          const offsetX = Math.round(((crop.right - crop.left) * fullScaledWidth) / 2);
-          previewImage.style.width = fullScaledWidth + "px";
-          previewImage.style.height = scaledHeight + "px";
-          previewImage.style.transform = "translateX(" + offsetX + "px)";
-        }
-        syncBillboardPaddingFromEditorPreview();
+        const fullScaledWidth = Math.max(1, Math.round(fullTargetWidth * fitScale));
+        const offsetX = Math.round(((crop.right - crop.left) * fullScaledWidth) / 2);
+        return {
+          scaledWidth,
+          scaledHeight,
+          fullScaledWidth,
+          offsetX,
+        };
       }
 
       function updateAllAssetBlockSizes() {
@@ -1535,6 +1581,74 @@
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-left-ratio", String(leftRatio));
         flatBillboard.style.setProperty("--safe-right-ratio", String(leftRatio));
+        syncFlatBillboardArtworks();
+      }
+
+      function syncFlatBillboardArtworks() {
+        if (!flatBillboardTrack) {
+          return;
+        }
+        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
+        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
+        const scaleFactor = billboardHeight / editorHeight;
+        const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
+        const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
+        const gap = 8 * scaleFactor;
+        const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
+
+        flatBillboardTrack.style.paddingTop = paddingTB + "px";
+        flatBillboardTrack.style.paddingBottom = paddingTB + "px";
+        flatBillboardTrack.style.paddingLeft = paddingLR + "px";
+        flatBillboardTrack.style.paddingRight = paddingLR + "px";
+        flatBillboardTrack.style.gap = gap + "px";
+        flatBillboardTrack.style.alignItems = align;
+
+        flatBillboardTrack.innerHTML = "";
+        const orderedBlocks = Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block"));
+        for (const sourceBlock of orderedBlocks) {
+          const renderedWidth = sourceBlock.offsetWidth;
+          const renderedHeight = sourceBlock.offsetHeight;
+          const previewImage = sourceBlock.querySelector(".asset-preview-image");
+
+          const targetBlock = document.createElement("div");
+          targetBlock.className = "flat-billboard-asset";
+          targetBlock.style.width = Math.max(1, renderedWidth * scaleFactor) + "px";
+          targetBlock.style.height = Math.max(1, renderedHeight * scaleFactor) + "px";
+
+          if (previewImage instanceof HTMLImageElement) {
+            const assetImage = document.createElement("img");
+            assetImage.className = "flat-billboard-asset-image";
+            assetImage.alt = "";
+            assetImage.decoding = "async";
+            assetImage.loading = "lazy";
+            const sourceWidth = parseFloat(previewImage.style.width || "0");
+            const sourceHeight = parseFloat(previewImage.style.height || "0");
+            const sourceOffsetX = parseFloat((previewImage.style.transform || "").replace(/[^\d.-]/g, "")) || 0;
+            if (sourceWidth > 0) {
+              assetImage.style.width = Math.max(1, sourceWidth * scaleFactor) + "px";
+            }
+            if (sourceHeight > 0) {
+              assetImage.style.height = Math.max(1, sourceHeight * scaleFactor) + "px";
+            }
+            assetImage.style.transform = "translateX(" + sourceOffsetX * scaleFactor + "px)";
+            const src = sourceBlock.dataset.assetSrc || "";
+            const group = sourceBlock.dataset.assetGroup || "";
+            resolvePreviewUrl(src, group)
+              .then((previewUrl) => {
+                if (assetImage.isConnected) {
+                  assetImage.src = previewUrl;
+                }
+              })
+              .catch(() => {
+                targetBlock.classList.add("no-preview");
+              });
+            targetBlock.appendChild(assetImage);
+          } else {
+            targetBlock.classList.add("no-preview");
+          }
+
+          flatBillboardTrack.appendChild(targetBlock);
+        }
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
@@ -1558,6 +1672,7 @@
             attachPreviewImageToBlock(block, src, group);
           }
         }
+        syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
         }
