@@ -321,17 +321,6 @@
         padding-right: var(--safe-right);
       }
 
-      .visual-editor-block.marquee-active {
-        width: calc(var(--editor-height) * 5900 / 3480);
-        min-width: calc(var(--editor-height) * 5900 / 3480);
-        overflow: hidden;
-      }
-
-      .visual-editor-block.marquee-vertical {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -495,6 +484,7 @@
         align-items: flex-start;
         overflow: hidden;
         pointer-events: none;
+        transform: translate(0px, 0px);
       }
 
       .flat-billboard-asset {
@@ -783,6 +773,10 @@
       let cropDragState = null;
       let marqueeAnimationRaf = null;
       let marqueeLastTimestamp = 0;
+      let billboardViewportOffsetX = 0;
+      let billboardViewportOffsetY = 0;
+      let billboardMarqueeOffsetX = 0;
+      let billboardMarqueeOffsetY = 0;
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -1285,9 +1279,6 @@
 
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
-        if (editorState.settings.marqueeEnabled) {
-          buildMarqueeCopies();
-        }
         syncBillboardPaddingFromEditorPreview();
       }
 
@@ -1389,9 +1380,6 @@
         const blocks = getPrimaryAssetBlocks();
         for (const block of blocks) {
           updateAssetBlockSize(block);
-        }
-        if (editorState.settings.marqueeEnabled) {
-          buildMarqueeCopies();
         }
         updateScaleControlButtons();
         positionScaleControls();
@@ -1519,10 +1507,19 @@
         if (!assetState) {
           return;
         }
-        assetState.scalePercent = Number(block.dataset.scalePercent) || assetState.scalePercent;
-        assetState.rotationTurns = Number(block.dataset.rotationTurns) || assetState.rotationTurns;
-        assetState.cropLeft = Number(block.dataset.cropLeft) || 0;
-        assetState.cropRight = Number(block.dataset.cropRight) || 0;
+        const parsedScale = Number(block.dataset.scalePercent);
+        const parsedRotation = Number(block.dataset.rotationTurns);
+        const parsedCropLeft = Number(block.dataset.cropLeft);
+        const parsedCropRight = Number(block.dataset.cropRight);
+
+        if (Number.isFinite(parsedScale)) {
+          assetState.scalePercent = parsedScale;
+        }
+        if (Number.isFinite(parsedRotation)) {
+          assetState.rotationTurns = parsedRotation;
+        }
+        assetState.cropLeft = Number.isFinite(parsedCropLeft) ? parsedCropLeft : 0;
+        assetState.cropRight = Number.isFinite(parsedCropRight) ? parsedCropRight : 0;
       }
 
       function updateSelectedAssetScale(deltaPercent) {
@@ -1592,7 +1589,7 @@
       }
 
       function clearMarqueeCopies() {
-        const copies = visualEditorBlock.querySelectorAll(".marquee-copy");
+        const copies = flatBillboardTrack.querySelectorAll(".marquee-copy");
         for (const copy of copies) {
           copy.remove();
         }
@@ -1601,7 +1598,7 @@
       function configureMarqueeLayout() {
         const direction = editorState.settings.marqueeDirection;
         const isVertical = direction === "btt" || direction === "ttb";
-        visualEditorBlock.classList.toggle("marquee-vertical", isVertical);
+        flatBillboardTrack.style.flexDirection = isVertical ? "column" : "row";
       }
 
       function buildMarqueeCopies() {
@@ -1609,22 +1606,16 @@
         if (!editorState.settings.marqueeEnabled) {
           return;
         }
-        const originals = getPrimaryAssetBlocks();
+        const originals = Array.from(flatBillboardTrack.querySelectorAll(".flat-billboard-asset:not(.marquee-copy)"));
         for (const original of originals) {
           const clone = original.cloneNode(true);
-          clone.classList.remove("is-selected", "is-cropping", "is-dragging");
           clone.classList.add("marquee-copy");
-          clone.removeAttribute("draggable");
-          const handles = clone.querySelectorAll(".asset-crop-handle");
-          for (const handle of handles) {
-            handle.remove();
-          }
-          visualEditorBlock.appendChild(clone);
+          flatBillboardTrack.appendChild(clone);
         }
       }
 
       function marqueeCycleLength() {
-        const originals = getPrimaryAssetBlocks();
+        const originals = Array.from(flatBillboardTrack.querySelectorAll(".flat-billboard-asset:not(.marquee-copy)"));
         if (!originals.length) {
           return 0;
         }
@@ -1636,6 +1627,15 @@
           return Math.max(1, last.offsetLeft + last.offsetWidth - first.offsetLeft);
         }
         return Math.max(1, last.offsetTop + last.offsetHeight - first.offsetTop);
+      }
+
+      function applyFlatBillboardTrackTransform() {
+        if (!flatBillboardTrack) {
+          return;
+        }
+        const x = billboardViewportOffsetX + billboardMarqueeOffsetX;
+        const y = billboardViewportOffsetY + billboardMarqueeOffsetY;
+        flatBillboardTrack.style.transform = "translate(" + x + "px, " + y + "px)";
       }
 
       function stepMarquee(now) {
@@ -1653,26 +1653,27 @@
           const delta = speed * dt;
           const direction = editorState.settings.marqueeDirection;
           if (direction === "rtl") {
-            visualEditorBlock.scrollLeft += delta;
-            if (visualEditorBlock.scrollLeft >= cycle) {
-              visualEditorBlock.scrollLeft -= cycle;
+            billboardMarqueeOffsetX -= delta;
+            if (Math.abs(billboardMarqueeOffsetX) >= cycle) {
+              billboardMarqueeOffsetX += cycle;
             }
           } else if (direction === "ltr") {
-            visualEditorBlock.scrollLeft -= delta;
-            if (visualEditorBlock.scrollLeft <= 0) {
-              visualEditorBlock.scrollLeft += cycle;
+            billboardMarqueeOffsetX += delta;
+            if (billboardMarqueeOffsetX >= cycle) {
+              billboardMarqueeOffsetX -= cycle;
             }
           } else if (direction === "btt") {
-            visualEditorBlock.scrollTop += delta;
-            if (visualEditorBlock.scrollTop >= cycle) {
-              visualEditorBlock.scrollTop -= cycle;
+            billboardMarqueeOffsetY -= delta;
+            if (Math.abs(billboardMarqueeOffsetY) >= cycle) {
+              billboardMarqueeOffsetY += cycle;
             }
           } else if (direction === "ttb") {
-            visualEditorBlock.scrollTop -= delta;
-            if (visualEditorBlock.scrollTop <= 0) {
-              visualEditorBlock.scrollTop += cycle;
+            billboardMarqueeOffsetY += delta;
+            if (billboardMarqueeOffsetY >= cycle) {
+              billboardMarqueeOffsetY -= cycle;
             }
           }
+          applyFlatBillboardTrackTransform();
         }
         marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
       }
@@ -1713,29 +1714,17 @@
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
 
-        visualEditorBlock.classList.toggle("marquee-active", normalizedEnabled);
         configureMarqueeLayout();
-        buildMarqueeCopies();
+        billboardMarqueeOffsetX = 0;
+        billboardMarqueeOffsetY = 0;
 
-        const cycle = marqueeCycleLength();
-        if (normalizedEnabled && cycle > 0) {
-          if (normalizedDirection === "ltr" || normalizedDirection === "ttb") {
-            if (normalizedDirection === "ltr") {
-              visualEditorBlock.scrollLeft = cycle;
-            } else {
-              visualEditorBlock.scrollTop = cycle;
-            }
-          } else {
-            visualEditorBlock.scrollLeft = 0;
-            visualEditorBlock.scrollTop = 0;
-          }
-          startMarqueeAnimation();
-        } else {
+        if (!normalizedEnabled) {
           stopMarqueeAnimation();
-          visualEditorBlock.scrollLeft = 0;
-          visualEditorBlock.scrollTop = 0;
         }
         syncFlatBillboardArtworks();
+        if (normalizedEnabled && marqueeCycleLength() > 0) {
+          startMarqueeAnimation();
+        }
         if (shouldPersist) {
           saveEditorState();
         }
@@ -1878,9 +1867,6 @@
         }
         editorState.assets = editorState.assets.filter((asset) => !selectedIds.has(asset.id));
         clearAssetSelection();
-        if (editorState.settings.marqueeEnabled) {
-          buildMarqueeCopies();
-        }
         syncBillboardPaddingFromEditorPreview();
         saveEditorState();
         return selectedBlocks.length;
@@ -1926,9 +1912,6 @@
         visualEditorBlock.style.setProperty("--asset-gap", normalizedGap + "px");
         assetGapControl.value = String(normalizedGap);
         editorState.settings.assetGap = normalizedGap;
-        if (editorState.settings.marqueeEnabled) {
-          buildMarqueeCopies();
-        }
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -1957,9 +1940,15 @@
         if (!flatBillboardTrack) {
           return;
         }
-        const scaleFactor = billboardScaleFactor();
-        const offsetX = -(editorStage.scrollLeft * scaleFactor);
-        flatBillboardTrack.style.transform = "translateX(" + offsetX + "px)";
+        if (editorState.settings.marqueeEnabled) {
+          billboardViewportOffsetX = 0;
+          billboardViewportOffsetY = 0;
+        } else {
+          const scaleFactor = billboardScaleFactor();
+          billboardViewportOffsetX = -(editorStage.scrollLeft * scaleFactor);
+          billboardViewportOffsetY = -(editorStage.scrollTop * scaleFactor);
+        }
+        applyFlatBillboardTrackTransform();
       }
 
       function syncFlatBillboardSelectionState() {
@@ -2041,6 +2030,7 @@
 
           flatBillboardTrack.appendChild(targetBlock);
         }
+        buildMarqueeCopies();
         syncFlatBillboardSelectionState();
         syncFlatBillboardViewportOffset();
       }
@@ -2222,10 +2212,8 @@
           return;
         }
         syncAssetOrderFromDom();
-        if (editorState.settings.marqueeEnabled) {
-          buildMarqueeCopies();
-        }
         saveEditorState();
+        syncFlatBillboardArtworks();
         positionScaleControls();
       });
 
