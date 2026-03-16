@@ -397,15 +397,7 @@ function normalizeArtworkItem(item) {
     id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateArtworkId(),
     src,
     name,
-    layout: sanitizeArtworkLayout(
-      item.layout && typeof item.layout === "object"
-        ? item.layout
-        : {
-            x: item.x,
-            y: item.y,
-            scale: item.scale
-          }
-    )
+    layout: sanitizeArtworkLayout(null)
   };
 }
 
@@ -950,48 +942,7 @@ async function processArtworkFile(file) {
   return rasterFileToDataUrl(file);
 }
 
-function snapLayoutToGrid(layout, scaleToPixels) {
-  const base = sanitizeArtworkLayout(layout);
-  const unit = Math.max(0.0001, EDITOR_GRID_SIZE_PX / Math.max(0.01, Number(scaleToPixels) || 1));
-  base.x = Math.round(base.x / unit) * unit;
-  base.y = Math.round(base.y / unit) * unit;
-  return base;
-}
-
-async function positionNewArtworksAtDrop(artworkIds, partitionKey = null, dropClientPoint = null) {
-  const ids = Array.isArray(artworkIds) ? artworkIds.filter((id) => !!id) : [];
-  if (!ids.length || !dropClientPoint || !Number.isFinite(dropClientPoint.clientX) || !Number.isFinite(dropClientPoint.clientY)) {
-    return;
-  }
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  const isPartition = !!normalizePartitionKey(partitionKey) && currentDirectionIsPartitioned();
-  const key = isPartition ? normalizePartitionKey(partitionKey) : null;
-  const track = isPartition ? partitionTrackElement(key) : loopPreviewTrack;
-  if (!track) {
-    return;
-  }
-  const scaleToPixels = isPartition ? computePartitionEditorLayoutScale(key).scale : computeLinearEditorLayoutScale();
-  const collection = isPartition ? partitionArtworks[key] || [] : loopArtworks;
-  ids.forEach((id, index) => {
-    const item = collection.find((entry) => entry && entry.id === id);
-    const tile = track.querySelector(`[data-artwork-id="${id}"]`);
-    if (!item || !tile) {
-      return;
-    }
-    const rect = tile.getBoundingClientRect();
-    const tileCenterX = rect.left + rect.width * 0.5;
-    const tileCenterY = rect.top + rect.height * 0.5;
-    const stagger = index * (EDITOR_GRID_SIZE_PX * 0.5);
-    const dxPx = dropClientPoint.clientX + stagger - tileCenterX;
-    const dyPx = dropClientPoint.clientY + stagger - tileCenterY;
-    const next = sanitizeArtworkLayout(item.layout);
-    next.x += dxPx / scaleToPixels;
-    next.y += dyPx / scaleToPixels;
-    item.layout = snapLayoutToGrid(next, scaleToPixels);
-  });
-}
-
-async function addArtworkFiles(files, partitionKey = null, dropClientPoint = null) {
+async function addArtworkFiles(files, partitionKey = null) {
   const validFiles = [...files].filter((file) => isSupportedArtworkFile(file));
   if (!validFiles.length) {
     return;
@@ -999,7 +950,6 @@ async function addArtworkFiles(files, partitionKey = null, dropClientPoint = nul
 
   const normalizedPartitionKey = normalizePartitionKey(partitionKey);
   const shouldTargetPartition = normalizedPartitionKey && currentDirectionIsPartitioned();
-  const addedIds = [];
 
   for (const file of validFiles) {
     try {
@@ -1010,7 +960,6 @@ async function addArtworkFiles(files, partitionKey = null, dropClientPoint = nul
       } else {
         loopArtworks.push(newItem);
       }
-      addedIds.push(newItem.id);
     } catch (error) {
       // Ignore single-file failures and continue with others.
     }
@@ -1022,16 +971,6 @@ async function addArtworkFiles(files, partitionKey = null, dropClientPoint = nul
   } else {
     saveArtworks(loopArtworks);
     renderLoopPreview();
-  }
-  if (addedIds.length && dropClientPoint) {
-    await positionNewArtworksAtDrop(addedIds, shouldTargetPartition ? normalizedPartitionKey : null, dropClientPoint);
-    if (shouldTargetPartition) {
-      savePartitionArtworks(partitionArtworks);
-      renderPartitionEditor(normalizedPartitionKey);
-    } else {
-      saveArtworks(loopArtworks);
-      renderLoopPreview();
-    }
   }
   sendLoopConfigToPreview();
 }
@@ -3575,11 +3514,6 @@ function getCurrentLoopConfig() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
-    config.partitionArtworkTransforms = {
-      left: (partitionArtworks.left || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
-      curve: (partitionArtworks.curve || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
-      right: (partitionArtworks.right || []).map((item) => sanitizeArtworkLayout(item && item.layout))
-    };
     config.artworkOrientations = currentPartitionArtworkOrientations();
     config.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
       acc[key] = partitionSettingsForKey(key);
@@ -3587,7 +3521,6 @@ function getCurrentLoopConfig() {
     }, {});
   } else {
     config.artworks = loopArtworks.map((item) => item.src);
-    config.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   return config;
 }
@@ -5148,11 +5081,6 @@ function sendLoopConfigToPreview() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
-    payload.partitionArtworkTransforms = {
-      left: (partitionArtworks.left || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
-      curve: (partitionArtworks.curve || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
-      right: (partitionArtworks.right || []).map((item) => sanitizeArtworkLayout(item && item.layout))
-    };
     payload.artworkOrientations = currentPartitionArtworkOrientations();
     payload.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
       acc[key] = partitionSettingsForKey(key);
@@ -5160,7 +5088,6 @@ function sendLoopConfigToPreview() {
     }, {});
   } else {
     payload.artworks = loopArtworks.map((item) => item.src);
-    payload.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -5625,19 +5552,6 @@ function renderLoopPreview() {
   }
 
   loopPreviewTrack.innerHTML = "";
-  loopPreviewTrack.onclick = (event) => {
-    activeArtworkEditorContext = { mode: "linear", partitionKey: "left" };
-    const target = event.target;
-    if (target === loopPreviewTrack || (target && target.classList && target.classList.contains("loop-preview-spacer"))) {
-      clearLinearSelection();
-      renderLoopPreview();
-    }
-  };
-  const layoutScale = computeLinearEditorLayoutScale();
-  const baseArtworkHeight = Math.max(
-    8,
-    Math.round((Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * layoutScale * 100) / 100
-  );
   const spacerStart = document.createElement("div");
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
@@ -5652,55 +5566,17 @@ function renderLoopPreview() {
     image.alt = "";
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src);
-    const itemLayout = sanitizeArtworkLayout(item.layout);
-    const itemHeight = Math.max(8, Math.round(baseArtworkHeight * itemLayout.scale * 100) / 100);
-    tile.dataset.baseHeightPx = String(baseArtworkHeight);
-    image.style.height = `${itemHeight}px`;
-    tile.style.height = `${itemHeight}px`;
     tile.appendChild(image);
-    const closeButton = document.createElement("button");
-    closeButton.type = "button";
-    closeButton.className = "artwork-close-button";
-    closeButton.title = "remove artwork";
-    closeButton.textContent = "×";
-    closeButton.addEventListener("click", (event) => {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-artwork";
+    remove.textContent = "✕";
+    remove.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
       removeArtworkById(item.id);
     });
-    tile.appendChild(closeButton);
-    ["tl", "tr", "bl", "br"].forEach((anchorKey) => {
-      const anchor = document.createElement("span");
-      anchor.className = `artwork-anchor artwork-anchor-${anchorKey}`;
-      anchor.dataset.corner = anchorKey;
-      tile.appendChild(anchor);
-    });
-    if (selectedLinearArtworkIds.has(item.id)) {
-      tile.classList.add("selected");
-    }
-    tile.addEventListener("click", (event) => {
-      event.preventDefault();
-      selectOnlyLinearArtwork(item.id);
-      renderLoopPreview();
-    });
-    applyArtworkTileTransform(tile, item, layoutScale);
-    bindArtworkEditorDrag(
-      tile,
-      () => item,
-      () => {
-        saveArtworks(loopArtworks);
-        sendLoopConfigToPreview();
-        render3dPreview();
-      },
-      layoutScale,
-      {
-        dropContainerSelector: ".loop-preview-track",
-        onRemove: () => {
-          removeArtworkById(item.id);
-        }
-      }
-    );
-
+    tile.appendChild(remove);
     loopPreviewTrack.appendChild(tile);
   });
   const spacerEnd = document.createElement("div");
@@ -5711,6 +5587,7 @@ function renderLoopPreview() {
     loopPreviewSortable.destroy();
   }
   loopPreviewSortable = null;
+  initLoopSortable();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
@@ -5878,21 +5755,7 @@ function renderPartitionEditor(partitionKey) {
     partitionSortables[key] = null;
   }
   const items = partitionArtworks[key] || [];
-  const partitionLayout = computePartitionEditorLayoutScale(key);
-  const settings = partitionSettingsForKey(key);
-  const baseArtworkHeight = Math.max(
-    8,
-    Math.round((Math.max(1, loopStageHeight) - Math.max(0, settings.padTopBottom) * 2) * partitionLayout.scale * 100) / 100
-  );
   trackEl.innerHTML = "";
-  trackEl.onclick = (event) => {
-    activeArtworkEditorContext = { mode: "partition", partitionKey: key };
-    const target = event.target;
-    if (target === trackEl || (target && target.classList && target.classList.contains("partition-preview-spacer"))) {
-      clearPartitionSelection(key);
-      renderPartitionEditor(key);
-    }
-  };
 
   if (!items.length) {
     const hint = document.createElement("div");
@@ -5906,64 +5769,27 @@ function renderPartitionEditor(partitionKey) {
   spacerStart.className = "partition-preview-spacer partition-preview-segment";
   trackEl.appendChild(spacerStart);
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "partition-preview-item partition-preview-segment";
+    tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
 
     const image = document.createElement("img");
     image.alt = "";
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src, key);
-    const itemLayout = sanitizeArtworkLayout(item.layout);
-    const itemHeight = Math.max(8, Math.round(baseArtworkHeight * itemLayout.scale * 100) / 100);
-    tile.dataset.baseHeightPx = String(baseArtworkHeight);
-    image.style.height = `${itemHeight}px`;
-    tile.style.height = `${itemHeight}px`;
     tile.appendChild(image);
-    const closeButton = document.createElement("button");
-    closeButton.type = "button";
-    closeButton.className = "artwork-close-button";
-    closeButton.title = "remove artwork";
-    closeButton.textContent = "×";
-    closeButton.addEventListener("click", (event) => {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-artwork";
+    remove.textContent = "✕";
+    remove.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      removePartitionArtworkById(key, item.id);
+      removePartitionArtwork(key, index);
     });
-    tile.appendChild(closeButton);
-    ["tl", "tr", "bl", "br"].forEach((anchorKey) => {
-      const anchor = document.createElement("span");
-      anchor.className = `artwork-anchor artwork-anchor-${anchorKey}`;
-      anchor.dataset.corner = anchorKey;
-      tile.appendChild(anchor);
-    });
-    if (selectedPartitionArtworkIds[key].has(item.id)) {
-      tile.classList.add("selected");
-    }
-    tile.addEventListener("click", (event) => {
-      event.preventDefault();
-      selectOnlyPartitionArtwork(key, item.id);
-      renderPartitionEditor(key);
-    });
-    applyArtworkTileTransform(tile, item, partitionLayout.scale);
-    bindArtworkEditorDrag(
-      tile,
-      () => item,
-      () => {
-        savePartitionArtworks(partitionArtworks);
-        sendLoopConfigToPreview();
-        render3dPreview();
-      },
-      partitionLayout.scale,
-      {
-        dropContainerSelector: ".partition-preview-track",
-        onRemove: () => {
-          removePartitionArtworkById(key, item.id);
-        }
-      }
-    );
-
+    tile.appendChild(remove);
     trackEl.appendChild(tile);
   });
 
@@ -5980,6 +5806,7 @@ function renderPartitionEditor(partitionKey) {
   activeWindowSecondary.dataset.partitionWindow = "secondary";
   trackEl.appendChild(activeWindowSecondary);
 
+  initPartitionSortable(key, trackEl);
   syncPartitionEditorVisuals();
   updatePartitionActiveWindows();
 }
@@ -6078,10 +5905,7 @@ function bindPartitionTrackDrop(trackEl, partitionKey) {
     if (!event.dataTransfer || !event.dataTransfer.files) {
       return;
     }
-    await addArtworkFiles(event.dataTransfer.files, key, {
-      clientX: event.clientX,
-      clientY: event.clientY
-    });
+    await addArtworkFiles(event.dataTransfer.files, key);
   });
 }
 
@@ -6804,25 +6628,6 @@ async function init() {
     },
     { passive: true }
   );
-  document.addEventListener("keydown", (event) => {
-    if (isEditableTextTarget(event.target)) {
-      return;
-    }
-    const key = String(event.key || "");
-    const lower = key.toLowerCase();
-    const isSelectAll = (event.metaKey || event.ctrlKey) && !event.altKey && lower === "a";
-    if (isSelectAll) {
-      event.preventDefault();
-      selectAllAssetsInActiveEditor();
-      return;
-    }
-    const isDelete = key === "Backspace" || key === "Delete";
-    if (isDelete && hasSelectedAssetsInActiveEditor()) {
-      event.preventDefault();
-      removeSelectedAssetsInActiveEditor();
-    }
-  });
-
   if (loopVisualization) {
     loopVisualization.addEventListener("dragover", (event) => {
       if (currentDirectionIsPartitioned()) {
@@ -6845,10 +6650,7 @@ async function init() {
       if (!event.dataTransfer || !event.dataTransfer.files) {
         return;
       }
-      addArtworkFiles(event.dataTransfer.files, null, {
-        clientX: event.clientX,
-        clientY: event.clientY
-      });
+      addArtworkFiles(event.dataTransfer.files, null);
     });
   }
 

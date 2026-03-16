@@ -441,24 +441,6 @@ body.dark-mode .orientation-choice.inactive {
   overflow: hidden;
   background: #f1f1f1;
   border: 1px solid rgba(0, 0, 0, 0.2);
-  --editor-grid-size: 16px;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.26) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.26) 1px, transparent 1px);
-  background-size: var(--editor-grid-size) var(--editor-grid-size);
-  background-position: 0 0;
-}
-
-.loop-visualization::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.32) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.32) 1px, transparent 1px);
-  background-size: var(--editor-grid-size) var(--editor-grid-size);
-  z-index: 0;
 }
 
 .loop-visualization.drag-over {
@@ -1097,12 +1079,6 @@ body.dark-mode .view-controls-panel {
   overflow: hidden;
   background: var(--partition-preview-bg, #f1f1f1);
   border: 1px solid rgba(0, 0, 0, 0.2);
-  --editor-grid-size: 16px;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.26) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.26) 1px, transparent 1px);
-  background-size: var(--editor-grid-size) var(--editor-grid-size);
-  background-position: 0 0;
 }
 
 .partition-preview-track::after {
@@ -1161,62 +1137,29 @@ body.dark-mode .view-controls-panel {
   -webkit-user-drag: none;
 }
 
-.artwork-scale-handle {
-  display: none;
-}
-
-.artwork-close-button {
+.remove-artwork {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 16px;
-  height: 16px;
-  border: 1px solid #222;
-  background: #fff;
-  color: #111;
-  font-family: "Courier New", Courier, monospace;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(211, 0, 0, 0.92);
+  color: #fff;
   font-size: 12px;
-  line-height: 12px;
+  line-height: 18px;
+  text-align: center;
   padding: 0;
   cursor: pointer;
-  z-index: 6;
+  z-index: 4;
   display: none;
 }
 
-.loop-preview-item.selected,
-.partition-preview-item.selected {
-  outline: 2px solid #d30000;
-  outline-offset: -2px;
-}
-
-.loop-preview-item.selected .artwork-close-button,
-.partition-preview-item.selected .artwork-close-button {
+.loop-preview-item:hover .remove-artwork,
+.partition-preview-item:hover .remove-artwork {
   display: block;
 }
-
-.artwork-anchor {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border: 1px solid #d30000;
-  background: #fff;
-  z-index: 6;
-  display: none;
-}
-
-.loop-preview-item.selected .artwork-anchor,
-.partition-preview-item.selected .artwork-anchor {
-  display: block;
-}
-
-.artwork-anchor-tl { left: -4px; top: -4px; }
-.artwork-anchor-tr { right: -4px; top: -4px; }
-.artwork-anchor-bl { left: -4px; bottom: -4px; }
-.artwork-anchor-br { right: -4px; bottom: -4px; }
-.artwork-anchor-tl,
-.artwork-anchor-br { cursor: nwse-resize; }
-.artwork-anchor-tr,
-.artwork-anchor-bl { cursor: nesw-resize; }
 
 @media (max-width: 1000px) {
   .app-shell {
