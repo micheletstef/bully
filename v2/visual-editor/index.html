@@ -144,14 +144,16 @@
         background: #fff;
       }
 
+      .editor-shell {
+        position: relative;
+      }
+
       .editor-stage {
         overflow: auto;
       }
 
       .editor-canvas {
-        position: relative;
         width: max-content;
-        padding-bottom: 30px;
       }
 
       .visual-editor-block {
@@ -270,14 +272,16 @@
           <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
         </div>
       </aside>
-      <main class="editor-stage">
-        <div class="editor-canvas">
-          <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
-          <div id="assetScaleControls" class="asset-scale-controls" aria-label="Selected asset scale controls">
-            <button id="assetScaleDownButton" type="button" class="asset-scale-button" aria-label="Decrease selected asset scale">-</button>
-            <span id="assetScaleValue" class="asset-scale-value">100%</span>
-            <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
+      <main class="editor-shell">
+        <div id="editorStage" class="editor-stage">
+          <div class="editor-canvas">
+            <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
           </div>
+        </div>
+        <div id="assetScaleControls" class="asset-scale-controls" aria-label="Selected asset scale controls">
+          <button id="assetScaleDownButton" type="button" class="asset-scale-button" aria-label="Decrease selected asset scale">-</button>
+          <span id="assetScaleValue" class="asset-scale-value">100%</span>
+          <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
         </div>
       </main>
     </div>
@@ -294,6 +298,7 @@
 
       const assetsList = document.getElementById("assetsList");
       const alignmentSettings = document.getElementById("alignmentSettings");
+      const editorStage = document.getElementById("editorStage");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
@@ -426,7 +431,7 @@
         if (!selectedBlock) {
           return;
         }
-        const centerX = selectedBlock.offsetLeft + selectedBlock.offsetWidth / 2;
+        const centerX = selectedBlock.offsetLeft - editorStage.scrollLeft + selectedBlock.offsetWidth / 2;
         assetScaleControls.style.left = centerX + "px";
       }
 
@@ -600,6 +605,14 @@
 
       assetScaleUpButton.addEventListener("click", () => {
         updateSelectedAssetScale(10);
+      });
+
+      editorStage.addEventListener("scroll", () => {
+        positionScaleControls();
+      });
+
+      window.addEventListener("resize", () => {
+        positionScaleControls();
       });
 
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
