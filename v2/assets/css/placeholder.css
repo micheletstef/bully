@@ -124,6 +124,12 @@ body.dark-mode .partition-preview-item {
   outline-color: rgba(255, 255, 255, 0.35);
 }
 
+body.dark-mode .partition-preview-track {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+}
+
 body.dark-mode .loop-active-window,
 body.dark-mode .partition-active-window {
   border-color: #fff;
@@ -1080,6 +1086,11 @@ body.dark-mode .view-controls-panel {
   overflow: hidden;
   background: var(--partition-preview-bg, #f1f1f1);
   border: 1px solid rgba(0, 0, 0, 0.2);
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.09) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 0 0;
 }
 
 .partition-preview-track::after {
@@ -1122,6 +1133,12 @@ body.dark-mode .view-controls-panel {
   cursor: move;
   background: transparent;
   overflow: visible;
+  z-index: 3;
+}
+
+.partition-preview-item.is-selected {
+  outline: 2px solid rgba(32, 103, 220, 0.9);
+  outline-offset: -2px;
 }
 
 .partition-preview-spacer {
@@ -1160,6 +1177,52 @@ body.dark-mode .view-controls-panel {
 .loop-preview-item:hover .remove-artwork,
 .partition-preview-item:hover .remove-artwork {
   display: block;
+}
+
+.artwork-anchor {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  border-radius: 50%;
+  padding: 0;
+  display: none;
+  z-index: 5;
+}
+
+body.dark-mode .artwork-anchor {
+  border-color: #fff;
+  background: #000;
+}
+
+.partition-preview-item:hover .artwork-anchor,
+.partition-preview-item.is-selected .artwork-anchor {
+  display: block;
+}
+
+.artwork-anchor[data-corner="tl"] {
+  left: -6px;
+  top: -6px;
+  cursor: nwse-resize;
+}
+
+.artwork-anchor[data-corner="tr"] {
+  right: -6px;
+  top: -6px;
+  cursor: nesw-resize;
+}
+
+.artwork-anchor[data-corner="bl"] {
+  left: -6px;
+  bottom: -6px;
+  cursor: nesw-resize;
+}
+
+.artwork-anchor[data-corner="br"] {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
 }
 
 @media (max-width: 1000px) {

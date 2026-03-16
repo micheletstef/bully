@@ -5448,12 +5448,15 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     if (event.button !== 0) {
       return;
     }
+    const target = event.target;
+    if (target && target.closest && target.closest(".remove-artwork")) {
+      return;
+    }
     const item = getItem();
     if (!item) {
       return;
     }
     event.preventDefault();
-    const target = event.target;
     const pointerId = typeof event.pointerId === "number" ? event.pointerId : null;
     const onWindowPointerUp = (upEvent) => finishDrag(upEvent, { cancelled: false });
     const onWindowPointerCancel = (cancelEvent) => finishDrag(cancelEvent, { cancelled: true });
@@ -5747,12 +5750,23 @@ function renderPartitionEditor(partitionKey) {
   const spacerStart = document.createElement("div");
   spacerStart.className = "partition-preview-spacer partition-preview-segment";
   trackEl.appendChild(spacerStart);
+  const settings = partitionSettingsForKey(key);
+  const scaleToPixels = computePartitionEditorLayoutScale(key).scale;
+  const baseArtworkHeightPx = Math.max(
+    8,
+    Math.round((Math.max(1, loopStageHeight) - Math.max(0, settings.padTopBottom) * 2) * scaleToPixels * 100) / 100
+  );
 
   items.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "partition-preview-item partition-preview-segment";
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
+    tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
+    if (selectedPartitionArtworkIds[key].has(item.id)) {
+      tile.classList.add("is-selected");
+    }
+    item.layout = sanitizeArtworkLayout(item.layout);
 
     const image = document.createElement("img");
     image.alt = "";
@@ -5769,6 +5783,40 @@ function renderPartitionEditor(partitionKey) {
       removePartitionArtwork(key, index);
     });
     tile.appendChild(remove);
+    ["tl", "tr", "bl", "br"].forEach((corner) => {
+      const anchor = document.createElement("button");
+      anchor.type = "button";
+      anchor.className = "artwork-anchor";
+      anchor.dataset.corner = corner;
+      anchor.setAttribute("aria-label", "Resize asset");
+      tile.appendChild(anchor);
+    });
+    tile.addEventListener("click", (event) => {
+      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor")) {
+        return;
+      }
+      selectOnlyPartitionArtwork(key, item.id);
+      renderPartitionEditor(key);
+    });
+    applyArtworkTileScale(tile, item.layout.scale);
+    applyArtworkTileTransform(tile, item, scaleToPixels);
+    bindArtworkEditorDrag(
+      tile,
+      () => item,
+      () => {
+        savePartitionArtworks(partitionArtworks);
+        renderPartitionEditor(key);
+        render3dPreview();
+        sendLoopConfigToPreview();
+      },
+      scaleToPixels,
+      {
+        dropContainerSelector: ".partition-preview-track",
+        onRemove: () => {
+          removePartitionArtworkById(key, item.id);
+        }
+      }
+    );
     trackEl.appendChild(tile);
   });
 
@@ -5785,7 +5833,6 @@ function renderPartitionEditor(partitionKey) {
   activeWindowSecondary.dataset.partitionWindow = "secondary";
   trackEl.appendChild(activeWindowSecondary);
 
-  initPartitionSortable(key, trackEl);
   syncPartitionEditorVisuals();
   updatePartitionActiveWindows();
 }
