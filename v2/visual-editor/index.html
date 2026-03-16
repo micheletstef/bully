@@ -872,7 +872,8 @@
         const previewImage = block.querySelector(".asset-preview-image");
         if (previewImage instanceof HTMLElement) {
           const fullScaledWidth = Math.max(1, Math.round(fullTargetWidth * fitScale));
-          const offsetX = -Math.round(crop.left * fullScaledWidth);
+          // Keep image centered in the container, then offset only by crop asymmetry.
+          const offsetX = Math.round(((crop.right - crop.left) * fullScaledWidth) / 2);
           previewImage.style.width = fullScaledWidth + "px";
           previewImage.style.height = scaledHeight + "px";
           previewImage.style.transform = "translateX(" + offsetX + "px)";
