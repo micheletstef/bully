@@ -1642,6 +1642,9 @@
             run += gap;
           }
         }
+        // Include the boundary gap between the last item and the first item
+        // of the next duplicated run for seamless wrap distance.
+        run += gap;
         return Math.max(1, run);
       }
 
@@ -1913,6 +1916,7 @@
         }
         visualEditorBlock.style.alignItems = alignmentMap[alignKey];
         editorState.settings.verticalAlignment = alignKey;
+        syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
         }
