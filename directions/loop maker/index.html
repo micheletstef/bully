@@ -603,6 +603,14 @@
         exportProgressLabel.textContent = `${Math.round(normalized * 100)}%`;
       }
 
+      function nextUiTick() {
+        return new Promise((resolve) => {
+          window.requestAnimationFrame(() => {
+            window.setTimeout(resolve, 0);
+          });
+        });
+      }
+
       function triggerDownload(url, filename) {
         if (!url) {
           return false;
@@ -1474,12 +1482,38 @@
         exportButton.disabled = true;
         setStatus("rendering gif...");
         setExportProgress(0, true);
+        await nextUiTick();
         try {
           const frames = steppedFrames();
-          const loadedImages = await Promise.all(frames.map((frame) => loadImage(frame.file)));
+          if (!frames.length) {
+            throw new Error("no frames");
+          }
+          setStatus("preparing frames...");
+          const frameImagePairs = [];
+          for (let index = 0; index < frames.length; index += 1) {
+            const frame = frames[index];
+            const image = await ensureFrameImage(frame);
+            if (!image) {
+              continue;
+            }
+            frameImagePairs.push({ frame, image });
+            if (index % 3 === 0 || index === frames.length - 1) {
+              const prepProgress = ((index + 1) / frames.length) * 0.2;
+              setExportProgress(prepProgress, true);
+              setStatus(`preparing frames... ${Math.round(((index + 1) / frames.length) * 100)}%`);
+              await nextUiTick();
+            }
+          }
+          if (!frameImagePairs.length) {
+            throw new Error("no images loaded");
+          }
           const offsets = await computeStabilizedOffsets(frames);
+          setExportProgress(0.25, true);
+          await nextUiTick();
           const scales = await computeScaleNormalization(frames);
-          const firstImage = loadedImages[0];
+          setExportProgress(0.3, true);
+          await nextUiTick();
+          const firstImage = frameImagePairs[0].image;
           const baseCropRect = cropRectForImage(firstImage);
           const width = Math.max(1, baseCropRect.sw);
           const height = Math.max(1, baseCropRect.sh);
@@ -1499,8 +1533,11 @@
             workerScript: "https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js"
           });
 
-          loadedImages.forEach((image, index) => {
-            const frame = frames[index];
+          setStatus("building gif frames...");
+          for (let index = 0; index < frameImagePairs.length; index += 1) {
+            const pair = frameImagePairs[index];
+            const image = pair.image;
+            const frame = pair.frame;
             const cropRect = cropRectForImage(image);
             const normalizedOffset = offsets.get(frameKey(frame, index));
             const scaleFactor = scales.get(frameKey(frame, index)) || 1;
@@ -1525,15 +1562,25 @@
               scaledHeight
             );
             gif.addFrame(context, { copy: true, delay: frameDelayMs() });
-          });
+            if (index % 3 === 0 || index === frameImagePairs.length - 1) {
+              const prepProgress = 0.3 + ((index + 1) / frameImagePairs.length) * 0.5;
+              setExportProgress(prepProgress, true);
+              setStatus(`building gif frames... ${Math.round(((index + 1) / frameImagePairs.length) * 100)}%`);
+              await nextUiTick();
+            }
+          }
 
+          setStatus("encoding gif...");
           const blob = await new Promise((resolve, reject) => {
             gif.on("finished", resolve);
             gif.on("abort", () => reject(new Error("render aborted")));
             gif.on("progress", (value) => {
-              setExportProgress(value, true);
+              setExportProgress(0.8 + Math.max(0, Math.min(1, Number(value) || 0)) * 0.2, true);
             });
             gif.render();
+            window.setTimeout(() => {
+              reject(new Error("gif render timeout"));
+            }, 120000);
           });
 
           const outputUrl = URL.createObjectURL(blob);
