@@ -434,9 +434,9 @@ body.dark-mode .orientation-choice.inactive {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: max-content;
+  width: min(84vw, 1400px);
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
-  height: 168px;
+  height: 72px;
   padding: 0;
   overflow: hidden;
   background: #f1f1f1;
@@ -1072,7 +1072,7 @@ body.dark-mode .view-controls-panel {
   display: flex;
   align-items: center;
   gap: var(--partition-preview-gap, 0px);
-  min-height: 136px;
+  min-height: 54px;
   width: min(84vw, 1400px);
   border: 0;
   padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);

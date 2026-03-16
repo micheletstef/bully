@@ -160,6 +160,8 @@ let partitionLoopDistances = {
   right: 1
 };
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
+const LEGACY_LINEAR_PREVIEW_HEIGHT_PX = 72;
+const LEGACY_LINEAR_TRACK_HEIGHT_PX = 46;
 const BILLBOARD_DESIGN_WIDTH = 5900;
 const BILLBOARD_DESIGN_HEIGHT = 3480;
 const BILLBOARD_MODEL_URL = "assets/models/D_Billboard_MockUp.glb";
@@ -5137,13 +5139,7 @@ function syncEffectiveLoopPadding() {
 }
 
 function getPartitionPreviewScale() {
-  const targetHeight = 54;
-  const stageHeight = Math.max(1, loopStageHeight);
-  const totalSourceHeight = stageHeight + Math.max(0, loopPadTopBottom) * 2;
-  if (!Number.isFinite(totalSourceHeight) || totalSourceHeight <= 0) {
-    return 1;
-  }
-  return targetHeight / totalSourceHeight;
+  return computeLinearEditorLayoutScale();
 }
 
 function syncPartitionEditorVisuals() {
@@ -5193,10 +5189,7 @@ function syncPartitionEditorVisuals() {
 }
 
 function getPreviewScale() {
-  const stageHeight = Math.max(1, loopStageHeight);
-  // Keep editor as a consistent scaled-down billboard model.
-  const targetArtHeight = 110;
-  return targetArtHeight / stageHeight;
+  return computeLinearEditorLayoutScale();
 }
 
 function syncVisualizationGapScaled() {
@@ -5235,7 +5228,7 @@ function syncVisualizationPaddingScaled() {
   loopVisualization.style.setProperty("--preview-safe-right", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-top", `${safeTop}px`);
   loopVisualization.style.setProperty("--preview-safe-height", `${scaledArtHeight}px`);
-  loopVisualization.style.height = `${Math.max(24, Math.round(scaledTrackHeight + 8))}px`;
+  loopVisualization.style.height = `${LEGACY_LINEAR_PREVIEW_HEIGHT_PX}px`;
   syncPreviewSpacers();
 }
 
@@ -5257,34 +5250,19 @@ function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
-  const horizontalPadding = 8;
-  loopVisualization.style.width = `${Math.round(contentWidth + horizontalPadding)}px`;
+  loopVisualization.style.width = "";
   loopPreviewTrack.style.transform = "none";
 }
 
 function computeLinearEditorLayoutScale() {
   const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const targetHeight = Math.min(Math.max(256, Math.round(stageHeight * dpr * 0.95)), 960);
-  return Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+  return Math.max(0.001, LEGACY_LINEAR_TRACK_HEIGHT_PX / stageHeight);
 }
 
 function computePartitionEditorLayoutScale(partitionKey) {
   const key = normalizePartitionKey(partitionKey) || "left";
   const settings = partitionSettingsForKey(key);
-  const orientation = current3dPartitionOrientation(key);
-  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const targetHeight = Math.min(Math.max(256, Math.round(stageHeight * dpr * 0.95)), 960);
-  const baseScale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
-  const viewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * baseScale));
-  const partitionWidthDesign =
-    key === "left" ? BILLBOARD_LEFT_WIDTH : key === "curve" ? BILLBOARD_CURVE_WIDTH : BILLBOARD_RIGHT_WIDTH;
-  const partitionRatio = Math.max(0.0001, partitionWidthDesign / BILLBOARD_DESIGN_WIDTH);
-  const partitionTargetHeight = Math.max(128, Math.round(viewportWidth * partitionRatio));
-  const paddingTargetHeight = orientation === "vertical" ? partitionTargetHeight : targetHeight;
-  const scale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const scale = computeLinearEditorLayoutScale();
   const padTopBottom = Math.max(
     0,
     Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(settings.padTopBottom) || 0)
