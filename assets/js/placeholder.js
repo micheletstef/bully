@@ -4009,6 +4009,8 @@ function buildPartitionedSnapshotHtml(config) {
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
+        const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         // Keep artwork inline in all orientations; vertical only changes track rotation/direction.
         const sidePadding = 0;
         const rows = [];
@@ -4066,6 +4068,7 @@ function buildPartitionedSnapshotHtml(config) {
           track.className = "loop-row-track";
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
+            track.style.height = verticalTrackHeight + "px";
           }
           row.appendChild(track);
           container.appendChild(row);

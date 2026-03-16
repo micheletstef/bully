@@ -397,6 +397,8 @@
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
+        const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         const sidePadding = 0;
         const rows = [];
         const allImages = [];
@@ -453,6 +455,7 @@
           track.className = "loop-row-track";
           if (verticalFlow) {
             track.classList.add("vertical-scroll");
+            track.style.height = `${verticalTrackHeight}px`;
           }
           row.appendChild(track);
           container.appendChild(row);
