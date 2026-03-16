@@ -3459,6 +3459,20 @@ function buildSnapshotHtml(config) {
       let playbackTimer = null;
       let primaryTrack = null;
 
+      function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+        const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+        const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+        const scale = Math.max(0.08, safeTargetHeight / 3480);
+        const safePadTBDesign = Math.max(
+          0,
+          Math.min(3480 / 2 - 1, Number(padTopBottomDesign) || 0)
+        );
+        const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+        const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+        const padLeftRight = Math.max(0, safePadLRDesign * scale);
+        return { padTopBottom, padLeftRight };
+      }
+
       function normalizeArtworkSource(path) {
         const source = String(path || "").trim();
         if (!source) {
@@ -3488,11 +3502,23 @@ function buildSnapshotHtml(config) {
       async function renderLoop() {
         loopFill.innerHTML = "";
         primaryTrack = null;
+        const viewportHeight = Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+        const stageHeight = Math.max(1, Number(loopStage.clientHeight) || viewportHeight);
+        const scaledPadding = computeScaledPaddingFrom3dMath(
+          Number(state.padTopBottom) || 0,
+          Number(state.padLeftRight) || 0,
+          stageHeight,
+          viewportHeight
+        );
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
-        const sidePadding = Math.max(0, Number(state.padLeftRight) || 0);
+        const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
@@ -3593,7 +3619,7 @@ function buildSnapshotHtml(config) {
 
         document.documentElement.style.setProperty("--loop-distance", safeDistance + "px");
         document.documentElement.style.setProperty("--loop-duration", state.seconds + "s");
-        document.documentElement.style.setProperty("--loop-pad-tb", state.padTopBottom + "px");
+        document.documentElement.style.setProperty("--loop-pad-tb", Math.max(0, Number(scaledPadding.padTopBottom) || 0) + "px");
         document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", gapSize + "px");
         document.documentElement.style.setProperty("--loop-row-gap", Math.max(0, Number(state.rowGap) || 0) + "px");
@@ -4001,19 +4027,64 @@ function buildPartitionedSnapshotHtml(config) {
         return (partitionDesignWidth / PARTITION_TOTAL_WIDTH) * viewportWidth;
       }
 
+      async function resolvePartitionHeight(container) {
+        const measure = () =>
+          Math.max(
+            0,
+            Number(container.clientHeight) || 0,
+            Number(container.getBoundingClientRect().height) || 0
+          );
+
+        let height = measure();
+        if (height > 1) {
+          return height;
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        height = measure();
+        if (height > 1) {
+          return height;
+        }
+
+        return Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+      }
+
+      function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+        const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+        const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+        const scale = Math.max(0.08, safeTargetHeight / 3480);
+        const safePadTBDesign = Math.max(0, Math.min(3480 / 2 - 1, Number(padTopBottomDesign) || 0));
+        const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+        const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+        const padLeftRight = Math.max(0, safePadLRDesign * scale);
+        return { padTopBottom, padLeftRight };
+      }
+
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const partitionSettings = settingsForPartition(partitionKey);
+        const partitionHeight = await resolvePartitionHeight(container);
+        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
+        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const paddingTargetHeight = verticalFlow ? partitionWidth : partitionHeight;
+        const scaledPadding = computeScaledPaddingFrom3dMath(
+          partitionSettings.padTopBottom,
+          partitionSettings.padLeftRight,
+          paddingTargetHeight,
+          partitionHeight
+        );
         container.style.background = partitionSettings.backgroundColor;
         container.style.setProperty("--loop-row-gap", Math.max(0, Number(partitionSettings.rowGap) || 0) + "px");
-        container.style.paddingTop = Math.max(0, Number(partitionSettings.padTopBottom) || 0) + "px";
-        container.style.paddingBottom = Math.max(0, Number(partitionSettings.padTopBottom) || 0) + "px";
-        container.style.paddingLeft = Math.max(0, Number(partitionSettings.padLeftRight) || 0) + "px";
-        container.style.paddingRight = Math.max(0, Number(partitionSettings.padLeftRight) || 0) + "px";
+        container.style.paddingTop = Math.max(0, Number(scaledPadding.padTopBottom) || 0) + "px";
+        container.style.paddingBottom = Math.max(0, Number(scaledPadding.padTopBottom) || 0) + "px";
+        container.style.paddingLeft = Math.max(0, Number(scaledPadding.padLeftRight) || 0) + "px";
+        container.style.paddingRight = Math.max(0, Number(scaledPadding.padLeftRight) || 0) + "px";
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
-        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         // Keep artwork inline in all orientations; vertical only changes track rotation/direction.
         const sidePadding = 0;

@@ -386,18 +386,63 @@
         return (partitionDesignWidth / PARTITION_TOTAL_WIDTH) * viewportWidth;
       }
 
-      async function renderPartition(container, sources, partitionKey, appliedPadTopBottom, appliedPadLeftRight) {
+      async function resolvePartitionHeight(container) {
+        const measure = () =>
+          Math.max(
+            0,
+            Number(container.clientHeight) || 0,
+            Number(container.getBoundingClientRect().height) || 0
+          );
+        let height = measure();
+        if (height > 1) {
+          return height;
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        height = measure();
+        if (height > 1) {
+          return height;
+        }
+        return Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+      }
+
+      function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+        const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+        const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+        const scale = Math.max(0.08, safeTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const safePadTBDesign = Math.max(
+          0,
+          Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(padTopBottomDesign) || 0)
+        );
+        const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+        const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+        const padLeftRight = Math.max(0, safePadLRDesign * scale);
+        return { padTopBottom, padLeftRight };
+      }
+
+      async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const partitionSettings = settingsForPartition(partitionKey);
+        const partitionHeight = await resolvePartitionHeight(container);
+        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
+        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
+        const paddingTargetHeight = verticalFlow ? partitionWidth : partitionHeight;
+        const scaledPadding = computeScaledPaddingFrom3dMath(
+          partitionSettings.padTopBottom,
+          partitionSettings.padLeftRight,
+          paddingTargetHeight,
+          partitionHeight
+        );
         container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
-        container.style.paddingTop = `${Math.max(0, Number(appliedPadTopBottom) || 0)}px`;
-        container.style.paddingBottom = `${Math.max(0, Number(appliedPadTopBottom) || 0)}px`;
-        container.style.paddingLeft = `${Math.max(0, Number(appliedPadLeftRight) || 0)}px`;
-        container.style.paddingRight = `${Math.max(0, Number(appliedPadLeftRight) || 0)}px`;
+        container.style.paddingTop = `${Math.max(0, Number(scaledPadding.padTopBottom) || 0)}px`;
+        container.style.paddingBottom = `${Math.max(0, Number(scaledPadding.padTopBottom) || 0)}px`;
+        container.style.paddingLeft = `${Math.max(0, Number(scaledPadding.padLeftRight) || 0)}px`;
+        container.style.paddingRight = `${Math.max(0, Number(scaledPadding.padLeftRight) || 0)}px`;
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
-        const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const partitionWidth = await resolvePartitionWidth(container, partitionKey);
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
         const sidePadding = 0;
         const rows = [];
@@ -508,27 +553,11 @@
       }
 
       async function renderLoop() {
-        const viewportHeight = Math.max(
-          1,
-          Number(document.documentElement.clientHeight) || 0,
-          Number(window.innerHeight) || 0
-        );
-        const viewportWidth = Math.max(
-          1,
-          Number(document.documentElement.clientWidth) || 0,
-          Number(window.innerWidth) || 0
-        );
         const baseSettings = settingsForPartition("left");
-        const padTopBottomDesign = Math.max(0, Number(baseSettings.padTopBottom) || 0);
-        const padLeftRightDesign = Math.max(0, Number(baseSettings.padLeftRight) || 0);
-        const appliedPadTopBottomRaw = (padTopBottomDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
-        const appliedPadLeftRightRaw = (padLeftRightDesign / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
-        const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
-        const appliedPadTopBottom = Math.min(appliedPadTopBottomRaw, maxPadTopBottom);
-        const appliedPadLeftRight = Math.max(0, appliedPadLeftRightRaw);
         document.documentElement.style.setProperty("--loop-duration", `${baseSettings.seconds}s`);
-        document.documentElement.style.setProperty("--loop-pad-tb", `${appliedPadTopBottom}px`);
-        document.documentElement.style.setProperty("--loop-pad-lr", `${appliedPadLeftRight}px`);
+        // Partition padding is applied per panel (matching 3D strip build); keep stage inset at zero.
+        document.documentElement.style.setProperty("--loop-pad-tb", "0px");
+        document.documentElement.style.setProperty("--loop-pad-lr", "0px");
         document.documentElement.style.setProperty("--loop-bg", baseSettings.backgroundColor);
         document.documentElement.style.setProperty("--loop-gap", `${Math.max(0, Number(baseSettings.assetGap) || 0)}px`);
         document.documentElement.style.setProperty(
@@ -552,19 +581,8 @@
           const normalizedSources = await Promise.all(
             sourceList.map((item) => colorizeSvgSource(normalizeArtworkSource(item), partitionSettings.assetColor))
           );
-          const appliedPartitionPadTopBottomRaw = (partitionSettings.padTopBottom / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
-          const appliedPartitionPadLeftRightRaw = (partitionSettings.padLeftRight / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
-          const maxPartitionPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
-          const appliedPartitionPadTopBottom = Math.min(appliedPartitionPadTopBottomRaw, maxPartitionPadTopBottom);
-          const appliedPartitionPadLeftRight = Math.max(0, appliedPartitionPadLeftRightRaw);
           container.style.background = partitionSettings.backgroundColor;
-          const result = await renderPartition(
-            container,
-            normalizedSources,
-            key,
-            appliedPartitionPadTopBottom,
-            appliedPartitionPadLeftRight
-          );
+          const result = await renderPartition(container, normalizedSources, key);
           const partitionVerticalFlow = orientationForPartition(key) === "vertical";
           const partitionViewportSize = partitionVerticalFlow
             ? container.clientHeight || 0

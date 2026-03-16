@@ -136,6 +136,20 @@
       let playbackTimer = null;
       let primaryTrack = null;
 
+      function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+        const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+        const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+        const scale = Math.max(0.08, safeTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const safePadTBDesign = Math.max(
+          0,
+          Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(padTopBottomDesign) || 0)
+        );
+        const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+        const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+        const padLeftRight = Math.max(0, safePadLRDesign * scale);
+        return { padTopBottom, padLeftRight };
+      }
+
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
           return path;
@@ -168,18 +182,17 @@
           Number(document.documentElement.clientHeight) || 0,
           Number(window.innerHeight) || 0
         );
-        const viewportWidth = Math.max(
-          1,
-          Number(document.documentElement.clientWidth) || 0,
-          Number(window.innerWidth) || 0
-        );
+        const stageHeight = Math.max(1, Number(loopStage.clientHeight) || viewportHeight);
         const padTopBottomDesign = Math.max(0, Number(state.padTopBottom) || 0);
         const padLeftRightDesign = Math.max(0, Number(state.padLeftRight) || 0);
-        const appliedPadTopBottomRaw = (padTopBottomDesign / BILLBOARD_DESIGN_HEIGHT) * viewportHeight;
-        const appliedPadLeftRightRaw = (padLeftRightDesign / BILLBOARD_DESIGN_WIDTH) * viewportWidth;
-        const maxPadTopBottom = Math.max(0, (viewportHeight - 1) / 2);
-        const appliedPadTopBottom = Math.min(appliedPadTopBottomRaw, maxPadTopBottom);
-        const appliedPadLeftRight = Math.max(0, appliedPadLeftRightRaw);
+        const scaledPadding = computeScaledPaddingFrom3dMath(
+          padTopBottomDesign,
+          padLeftRightDesign,
+          stageHeight,
+          viewportHeight
+        );
+        const appliedPadTopBottom = scaledPadding.padTopBottom;
+        const appliedPadLeftRight = scaledPadding.padLeftRight;
 
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
