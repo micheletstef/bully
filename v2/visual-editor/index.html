@@ -1633,6 +1633,14 @@
         }
         const direction = editorState.settings.marqueeDirection;
         const horizontal = direction === "rtl" || direction === "ltr";
+        const firstOriginal = originals[0];
+        const firstCopy = flatBillboardTrack.querySelector(".flat-billboard-asset.marquee-copy");
+        if (firstCopy instanceof HTMLElement) {
+          if (horizontal) {
+            return Math.max(1, firstCopy.offsetLeft - firstOriginal.offsetLeft);
+          }
+          return Math.max(1, firstCopy.offsetTop - firstOriginal.offsetTop);
+        }
         const gap = Math.max(0, parseFloat(flatBillboardTrack.style.gap || "0") || 0);
         let run = 0;
         for (let index = 0; index < originals.length; index += 1) {
