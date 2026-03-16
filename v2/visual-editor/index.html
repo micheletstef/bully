@@ -220,6 +220,7 @@
 
       .editor-shell {
         position: relative;
+        --asset-controls-top: 0px;
       }
 
       .editor-stage {
@@ -337,7 +338,7 @@
 
       .asset-scale-controls {
         position: absolute;
-        top: calc(100% + 6px);
+        top: calc(var(--asset-controls-top) + 6px);
         left: 0;
         transform: translateX(-50%);
         display: none;
@@ -371,7 +372,7 @@
       }
 
       .flat-billboard-wrap {
-        margin-top: 44px;
+        margin-top: 78px;
       }
 
       .flat-billboard-shell {
@@ -383,10 +384,10 @@
         --editor-height: 200px;
         --editor-bg: #ff00ff;
         --safe-guide-color: #00ffff;
-        --safe-top: 0px;
-        --safe-bottom: 0px;
-        --safe-left: 0px;
-        --safe-right: 0px;
+        --safe-top-ratio: 0;
+        --safe-bottom-ratio: 0;
+        --safe-left-ratio: 0;
+        --safe-right-ratio: 0;
         position: relative;
         width: 100%;
         aspect-ratio: 5900 / 3480;
@@ -404,10 +405,10 @@
           100% 1px;
         background-repeat: no-repeat;
         background-position:
-          var(--safe-left) 0,
-          calc(100% - var(--safe-right)) 0,
-          0 var(--safe-top),
-          0 calc(100% - var(--safe-bottom));
+          calc(var(--safe-left-ratio) * 100%) 0,
+          calc(100% - (var(--safe-right-ratio) * 100%)) 0,
+          0 calc(var(--safe-top-ratio) * 100%),
+          0 calc(100% - (var(--safe-bottom-ratio) * 100%));
       }
 
       .flat-billboard-annotations {
@@ -486,8 +487,8 @@
 
       .flat-anno-marker {
         position: absolute;
-        top: 0;
-        height: 100%;
+        top: -16px;
+        height: calc(100% + 16px);
         border-left: 1px solid rgba(17, 17, 17, 0.45);
       }
 
@@ -613,6 +614,8 @@
       const assetScaleUpButton = document.getElementById("assetScaleUpButton");
       const assetScaleValue = document.getElementById("assetScaleValue");
       const assetRotateButton = document.getElementById("assetRotateButton");
+      const svgSourceCache = new Map();
+      const svgColorUrlCache = new Map();
       let draggingAssetId = null;
       let cropDragState = null;
       const alignmentMap = {
@@ -736,27 +739,96 @@
         return apiPath(src);
       }
 
-      function attachPreviewImageToBlock(block, src) {
+      function extensionOf(path) {
+        const clean = String(path || "").split("?")[0].toLowerCase();
+        const parts = clean.split(".");
+        return parts.length > 1 ? parts[parts.length - 1] : "";
+      }
+
+      function isGraphicsSvgAsset(src, group) {
+        return extensionOf(src) === "svg" && String(group || "").toLowerCase() === "graphics";
+      }
+
+      function clearSvgColorUrlCache() {
+        for (const objectUrl of svgColorUrlCache.values()) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        svgColorUrlCache.clear();
+      }
+
+      async function getSvgSource(src) {
+        if (svgSourceCache.has(src)) {
+          return svgSourceCache.get(src);
+        }
+        const response = await fetch(resolveAssetUrlFromSrc(src), { cache: "force-cache" });
+        if (!response.ok) {
+          throw new Error("Unable to load SVG source.");
+        }
+        const source = await response.text();
+        svgSourceCache.set(src, source);
+        return source;
+      }
+
+      function colorizeSvgSource(source, color) {
+        const insertCss = "<style data-visual-editor-colorize>*:not([fill='none']):not([fill='transparent']){fill:" + color + " !important;}*:not([stroke='none']):not([stroke='transparent']){stroke:" + color + " !important;}</style>";
+        if (source.includes("data-visual-editor-colorize")) {
+          return source.replace(/<style data-visual-editor-colorize>[\s\S]*?<\/style>/i, insertCss);
+        }
+        return source.replace(/<svg\b([^>]*)>/i, "<svg$1>" + insertCss);
+      }
+
+      async function resolvePreviewUrl(src, group) {
+        if (!isGraphicsSvgAsset(src, group)) {
+          return resolveAssetUrlFromSrc(src);
+        }
+        const color = editorState.settings.assetColor;
+        const cacheKey = src + "|" + color;
+        if (svgColorUrlCache.has(cacheKey)) {
+          return svgColorUrlCache.get(cacheKey);
+        }
+        const rawSvg = await getSvgSource(src);
+        const colorizedSvg = colorizeSvgSource(rawSvg, color);
+        const objectUrl = URL.createObjectURL(new Blob([colorizedSvg], { type: "image/svg+xml" }));
+        svgColorUrlCache.set(cacheKey, objectUrl);
+        return objectUrl;
+      }
+
+      function attachPreviewImageToBlock(block, src, group) {
         if (!block || !src) {
           return;
         }
         const currentImage = block.querySelector(".asset-preview-image");
-        if (currentImage) {
-          return;
+        let image = currentImage;
+        if (!(image instanceof HTMLImageElement)) {
+          image = document.createElement("img");
+          image.className = "asset-preview-image";
+          image.alt = "";
+          image.decoding = "async";
+          image.loading = "lazy";
+          image.addEventListener("error", () => {
+            image.remove();
+            block.classList.add("no-preview");
+          });
+          block.appendChild(image);
         }
         block.dataset.assetSrc = src;
-        const image = document.createElement("img");
-        image.className = "asset-preview-image";
-        image.alt = "";
-        image.decoding = "async";
-        image.loading = "lazy";
-        image.src = resolveAssetUrlFromSrc(src);
-        image.addEventListener("error", () => {
-          image.remove();
-          block.classList.add("no-preview");
-        });
+        block.dataset.assetGroup = group || "";
         block.classList.remove("no-preview");
-        block.appendChild(image);
+        const token = String(Date.now()) + Math.random().toString(16).slice(2);
+        image.dataset.previewToken = token;
+        resolvePreviewUrl(src, group)
+          .then((previewUrl) => {
+            if (!image.isConnected || image.dataset.previewToken !== token) {
+              return;
+            }
+            image.src = previewUrl;
+          })
+          .catch(() => {
+            if (image.isConnected && image.dataset.previewToken === token) {
+              image.remove();
+              block.classList.add("no-preview");
+            }
+          });
       }
 
       function createAssetButton(asset) {
@@ -843,12 +915,6 @@
           }
           assetsList.appendChild(group);
         }
-      }
-
-      function extensionOf(path) {
-        const clean = String(path || "").split("?")[0].toLowerCase();
-        const parts = clean.split(".");
-        return parts.length > 1 ? parts[parts.length - 1] : "";
       }
 
       function fallbackDimensionsForAsset(asset) {
@@ -949,7 +1015,7 @@
           if (!savedAsset || !savedAsset.src) {
             continue;
           }
-          attachPreviewImageToBlock(block, savedAsset.src);
+          attachPreviewImageToBlock(block, savedAsset.src, savedAsset.group);
         }
         saveEditorState();
       }
@@ -966,7 +1032,7 @@
         block.dataset.cropLeft = String(asset.cropLeft || 0);
         block.dataset.cropRight = String(asset.cropRight || 0);
         if (typeof asset.src === "string" && asset.src) {
-          attachPreviewImageToBlock(block, asset.src);
+          attachPreviewImageToBlock(block, asset.src, asset.group);
         } else {
           block.classList.add("no-preview");
         }
@@ -1073,6 +1139,14 @@
 
       function setScaleControlsVisible(isVisible) {
         assetScaleControls.style.display = isVisible ? "inline-flex" : "none";
+      }
+
+      function updateScaleControlsAnchorTop() {
+        const editorShell = editorStage.closest(".editor-shell");
+        if (!(editorShell instanceof HTMLElement)) {
+          return;
+        }
+        editorShell.style.setProperty("--asset-controls-top", editorStage.offsetHeight + "px");
       }
 
       function positionScaleControls() {
@@ -1392,10 +1466,10 @@
         visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
         visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
         visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
-        flatBillboard.style.setProperty("--safe-top", normalizedTB + "px");
-        flatBillboard.style.setProperty("--safe-bottom", normalizedTB + "px");
-        flatBillboard.style.setProperty("--safe-left", normalizedLR + "px");
-        flatBillboard.style.setProperty("--safe-right", normalizedLR + "px");
+        flatBillboard.style.setProperty("--safe-top-ratio", String(normalizedTB / 3480));
+        flatBillboard.style.setProperty("--safe-bottom-ratio", String(normalizedTB / 3480));
+        flatBillboard.style.setProperty("--safe-left-ratio", String(normalizedLR / 5900));
+        flatBillboard.style.setProperty("--safe-right-ratio", String(normalizedLR / 5900));
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
         editorState.settings.paddingTB = normalizedTB;
@@ -1407,6 +1481,7 @@
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
+        const previousAssetColor = editorState.settings.assetColor;
         visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
         visualEditorBlock.style.setProperty("--asset-color", assetColor);
         flatBillboard.style.setProperty("--editor-bg", backgroundColor);
@@ -1414,6 +1489,18 @@
         assetColorControl.value = assetColor;
         editorState.settings.backgroundColor = backgroundColor;
         editorState.settings.assetColor = assetColor;
+        if (previousAssetColor !== assetColor) {
+          clearSvgColorUrlCache();
+          const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
+          for (const block of blocks) {
+            const src = block.dataset.assetSrc;
+            const group = block.dataset.assetGroup;
+            if (!src || !isGraphicsSvgAsset(src, group)) {
+              continue;
+            }
+            attachPreviewImageToBlock(block, src, group);
+          }
+        }
         if (shouldPersist) {
           saveEditorState();
         }
@@ -1577,6 +1664,7 @@
       });
 
       window.addEventListener("resize", () => {
+        updateScaleControlsAnchorTop();
         positionScaleControls();
       });
 
@@ -1604,6 +1692,7 @@
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
+      updateScaleControlsAnchorTop();
       setScaleControlsVisible(false);
       updateScaleControlButtons();
       loadAvailableAssets();
