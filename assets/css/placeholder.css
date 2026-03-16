@@ -436,11 +436,12 @@ body.dark-mode .orientation-choice.inactive {
   transform: translateX(-50%);
   width: max-content;
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
-  height: 72px;
+  height: 168px;
   padding: 0;
   overflow-x: visible;
   overflow-y: visible;
   background: #f1f1f1;
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .loop-visualization.drag-over {
@@ -473,9 +474,10 @@ body.dark-mode .orientation-choice.inactive {
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
   background: transparent;
-  cursor: grab;
+  cursor: move;
   transition: transform 150ms ease, opacity 150ms ease;
   user-select: none;
+  overflow: visible;
 }
 
 .loop-preview-item.dragging {
@@ -1056,12 +1058,13 @@ body.dark-mode .view-controls-panel {
   display: flex;
   align-items: center;
   gap: var(--partition-preview-gap, 0px);
-  min-height: 54px;
+  min-height: 136px;
   width: fit-content;
   border: 0;
   padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);
   overflow: hidden;
   background: var(--partition-preview-bg, #f1f1f1);
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .partition-preview-track.drag-over {
@@ -1088,8 +1091,9 @@ body.dark-mode .view-controls-panel {
   height: var(--partition-preview-art-height, 46px);
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
-  cursor: grab;
+  cursor: move;
   background: transparent;
+  overflow: visible;
 }
 
 .partition-preview-spacer {
@@ -1104,6 +1108,23 @@ body.dark-mode .view-controls-panel {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.artwork-scale-handle {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #222;
+  background: #fff;
+  color: #111;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10px;
+  line-height: 12px;
+  padding: 0;
+  cursor: nwse-resize;
+  z-index: 5;
 }
 
 @media (max-width: 1000px) {

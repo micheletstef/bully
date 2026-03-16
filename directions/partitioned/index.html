@@ -164,6 +164,11 @@
           curve: [DEFAULT_SOURCE],
           right: [DEFAULT_SOURCE]
         },
+        partitionArtworkTransforms: {
+          left: [],
+          curve: [],
+          right: []
+        },
         padTopBottom: 0,
         padLeftRight: 0,
         backgroundColor: "#fff8a5",
@@ -453,6 +458,10 @@
         );
         const layoutScale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
         const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * layoutScale));
+        const transformList =
+          state.partitionArtworkTransforms && Array.isArray(state.partitionArtworkTransforms[partitionKey])
+            ? state.partitionArtworkTransforms[partitionKey]
+            : [];
         // Match 3D semantics:
         // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
@@ -487,12 +496,19 @@
             startNode = spacerStart;
           }
 
-          sources.forEach((src) => {
+          sources.forEach((src, idx) => {
             const image = document.createElement("img");
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
             image.style.marginRight = `${scaledGap}px`;
+            const layoutRaw = transformList[idx];
+            const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
+            image.style.transformOrigin = "center center";
+            image.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
             track.appendChild(image);
             allImages.push(image);
             if (rowImagesByTrack.has(track)) {
@@ -731,6 +747,21 @@
             state.artworksByPartition.curve = [...cleaned];
             state.artworksByPartition.right = [...cleaned];
           }
+        }
+
+        if (payload.partitionArtworkTransforms && typeof payload.partitionArtworkTransforms === "object") {
+          PARTITION_KEYS.forEach((key) => {
+            const raw = Array.isArray(payload.partitionArtworkTransforms[key]) ? payload.partitionArtworkTransforms[key] : [];
+            state.partitionArtworkTransforms[key] = raw.map((entry) =>
+              entry && typeof entry === "object"
+                ? {
+                    x: Number.isFinite(Number(entry.x)) ? Number(entry.x) : 0,
+                    y: Number.isFinite(Number(entry.y)) ? Number(entry.y) : 0,
+                    scale: Number.isFinite(Number(entry.scale)) ? Math.max(0.1, Math.min(8, Number(entry.scale))) : 1
+                  }
+                : { x: 0, y: 0, scale: 1 }
+            );
+          });
         }
 
         const padTopBottom = Number(payload.padTopBottom);

@@ -120,6 +120,8 @@ let partitionArtworks = createDefaultPartitionArtworks();
 let partitionSettingsByKey = createDefaultPartitionSettings();
 let activePartitionSettingsKey = "left";
 let draggingArtworkIndex = null;
+let artworkEditorDragState = null;
+let artworkEditorSyncFrameId = null;
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
 let loopPlaybackViewportRatio = 0.25;
@@ -342,11 +344,23 @@ function generateArtworkId() {
   return `art-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function sanitizeArtworkLayout(layoutLike) {
+  const source = layoutLike && typeof layoutLike === "object" ? layoutLike : {};
+  const xRaw = Number(source.x);
+  const yRaw = Number(source.y);
+  const scaleRaw = Number(source.scale);
+  const x = Number.isFinite(xRaw) ? Math.max(-12000, Math.min(12000, xRaw)) : 0;
+  const y = Number.isFinite(yRaw) ? Math.max(-12000, Math.min(12000, yRaw)) : 0;
+  const scale = Number.isFinite(scaleRaw) ? Math.max(0.1, Math.min(8, scaleRaw)) : 1;
+  return { x, y, scale };
+}
+
 function createArtworkItem(src, name) {
   return {
     id: generateArtworkId(),
     src,
-    name: name || artworkFileName(src)
+    name: name || artworkFileName(src),
+    layout: sanitizeArtworkLayout(null)
   };
 }
 
@@ -374,7 +388,16 @@ function normalizeArtworkItem(item) {
   return {
     id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : generateArtworkId(),
     src,
-    name
+    name,
+    layout: sanitizeArtworkLayout(
+      item.layout && typeof item.layout === "object"
+        ? item.layout
+        : {
+            x: item.x,
+            y: item.y,
+            scale: item.scale
+          }
+    )
   };
 }
 
@@ -783,6 +806,26 @@ async function applyAssetColorToSources(sources, color) {
   return tinted;
 }
 
+async function applyAssetColorToArtworkEntries(entries, color) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (!list.length) {
+    return [];
+  }
+  if (!/^#[0-9a-f]{6}$/i.test(color || "")) {
+    return list.map((entry) => ({
+      src: String(entry && entry.src ? entry.src : ""),
+      layout: sanitizeArtworkLayout(entry && entry.layout)
+    }));
+  }
+  const tinted = await Promise.all(
+    list.map(async (entry) => ({
+      src: await colorizeSvgSource(String(entry && entry.src ? entry.src : ""), color),
+      layout: sanitizeArtworkLayout(entry && entry.layout)
+    }))
+  );
+  return tinted.filter((entry) => !!entry.src);
+}
+
 function editorAssetColorForPartition(partitionKey = null) {
   if (currentDirectionIsPartitioned() && partitionKey) {
     return partitionSettingsForKey(partitionKey).assetColor;
@@ -1044,6 +1087,24 @@ function normalize3dArtworkSource(path) {
   return source;
 }
 
+function normalize3dArtworkEntry(item) {
+  if (typeof item === "string") {
+    const src = normalize3dArtworkSource(item);
+    return src ? { src, layout: sanitizeArtworkLayout(null) } : null;
+  }
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const src = normalize3dArtworkSource(item.src);
+  if (!src) {
+    return null;
+  }
+  return {
+    src,
+    layout: sanitizeArtworkLayout(item.layout)
+  };
+}
+
 function current3dOrientation() {
   if (currentDirectionIsPartitioned()) {
     const orientations = currentPartitionArtworkOrientations();
@@ -1074,6 +1135,21 @@ function current3dSources() {
   return loopArtworks.map((item) => normalize3dArtworkSource(item.src));
 }
 
+function current3dEntries() {
+  if (!currentDirectionIsPartitioned()) {
+    const entries = loopArtworks.map((item) => normalize3dArtworkEntry(item)).filter((item) => !!item);
+    return entries.length ? entries : [normalize3dArtworkEntry({ src: "assets/linear-loop-strip.png" })];
+  }
+  const merged = [...(partitionArtworks.left || []), ...(partitionArtworks.curve || []), ...(partitionArtworks.right || [])]
+    .map((item) => normalize3dArtworkEntry(item))
+    .filter((item) => !!item);
+  if (merged.length) {
+    return merged;
+  }
+  const fallback = normalize3dArtworkEntry({ src: "assets/linear-loop-strip.png" });
+  return fallback ? [fallback] : [];
+}
+
 function current3dPartitionSources(partitionKey) {
   const key = normalizePartitionKey(partitionKey);
   if (!key) {
@@ -1085,6 +1161,20 @@ function current3dPartitionSources(partitionKey) {
     return sources;
   }
   return ["assets/linear-loop-strip.png"];
+}
+
+function current3dPartitionEntries(partitionKey) {
+  const key = normalizePartitionKey(partitionKey);
+  if (!key) {
+    return [];
+  }
+  const raw = Array.isArray(partitionArtworks[key]) ? partitionArtworks[key] : [];
+  const entries = raw.map((item) => normalize3dArtworkEntry(item)).filter((item) => !!item);
+  if (entries.length) {
+    return entries;
+  }
+  const fallback = normalize3dArtworkEntry({ src: "assets/linear-loop-strip.png" });
+  return fallback ? [fallback] : [];
 }
 
 function get3dCanvasContext() {
@@ -1146,12 +1236,13 @@ function ensure3dAnimatedImageHost() {
   host.style.position = "fixed";
   host.style.left = "0";
   host.style.top = "0";
-  host.style.width = "1px";
-  host.style.height = "1px";
+  host.style.width = "2px";
+  host.style.height = "2px";
   host.style.overflow = "hidden";
-  host.style.opacity = "0";
+  // Keep a tiny painted region; some engines pause GIFs when fully hidden.
+  host.style.opacity = "0.01";
   host.style.pointerEvents = "none";
-  host.style.zIndex = "-2147483648";
+  host.style.zIndex = "2147483647";
   (document.body || document.documentElement).appendChild(host);
   preview3dAnimatedImageHost = host;
   return host;
@@ -1172,9 +1263,9 @@ function attach3dAnimatedImage(src, img) {
   img.style.position = "absolute";
   img.style.left = "0";
   img.style.top = "0";
-  img.style.width = "1px";
-  img.style.height = "1px";
-  img.style.opacity = "0";
+  img.style.width = "2px";
+  img.style.height = "2px";
+  img.style.opacity = "1";
   img.style.pointerEvents = "none";
   preview3dAnimatedImageNodes.set(src, img);
 }
@@ -1191,14 +1282,16 @@ function looksLikeGifSource(src) {
   return clean.endsWith(".gif");
 }
 
-async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation, options = {}) {
-  if (!sources.length) {
+async function build3dSurfaceStripFromConfig(targetHeight, artworkEntries, orientation, options = {}) {
+  const sourceEntries = Array.isArray(artworkEntries) ? artworkEntries : [];
+  if (!sourceEntries.length) {
     return null;
   }
   const loadedEntries = await Promise.all(
-    sources.map(async (src) => ({
-      src,
-      img: await load3dImage(src)
+    sourceEntries.map(async (entry) => ({
+      src: String(entry && entry.src ? entry.src : ""),
+      layout: sanitizeArtworkLayout(entry && entry.layout),
+      img: await load3dImage(entry && entry.src)
     }))
   );
   const entries = loadedEntries.filter((entry) => !!entry.img);
@@ -1232,13 +1325,19 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
   const padTBPx = Math.max(0, Math.round((stripHeight - artworkHeightPx) / 2));
   const padLRPx = Math.max(0, Math.round(padLRDesign * scale));
   const gapPx = Math.max(0, Math.round(gapDesign * scale));
-  const widthsDesign = images.map((img) => {
+  const widthsDesign = entries.map((entry) => {
+    const img = entry.img;
+    const layout = sanitizeArtworkLayout(entry.layout);
     const sourceWidth = Math.max(1, img.naturalWidth || img.width || 1);
     const sourceHeight = Math.max(1, img.naturalHeight || img.height || 1);
     if (rotateAssetsInStrip) {
-      return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign);
+      return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign * layout.scale);
     }
-    return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign);
+    return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign * layout.scale);
+  });
+  const artworkHeights = entries.map((entry) => {
+    const layout = sanitizeArtworkLayout(entry.layout);
+    return Math.max(1, Math.round(artworkHeightPx * layout.scale));
   });
   const widths = widthsDesign.map((width) => Math.max(1, Math.round(width * scale)));
   const sequenceWidth = Math.max(
@@ -1263,19 +1362,25 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
   };
   const drawSequence = (startX) => {
     let cursor = startX + padLRPx;
-    images.forEach((img, idx) => {
+    entries.forEach((entry, idx) => {
+      const img = entry.img;
+      const layout = sanitizeArtworkLayout(entry.layout);
       const drawWidth = widths[idx];
+      const drawHeight = artworkHeights[idx];
+      const offsetX = layout.x * scale;
+      const offsetY = layout.y * scale;
+      const drawY = padTBPx + Math.round((artworkHeightPx - drawHeight) * 0.5) + offsetY;
       if (rotateAssetsInStrip) {
         stripCtx.save();
-        stripCtx.translate(cursor + drawWidth / 2, padTBPx + artworkHeightPx / 2);
+        stripCtx.translate(cursor + drawWidth / 2 + offsetX, drawY + drawHeight / 2);
         stripCtx.rotate(-Math.PI / 2);
-        stripCtx.drawImage(img, -artworkHeightPx / 2, -drawWidth / 2, artworkHeightPx, drawWidth);
+        stripCtx.drawImage(img, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
         stripCtx.restore();
       } else {
-        stripCtx.drawImage(img, cursor, padTBPx, drawWidth, artworkHeightPx);
+        stripCtx.drawImage(img, cursor + offsetX, drawY, drawWidth, drawHeight);
       }
       cursor += drawWidth;
-      if (idx < images.length - 1) {
+      if (idx < entries.length - 1) {
         cursor += gapPx;
       }
     });
@@ -1291,14 +1396,14 @@ async function build3dSurfaceStripFromConfig(targetHeight, sources, orientation,
 }
 
 async function build3dSurfaceStrip(targetHeight) {
-  const sources = await applyAssetColorToSources(current3dSources(), currentAssetColor());
+  const sources = await applyAssetColorToArtworkEntries(current3dEntries(), currentAssetColor());
   const orientation = current3dOrientation();
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation);
 }
 
 async function build3dPartitionSurfaceStrip(targetHeight, partitionKey, orientationOverride = null) {
   const settings = partitionSettingsForKey(partitionKey);
-  const sources = await applyAssetColorToSources(current3dPartitionSources(partitionKey), settings.assetColor);
+  const sources = await applyAssetColorToArtworkEntries(current3dPartitionEntries(partitionKey), settings.assetColor);
   const orientation = orientationOverride || current3dPartitionOrientation(partitionKey);
   return build3dSurfaceStripFromConfig(targetHeight, sources, orientation, {
     // Keep partition artwork inline in vertical mode; rotate only at draw time.
@@ -2779,8 +2884,14 @@ async function syncThreeLoopTexture() {
   }
   preview3dThreeState.texture = texture;
   preview3dThreeState.textureSource = isPartitioned
-    ? `partitioned:${PARTITION_KEYS.map((key) => `${key}:${current3dPartitionSources(key).join("|")}:${current3dPartitionOrientation(key)}`).join(";")}`
-    : `linear:${current3dSources().join("|")}:${current3dOrientation()}`;
+    ? `partitioned:${PARTITION_KEYS.map((key) => `${key}:${current3dPartitionEntries(key).map((entry) => {
+      const layout = sanitizeArtworkLayout(entry.layout);
+      return `${entry.src}@${layout.x},${layout.y},${layout.scale}`;
+    }).join("|")}:${current3dPartitionOrientation(key)}`).join(";")}`
+    : `linear:${current3dEntries().map((entry) => {
+      const layout = sanitizeArtworkLayout(entry.layout);
+      return `${entry.src}@${layout.x},${layout.y},${layout.scale}`;
+    }).join("|")}:${current3dOrientation()}`;
   preview3dThreeState.textureScrollBaseX = 0;
   preview3dThreeState.textureOffsetY = 0;
   preview3dThreeState.textureMode = isPartitioned ? "partitioned" : "linear";
@@ -3403,6 +3514,11 @@ function getCurrentLoopConfig() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
+    config.partitionArtworkTransforms = {
+      left: (partitionArtworks.left || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      curve: (partitionArtworks.curve || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      right: (partitionArtworks.right || []).map((item) => sanitizeArtworkLayout(item && item.layout))
+    };
     config.artworkOrientations = currentPartitionArtworkOrientations();
     config.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
       acc[key] = partitionSettingsForKey(key);
@@ -3410,6 +3526,7 @@ function getCurrentLoopConfig() {
     }, {});
   } else {
     config.artworks = loopArtworks.map((item) => item.src);
+    config.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   return config;
 }
@@ -3615,6 +3732,7 @@ function buildSnapshotHtml(config) {
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
+        const transforms = Array.isArray(state.artworkTransforms) ? state.artworkTransforms : [];
         const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
         const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
         const rows = [];
@@ -3637,12 +3755,19 @@ function buildSnapshotHtml(config) {
             startNode = spacerStart;
           }
 
-          sources.forEach((src) => {
+          sources.forEach((src, idx) => {
             const image = document.createElement("img");
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
             image.style.marginRight = scaledGap + "px";
+            const layoutRaw = transforms[idx];
+            const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
+            image.style.transformOrigin = "center center";
+            image.style.transform = "translate(" + tx + "px, " + ty + "px) scale(" + scale + ")";
             track.appendChild(image);
             allImages.push(image);
             if (rowImagesByTrack.has(track)) {
@@ -4214,6 +4339,10 @@ function buildPartitionedSnapshotHtml(config) {
         );
         const layoutScale = Math.max(0.08, paddingTargetHeight / 3480);
         const scaledGap = Math.max(0, Math.round((Number(partitionSettings.assetGap) || 0) * layoutScale));
+        const transformList =
+          state.partitionArtworkTransforms && Array.isArray(state.partitionArtworkTransforms[partitionKey])
+            ? state.partitionArtworkTransforms[partitionKey]
+            : [];
         // Match 3D semantics:
         // - padTopBottom reduces artwork size in the strip cross-axis
         // - padLeftRight is sequence spacer padding (applied via sidePadding below)
@@ -4250,12 +4379,19 @@ function buildPartitionedSnapshotHtml(config) {
             startNode = spacerStart;
           }
 
-          sources.forEach((src) => {
+          sources.forEach((src, idx) => {
             const image = document.createElement("img");
             image.className = "loop-artwork";
             image.src = src;
             image.alt = "";
             image.style.marginRight = scaledGap + "px";
+            const layoutRaw = transformList[idx];
+            const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
+            image.style.transformOrigin = "center center";
+            image.style.transform = "translate(" + tx + "px, " + ty + "px) scale(" + scale + ")";
             track.appendChild(image);
             allImages.push(image);
             if (rowImagesByTrack.has(track)) {
@@ -4395,6 +4531,9 @@ function coerceSnapshotLoopConfig(candidate) {
       .map((item) => normalizeSnapshotArtworkSource(item))
       .filter((item) => item.length > 0)
     : [];
+  const artworkTransforms = Array.isArray(candidate.artworkTransforms)
+    ? candidate.artworkTransforms.map((entry) => sanitizeArtworkLayout(entry))
+    : [];
   const artworksByPartition =
     candidate.artworksByPartition && typeof candidate.artworksByPartition === "object"
       ? {
@@ -4415,6 +4554,20 @@ function coerceSnapshotLoopConfig(candidate) {
               .map((item) => String(item).trim())
               .map((item) => normalizeSnapshotArtworkSource(item))
               .filter((item) => item.length > 0)
+            : []
+        }
+      : null;
+  const partitionArtworkTransforms =
+    candidate.partitionArtworkTransforms && typeof candidate.partitionArtworkTransforms === "object"
+      ? {
+          left: Array.isArray(candidate.partitionArtworkTransforms.left)
+            ? candidate.partitionArtworkTransforms.left.map((entry) => sanitizeArtworkLayout(entry))
+            : [],
+          curve: Array.isArray(candidate.partitionArtworkTransforms.curve)
+            ? candidate.partitionArtworkTransforms.curve.map((entry) => sanitizeArtworkLayout(entry))
+            : [],
+          right: Array.isArray(candidate.partitionArtworkTransforms.right)
+            ? candidate.partitionArtworkTransforms.right.map((entry) => sanitizeArtworkLayout(entry))
             : []
         }
       : null;
@@ -4457,7 +4610,9 @@ function coerceSnapshotLoopConfig(candidate) {
   return {
     seconds,
     artworks,
+    artworkTransforms,
     artworksByPartition,
+    partitionArtworkTransforms,
     padTopBottom: Number.isFinite(padTopBottomRaw) && padTopBottomRaw >= 0 ? padTopBottomRaw : 0,
     padLeftRight: Number.isFinite(padLeftRightRaw) && padLeftRightRaw >= 0 ? padLeftRightRaw : 0,
     backgroundColor,
@@ -4928,6 +5083,11 @@ function sendLoopConfigToPreview() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
+    payload.partitionArtworkTransforms = {
+      left: (partitionArtworks.left || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      curve: (partitionArtworks.curve || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      right: (partitionArtworks.right || []).map((item) => sanitizeArtworkLayout(item && item.layout))
+    };
     payload.artworkOrientations = currentPartitionArtworkOrientations();
     payload.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
       acc[key] = partitionSettingsForKey(key);
@@ -4935,6 +5095,7 @@ function sendLoopConfigToPreview() {
     }, {});
   } else {
     payload.artworks = loopArtworks.map((item) => item.src);
+    payload.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -5104,12 +5265,134 @@ function syncVisualizationGeometry() {
   loopVisualization.style.width = `${totalWidth + horizontalPadding}px`;
 }
 
+function computeLinearEditorLayoutScale() {
+  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const targetHeight = Math.min(Math.max(256, Math.round(stageHeight * dpr * 0.95)), 960);
+  return Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+}
+
+function computePartitionEditorLayoutScale(partitionKey) {
+  const key = normalizePartitionKey(partitionKey) || "left";
+  const settings = partitionSettingsForKey(key);
+  const orientation = current3dPartitionOrientation(key);
+  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const targetHeight = Math.min(Math.max(256, Math.round(stageHeight * dpr * 0.95)), 960);
+  const baseScale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const viewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * baseScale));
+  const partitionWidthDesign =
+    key === "left" ? BILLBOARD_LEFT_WIDTH : key === "curve" ? BILLBOARD_CURVE_WIDTH : BILLBOARD_RIGHT_WIDTH;
+  const partitionRatio = Math.max(0.0001, partitionWidthDesign / BILLBOARD_DESIGN_WIDTH);
+  const partitionTargetHeight = Math.max(128, Math.round(viewportWidth * partitionRatio));
+  const paddingTargetHeight = orientation === "vertical" ? partitionTargetHeight : targetHeight;
+  const scale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+  const padTopBottom = Math.max(
+    0,
+    Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(settings.padTopBottom) || 0)
+  ) * scale;
+  return {
+    scale,
+    padTopBottomPx: padTopBottom
+  };
+}
+
+function applyArtworkTileTransform(imageEl, item, scaleToPixels) {
+  if (!imageEl) {
+    return;
+  }
+  const layout = sanitizeArtworkLayout(item && item.layout);
+  const pixelScale = Math.max(0.01, Number(scaleToPixels) || 1);
+  const tx = layout.x * pixelScale;
+  const ty = layout.y * pixelScale;
+  imageEl.style.transformOrigin = "center center";
+  imageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${layout.scale})`;
+}
+
+function scheduleArtworkLayoutSync() {
+  if (artworkEditorSyncFrameId !== null) {
+    return;
+  }
+  artworkEditorSyncFrameId = requestAnimationFrame(() => {
+    artworkEditorSyncFrameId = null;
+    sendLoopConfigToPreview();
+    if (previewViewMode === "3d") {
+      render3dPreview();
+    }
+  });
+}
+
+function bindArtworkEditorDrag(tileEl, imageEl, getItem, onCommit, scaleToPixels) {
+  if (!tileEl || !imageEl) {
+    return;
+  }
+  tileEl.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const item = getItem();
+    if (!item) {
+      return;
+    }
+    event.preventDefault();
+    const target = event.target;
+    const isScaleHandle = !!(target && target.classList && target.classList.contains("artwork-scale-handle"));
+    artworkEditorDragState = {
+      item,
+      imageEl,
+      mode: isScaleHandle ? "scale" : "move",
+      startX: event.clientX,
+      startY: event.clientY,
+      startLayout: sanitizeArtworkLayout(item.layout),
+      scaleToPixels: Math.max(0.01, Number(scaleToPixels) || 1)
+    };
+    tileEl.setPointerCapture(event.pointerId);
+  });
+
+  tileEl.addEventListener("pointermove", (event) => {
+    if (!artworkEditorDragState || artworkEditorDragState.item !== getItem()) {
+      return;
+    }
+    const state = artworkEditorDragState;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    const next = sanitizeArtworkLayout(state.startLayout);
+    if (state.mode === "scale") {
+      next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(-dy * 0.01)));
+    } else {
+      next.x = state.startLayout.x + dx / state.scaleToPixels;
+      next.y = state.startLayout.y + dy / state.scaleToPixels;
+    }
+    state.item.layout = sanitizeArtworkLayout(next);
+    applyArtworkTileTransform(state.imageEl, state.item, state.scaleToPixels);
+    scheduleArtworkLayoutSync();
+  });
+
+  tileEl.addEventListener("pointerup", (event) => {
+    if (!artworkEditorDragState || artworkEditorDragState.item !== getItem()) {
+      return;
+    }
+    tileEl.releasePointerCapture(event.pointerId);
+    artworkEditorDragState = null;
+    onCommit();
+  });
+
+  tileEl.addEventListener("pointercancel", () => {
+    if (!artworkEditorDragState || artworkEditorDragState.item !== getItem()) {
+      return;
+    }
+    artworkEditorDragState = null;
+    onCommit();
+  });
+}
+
 function renderLoopPreview() {
   if (!loopPreviewTrack) {
     return;
   }
 
   loopPreviewTrack.innerHTML = "";
+  const layoutScale = computeLinearEditorLayoutScale();
   const spacerStart = document.createElement("div");
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
@@ -5125,6 +5408,24 @@ function renderLoopPreview() {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src);
     tile.appendChild(image);
+    const scaleHandle = document.createElement("button");
+    scaleHandle.type = "button";
+    scaleHandle.className = "artwork-scale-handle";
+    scaleHandle.title = "scale artwork";
+    scaleHandle.textContent = "↘";
+    tile.appendChild(scaleHandle);
+    applyArtworkTileTransform(image, item, layoutScale);
+    bindArtworkEditorDrag(
+      tile,
+      image,
+      () => item,
+      () => {
+        saveArtworks(loopArtworks);
+        sendLoopConfigToPreview();
+        render3dPreview();
+      },
+      layoutScale
+    );
 
     loopPreviewTrack.appendChild(tile);
   });
@@ -5136,8 +5437,6 @@ function renderLoopPreview() {
     loopPreviewSortable.destroy();
   }
   loopPreviewSortable = null;
-
-  initLoopSortable();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
@@ -5304,6 +5603,7 @@ function renderPartitionEditor(partitionKey) {
     partitionSortables[key] = null;
   }
   const items = partitionArtworks[key] || [];
+  const partitionLayout = computePartitionEditorLayoutScale(key);
   trackEl.innerHTML = "";
 
   if (!items.length) {
@@ -5328,6 +5628,24 @@ function renderPartitionEditor(partitionKey) {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src, key);
     tile.appendChild(image);
+    const scaleHandle = document.createElement("button");
+    scaleHandle.type = "button";
+    scaleHandle.className = "artwork-scale-handle";
+    scaleHandle.title = "scale artwork";
+    scaleHandle.textContent = "↘";
+    tile.appendChild(scaleHandle);
+    applyArtworkTileTransform(image, item, partitionLayout.scale);
+    bindArtworkEditorDrag(
+      tile,
+      image,
+      () => item,
+      () => {
+        savePartitionArtworks(partitionArtworks);
+        sendLoopConfigToPreview();
+        render3dPreview();
+      },
+      partitionLayout.scale
+    );
 
     trackEl.appendChild(tile);
   });
@@ -5345,7 +5663,6 @@ function renderPartitionEditor(partitionKey) {
   activeWindowSecondary.dataset.partitionWindow = "secondary";
   trackEl.appendChild(activeWindowSecondary);
 
-  initPartitionSortable(key, trackEl);
   syncPartitionEditorVisuals();
   updatePartitionActiveWindows();
 }
