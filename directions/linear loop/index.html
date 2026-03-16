@@ -86,10 +86,10 @@
 
       @keyframes loop-y {
         from {
-          transform: translateY(100%) rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
+          transform: translateY(var(--loop-vertical-shift, 100%)) rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
         }
         to {
-          transform: translateY(100%) rotate(-90deg) translateX(0);
+          transform: translateY(var(--loop-vertical-shift, 100%)) rotate(-90deg) translateX(0);
         }
       }
 
@@ -279,7 +279,11 @@
         const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
         rows.forEach((track, rowIndex) => {
           const delay = -1 * offsetSecondsPerRow * rowIndex;
+          const rowHeight = track.parentElement
+            ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+            : Math.max(1, Math.round(loopStage.getBoundingClientRect().height));
           track.style.setProperty("--loop-row-delay", `${delay}s`);
+          track.style.setProperty("--loop-vertical-shift", `${rowHeight}px`);
           track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
           track.style.setProperty("--loop-row-direction", "normal");
         });
