@@ -1564,7 +1564,11 @@
             quality: 10,
             width: exportWidth,
             height: exportHeight,
-            workerScript: workerScriptUrl
+            workerScript: workerScriptUrl,
+            // GIF supports single-color transparency. Use a chroma key
+            // color unlikely to appear in artwork and mark it transparent.
+            background: "#01ff01",
+            transparent: 0x01ff01
           });
 
           setStatus("building gif frames...");
@@ -1584,6 +1588,8 @@
               ? { x: normalizedOffset.oxNorm * scaledWidth, y: normalizedOffset.oyNorm * scaledHeight }
               : autoCenterShiftPx(frame, image, cropRect, scaledWidth, scaledHeight);
             context.clearRect(0, 0, exportWidth, exportHeight);
+            context.fillStyle = "#01ff01";
+            context.fillRect(0, 0, exportWidth, exportHeight);
             context.drawImage(
               image,
               cropRect.sx,
