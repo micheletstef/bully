@@ -5423,6 +5423,28 @@ function hasSelectedAssetsInActiveEditor() {
   return selectedLinearArtworkIds.size > 0;
 }
 
+function syncLinearSelectionClasses() {
+  if (!loopPreviewTrack) {
+    return;
+  }
+  loopPreviewTrack.querySelectorAll(".loop-preview-item").forEach((tile) => {
+    const id = tile && tile.dataset ? String(tile.dataset.artworkId || "") : "";
+    tile.classList.toggle("is-selected", !!id && selectedLinearArtworkIds.has(id));
+  });
+}
+
+function syncPartitionSelectionClasses(partitionKey) {
+  const key = normalizePartitionKey(partitionKey);
+  const trackEl = partitionTrackElement(key);
+  if (!key || !trackEl) {
+    return;
+  }
+  trackEl.querySelectorAll(".partition-preview-item").forEach((tile) => {
+    const id = tile && tile.dataset ? String(tile.dataset.artworkId || "") : "";
+    tile.classList.toggle("is-selected", !!id && selectedPartitionArtworkIds[key].has(id));
+  });
+}
+
 function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options = {}) {
   if (!tileEl) {
     return;
@@ -5442,6 +5464,9 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     }
     if (state.pointerId !== null && tileEl.hasPointerCapture && tileEl.hasPointerCapture(state.pointerId)) {
       tileEl.releasePointerCapture(state.pointerId);
+    }
+    if (!state.hasMoved) {
+      return;
     }
     if (!cancelled && state.mode === "move" && onRemove && dropContainerSelector) {
       const cx = eventLike && Number.isFinite(Number(eventLike.clientX)) ? Number(eventLike.clientX) : null;
@@ -5489,6 +5514,7 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
       startY: event.clientY,
       startLayout: sanitizeArtworkLayout(item.layout),
       scaleToPixels: Math.max(0.01, Number(scaleToPixels) || 1),
+      hasMoved: false,
       pointerId,
       cleanup: () => {
         window.removeEventListener("pointerup", onWindowPointerUp, true);
@@ -5511,6 +5537,7 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     if (Math.hypot(dx, dy) < POINTER_MOVE_DEADZONE_PX) {
       return;
     }
+    state.hasMoved = true;
     const next = sanitizeArtworkLayout(state.startLayout);
     if (state.mode === "scale") {
       const corner = String(state.corner || "br");
@@ -5598,7 +5625,7 @@ function renderLoopPreview() {
         return;
       }
       selectOnlyLinearArtwork(item.id);
-      renderLoopPreview();
+      syncLinearSelectionClasses();
     });
     applyArtworkTileScale(tile, item.layout.scale);
     applyArtworkTileTransform(tile, item, scaleToPixels);
@@ -5853,7 +5880,7 @@ function renderPartitionEditor(partitionKey) {
         return;
       }
       selectOnlyPartitionArtwork(key, item.id);
-      renderPartitionEditor(key);
+      syncPartitionSelectionClasses(key);
     });
     applyArtworkTileScale(tile, item.layout.scale);
     applyArtworkTileTransform(tile, item, scaleToPixels);
