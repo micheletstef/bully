@@ -1585,13 +1585,26 @@
         syncFlatBillboardArtworks();
       }
 
+      function billboardScaleFactor() {
+        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
+        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
+        return billboardHeight / editorHeight;
+      }
+
+      function syncFlatBillboardViewportOffset() {
+        if (!flatBillboardTrack) {
+          return;
+        }
+        const scaleFactor = billboardScaleFactor();
+        const offsetX = -(editorStage.scrollLeft * scaleFactor);
+        flatBillboardTrack.style.transform = "translateX(" + offsetX + "px)";
+      }
+
       function syncFlatBillboardArtworks() {
         if (!flatBillboardTrack) {
           return;
         }
-        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
-        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
-        const scaleFactor = billboardHeight / editorHeight;
+        const scaleFactor = billboardScaleFactor();
         const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
         const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
         const gap = 8 * scaleFactor;
@@ -1645,6 +1658,7 @@
 
           flatBillboardTrack.appendChild(targetBlock);
         }
+        syncFlatBillboardViewportOffset();
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
@@ -1828,6 +1842,7 @@
       });
 
       editorStage.addEventListener("scroll", () => {
+        syncFlatBillboardViewportOffset();
         positionScaleControls();
       });
 
