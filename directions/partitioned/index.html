@@ -436,11 +436,13 @@
           paddingTargetHeight,
           partitionHeight
         );
+        const appliedPadTB = verticalFlow ? scaledPadding.padLeftRight : scaledPadding.padTopBottom;
+        const appliedPadLR = verticalFlow ? scaledPadding.padTopBottom : scaledPadding.padLeftRight;
         container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
-        container.style.paddingTop = `${Math.max(0, Number(scaledPadding.padTopBottom) || 0)}px`;
-        container.style.paddingBottom = `${Math.max(0, Number(scaledPadding.padTopBottom) || 0)}px`;
-        container.style.paddingLeft = `${Math.max(0, Number(scaledPadding.padLeftRight) || 0)}px`;
-        container.style.paddingRight = `${Math.max(0, Number(scaledPadding.padLeftRight) || 0)}px`;
+        container.style.paddingTop = `${Math.max(0, Number(appliedPadTB) || 0)}px`;
+        container.style.paddingBottom = `${Math.max(0, Number(appliedPadTB) || 0)}px`;
+        container.style.paddingLeft = `${Math.max(0, Number(appliedPadLR) || 0)}px`;
+        container.style.paddingRight = `${Math.max(0, Number(appliedPadLR) || 0)}px`;
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
