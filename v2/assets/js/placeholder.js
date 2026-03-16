@@ -5579,19 +5579,28 @@ function syncVisualizationPaddingScaled() {
   }
   const stageHeight = Math.max(1, Number(loopStageHeight) || BILLBOARD_DESIGN_HEIGHT);
   const editorScaleFromViewport = PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+  const computedPadding = computeScaledPaddingFromRendererMath(
+    currentPadTopBottom(),
+    currentPadLeftRight(),
+    compute3dLikeTargetHeightFromStage(stageHeight),
+    stageHeight
+  );
   const hasRendererPad =
     Number.isFinite(loopRendererPadTopBottomPx) &&
     loopRendererPadTopBottomPx >= 0 &&
     Number.isFinite(loopRendererPadLeftRightPx) &&
     loopRendererPadLeftRightPx >= 0;
-  const scaledPaddingRender = hasRendererPad
+  const rendererPadding = hasRendererPad
     ? { padTopBottom: loopRendererPadTopBottomPx, padLeftRight: loopRendererPadLeftRightPx }
-    : computeScaledPaddingFromRendererMath(
-        currentPadTopBottom(),
-        currentPadLeftRight(),
-        compute3dLikeTargetHeightFromStage(stageHeight),
-        stageHeight
-      );
+    : null;
+  const padTBTolerance = Math.max(4, computedPadding.padTopBottom * 0.5);
+  const padLRTolerance = Math.max(4, computedPadding.padLeftRight * 0.5);
+  const rendererLooksSane =
+    !!rendererPadding &&
+    Math.abs(rendererPadding.padTopBottom - computedPadding.padTopBottom) <= padTBTolerance &&
+    Math.abs(rendererPadding.padLeftRight - computedPadding.padLeftRight) <= padLRTolerance;
+  // Guard against transient bad renderer telemetry shrinking the editor preview.
+  const scaledPaddingRender = rendererLooksSane ? rendererPadding : computedPadding;
   const scaledPadTBRaw = Math.max(0, scaledPaddingRender.padTopBottom * editorScaleFromViewport);
   const scaledPadLRRaw = Math.max(0, scaledPaddingRender.padLeftRight * editorScaleFromViewport);
   const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
