@@ -1607,10 +1607,22 @@
           return;
         }
         const originals = Array.from(flatBillboardTrack.querySelectorAll(".flat-billboard-asset:not(.marquee-copy)"));
-        for (const original of originals) {
-          const clone = original.cloneNode(true);
-          clone.classList.add("marquee-copy");
-          flatBillboardTrack.appendChild(clone);
+        if (!originals.length) {
+          return;
+        }
+        const direction = editorState.settings.marqueeDirection;
+        const horizontal = direction === "rtl" || direction === "ltr";
+        const viewportLength = horizontal
+          ? Math.max(1, flatBillboard.clientWidth || 1)
+          : Math.max(1, flatBillboard.clientHeight || 1);
+        const runLength = marqueeCycleLength();
+        const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
+        for (let setIndex = 0; setIndex < duplicateSets; setIndex += 1) {
+          for (const original of originals) {
+            const clone = original.cloneNode(true);
+            clone.classList.add("marquee-copy");
+            flatBillboardTrack.appendChild(clone);
+          }
         }
       }
 
