@@ -16,19 +16,116 @@
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
         background: #ffffff;
+        font-family: Arial, sans-serif;
+      }
+
+      .page-shell {
+        width: min(1240px, 100%);
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+
+      .assets-directory {
+        border: 1px solid #d8d8d8;
+        border-radius: 10px;
+        padding: 14px;
+        background: #fafafa;
+      }
+
+      .assets-title {
+        margin: 0 0 12px;
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: lowercase;
+      }
+
+      .assets-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .asset-button {
+        width: 100%;
+        text-align: left;
+        border: 1px solid #cfcfcf;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      .asset-button:hover {
+        background: #f2f7ff;
+        border-color: #9fc1ff;
+      }
+
+      .editor-stage {
+        display: flex;
+        justify-content: center;
       }
 
       .visual-editor-block {
-        width: 280px;
-        height: 280px;
+        min-width: 800px;
+        height: 200px;
         background: #ff00ff;
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 8px;
+        padding: 10px;
+        overflow: auto;
+      }
+
+      .fake-asset-block {
+        background: #1e6cff;
+        border: 1px solid #0e4fc7;
       }
     </style>
   </head>
   <body>
-    <div class="visual-editor-block" aria-label="Visual editor placeholder"></div>
+    <div class="page-shell">
+      <aside class="assets-directory" aria-label="Placeholder assets directory">
+        <h2 class="assets-title">assets directory</h2>
+        <div id="assetsList" class="assets-list"></div>
+      </aside>
+      <main class="editor-stage">
+        <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
+      </main>
+    </div>
+    <script>
+      const fakeAssets = [
+        { name: "hero-banner.psd", width: 160, height: 48 },
+        { name: "logo-alt.png", width: 110, height: 70 },
+        { name: "product-shot.jpg", width: 90, height: 90 },
+        { name: "tagline.svg", width: 210, height: 36 },
+        { name: "cta-button.ai", width: 130, height: 52 },
+      ];
+
+      const assetsList = document.getElementById("assetsList");
+      const visualEditorBlock = document.getElementById("visualEditorBlock");
+
+      for (const asset of fakeAssets) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "asset-button";
+        button.textContent = asset.name + " (" + asset.width + "x" + asset.height + ")";
+        button.addEventListener("click", () => {
+          const block = document.createElement("div");
+          block.className = "fake-asset-block";
+          block.style.width = asset.width + "px";
+          block.style.height = asset.height + "px";
+          visualEditorBlock.appendChild(block);
+        });
+        assetsList.appendChild(button);
+      }
+    </script>
   </body>
 </html>
