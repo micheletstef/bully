@@ -138,6 +138,9 @@
       let latestScaledPadding = { padTopBottom: 0, padLeftRight: 0 };
       let playbackTimer = null;
       let primaryTrack = null;
+      let renderGeneration = 0;
+      let playbackEmitterStarted = false;
+      let hasReceivedInitialConfig = false;
 
       function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
         const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
@@ -213,6 +216,7 @@
       }
 
       async function renderLoop() {
+        const generation = ++renderGeneration;
         loopFill.innerHTML = "";
         primaryTrack = null;
         const viewportHeight = Math.max(
@@ -335,6 +339,9 @@
         }
 
         await Promise.all(allImages.map(waitForImage));
+        if (generation !== renderGeneration) {
+          return;
+        }
 
         rows.forEach((track) => {
           const rowHeight = track.parentElement
@@ -443,7 +450,7 @@
         playbackTimer = setInterval(emitPlayback, 50);
       }
 
-      function applyConfig(payload) {
+      async function applyConfig(payload) {
         const seconds = Number(payload.seconds);
         if (Number.isFinite(seconds) && seconds > 0) {
           state.seconds = seconds;
@@ -522,7 +529,12 @@
           state.gifSyncNonce = String(payload.gifSyncNonce);
         }
 
-        renderLoop();
+        await renderLoop();
+        hasReceivedInitialConfig = true;
+        if (!playbackEmitterStarted) {
+          startPlaybackEmitter();
+          playbackEmitterStarted = true;
+        }
       }
 
       window.addEventListener("message", (event) => {
@@ -532,17 +544,14 @@
         }
 
         if (payload.type === "setLoopConfig") {
-          applyConfig(payload);
+          void applyConfig(payload);
           return;
         }
 
-        if (payload.type === "setLoopDuration") {
-          applyConfig({ seconds: payload.seconds });
+        if (payload.type === "setLoopDuration" && hasReceivedInitialConfig) {
+          void applyConfig({ seconds: payload.seconds });
         }
       });
-
-      renderLoop();
-      startPlaybackEmitter();
     </script>
   </body>
 </html>

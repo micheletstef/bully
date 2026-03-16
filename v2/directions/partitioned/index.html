@@ -205,6 +205,9 @@
       let primaryTrack = null;
       let primaryDistance = 1;
       let primaryOrientation = "horizontal";
+      let renderGeneration = 0;
+      let playbackEmitterStarted = false;
+      let hasReceivedInitialConfig = false;
       let partitionMetrics = {
         left: { loopDistance: 1, viewportRatio: 0.25 },
         curve: { loopDistance: 1, viewportRatio: 0.25 },
@@ -467,7 +470,7 @@
         return { targetHeight, viewportWidth };
       }
 
-      async function renderPartition(container, sources, partitionKey) {
+      async function renderPartition(container, sources, partitionKey, generation) {
         container.innerHTML = "";
         const partitionSettings = settingsForPartition(partitionKey);
         const partitionHeight = await resolvePartitionHeight(container);
@@ -596,6 +599,9 @@
         }
 
         await Promise.all(allImages.map(waitForImage));
+        if (generation !== renderGeneration) {
+          return null;
+        }
 
         rows.forEach((track) => {
           const rowCrossSize = verticalFlow
@@ -653,6 +659,7 @@
       }
 
       async function renderLoop() {
+        const generation = ++renderGeneration;
         const baseSettings = settingsForPartition("left");
         document.documentElement.style.setProperty("--loop-duration", `${baseSettings.seconds}s`);
         // Partition padding is applied per panel (matching 3D strip build); keep stage inset at zero.
@@ -681,8 +688,14 @@
           const normalizedSources = await Promise.all(
             sourceList.map((item) => colorizeSvgSource(normalizeArtworkSource(item), partitionSettings.assetColor))
           );
+          if (generation !== renderGeneration) {
+            return;
+          }
           container.style.background = partitionSettings.backgroundColor;
-          const result = await renderPartition(container, normalizedSources, key);
+          const result = await renderPartition(container, normalizedSources, key, generation);
+          if (generation !== renderGeneration || !result) {
+            return;
+          }
           const partitionVerticalFlow = orientationForPartition(key) === "vertical";
           const partitionViewportSize = partitionVerticalFlow
             ? container.clientHeight || 0
@@ -767,7 +780,7 @@
         return output;
       }
 
-      function applyConfig(payload) {
+      async function applyConfig(payload) {
         const seconds = Number(payload.seconds);
         if (Number.isFinite(seconds) && seconds > 0) {
           state.seconds = seconds;
@@ -915,7 +928,12 @@
           });
         }
 
-        renderLoop();
+        await renderLoop();
+        hasReceivedInitialConfig = true;
+        if (!playbackEmitterStarted) {
+          startPlaybackEmitter();
+          playbackEmitterStarted = true;
+        }
       }
 
       window.addEventListener("message", (event) => {
@@ -925,17 +943,14 @@
         }
 
         if (payload.type === "setLoopConfig") {
-          applyConfig(payload);
+          void applyConfig(payload);
           return;
         }
 
-        if (payload.type === "setLoopDuration") {
-          applyConfig({ seconds: payload.seconds });
+        if (payload.type === "setLoopDuration" && hasReceivedInitialConfig) {
+          void applyConfig({ seconds: payload.seconds });
         }
       });
-
-      renderLoop();
-      startPlaybackEmitter();
     </script>
   </body>
 </html>

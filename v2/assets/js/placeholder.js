@@ -5639,7 +5639,6 @@ function sendLoopConfigToPreview() {
     payload.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   billboardPreview.contentWindow.postMessage(payload, "*");
-  billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
 }
 
 function syncVisualizationBackground() {
@@ -7920,12 +7919,6 @@ async function init() {
   syncVisualizationGeometry();
   syncGifPlaybackAcrossViews();
   sendLoopConfigToPreview();
-  window.requestAnimationFrame(() => {
-    sendLoopConfigToPreview();
-  });
-  window.setTimeout(() => {
-    sendLoopConfigToPreview();
-  }, 120);
 }
 
 function waitForThreeBootstrap(timeoutMs = 4000) {
