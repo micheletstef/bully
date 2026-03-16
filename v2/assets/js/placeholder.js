@@ -398,7 +398,17 @@ function sanitizeArtworkLayout(layoutLike) {
   const source = layoutLike && typeof layoutLike === "object" ? layoutLike : {};
   const scaleRaw = Number(source.scale);
   const scale = Number.isFinite(scaleRaw) ? Math.max(0.1, Math.min(8, scaleRaw)) : 1;
-  return { x: 0, y: 0, scale };
+  const cropLeftRaw = Number(source.cropLeft);
+  const cropRightRaw = Number(source.cropRight);
+  let cropLeft = Number.isFinite(cropLeftRaw) ? Math.max(0, Math.min(0.9, cropLeftRaw)) : 0;
+  let cropRight = Number.isFinite(cropRightRaw) ? Math.max(0, Math.min(0.9, cropRightRaw)) : 0;
+  const cropTotal = cropLeft + cropRight;
+  if (cropTotal > 0.95) {
+    const ratio = 0.95 / cropTotal;
+    cropLeft *= ratio;
+    cropRight *= ratio;
+  }
+  return { x: 0, y: 0, scale, cropLeft, cropRight };
 }
 
 function createArtworkItem(src, name) {
@@ -1551,12 +1561,13 @@ async function build3dSurfaceStripFromConfig(targetHeight, artworkEntries, orien
   const widthsDesign = entries.map((entry) => {
     const img = entry.img;
     const layout = sanitizeArtworkLayout(entry.layout);
+    const visibleRatio = Math.max(0.05, 1 - (layout.cropLeft + layout.cropRight));
     const sourceWidth = Math.max(1, img.naturalWidth || img.width || 1);
     const sourceHeight = Math.max(1, img.naturalHeight || img.height || 1);
     if (rotateAssetsInStrip) {
-      return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign * layout.scale);
+      return Math.max(1, (sourceHeight / sourceWidth) * artworkHeightDesign * layout.scale * visibleRatio);
     }
-    return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign * layout.scale);
+    return Math.max(1, (sourceWidth / sourceHeight) * artworkHeightDesign * layout.scale * visibleRatio);
   });
   const artworkHeights = entries.map((entry) => {
     const layout = sanitizeArtworkLayout(entry.layout);
@@ -1593,14 +1604,21 @@ async function build3dSurfaceStripFromConfig(targetHeight, artworkEntries, orien
       const offsetX = layout.x * scale;
       const offsetY = layout.y * scale;
       const drawY = padTBPx + Math.round((artworkHeightPx - drawHeight) * 0.5) + offsetY;
+      const safeCropLeft = Math.max(0, Math.min(0.9, layout.cropLeft || 0));
+      const safeCropRight = Math.max(0, Math.min(0.9, layout.cropRight || 0));
+      const safeCropTotal = Math.min(0.95, safeCropLeft + safeCropRight);
+      const naturalWidth = Math.max(1, img.naturalWidth || img.width || 1);
+      const naturalHeight = Math.max(1, img.naturalHeight || img.height || 1);
+      const sx = Math.round(naturalWidth * safeCropLeft);
+      const sw = Math.max(1, Math.round(naturalWidth * (1 - safeCropTotal)));
       if (rotateAssetsInStrip) {
         stripCtx.save();
         stripCtx.translate(cursor + drawWidth / 2 + offsetX, drawY + drawHeight / 2);
         stripCtx.rotate(-Math.PI / 2);
-        stripCtx.drawImage(img, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
+        stripCtx.drawImage(img, sx, 0, sw, naturalHeight, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
         stripCtx.restore();
       } else {
-        stripCtx.drawImage(img, cursor + offsetX, drawY, drawWidth, drawHeight);
+        stripCtx.drawImage(img, sx, 0, sw, naturalHeight, cursor + offsetX, drawY, drawWidth, drawHeight);
       }
       cursor += drawWidth;
       if (idx < entries.length - 1) {
@@ -3109,11 +3127,11 @@ async function syncThreeLoopTexture() {
   preview3dThreeState.textureSource = isPartitioned
     ? `partitioned:${PARTITION_KEYS.map((key) => `${key}:${current3dPartitionEntries(key).map((entry) => {
       const layout = sanitizeArtworkLayout(entry.layout);
-      return `${entry.src}@${layout.x},${layout.y},${layout.scale}`;
+      return `${entry.src}@${layout.x},${layout.y},${layout.scale},${layout.cropLeft},${layout.cropRight}`;
     }).join("|")}:${current3dPartitionOrientation(key)}`).join(";")}`
     : `linear:${current3dEntries().map((entry) => {
       const layout = sanitizeArtworkLayout(entry.layout);
-      return `${entry.src}@${layout.x},${layout.y},${layout.scale}`;
+      return `${entry.src}@${layout.x},${layout.y},${layout.scale},${layout.cropLeft},${layout.cropRight}`;
     }).join("|")}:${current3dOrientation()}`;
   preview3dThreeState.textureScrollBaseX = 0;
   preview3dThreeState.textureOffsetY = 0;
@@ -5700,11 +5718,12 @@ function applyArtworkTileTransform(targetEl, item, scaleToPixels) {
   targetEl.style.transform = `translate(${tx}px, ${ty}px)`;
 }
 
-function applyArtworkTileScale(targetEl, scaleValue) {
+function applyArtworkTileScale(targetEl, layoutLike) {
   if (!targetEl) {
     return;
   }
-  const scale = Math.max(0.1, Math.min(8, Number(scaleValue) || 1));
+  const layout = sanitizeArtworkLayout(layoutLike);
+  const scale = layout.scale;
   // Keep tile layout dimensions fixed so editor geometry does not collapse.
   targetEl.style.height = "";
   const image = targetEl.querySelector("img");
@@ -5712,7 +5731,89 @@ function applyArtworkTileScale(targetEl, scaleValue) {
     image.style.height = "100%";
     image.style.transformOrigin = "center center";
     image.style.transform = `scale(${scale})`;
+    const cropLeftPct = Math.max(0, Math.min(95, layout.cropLeft * 100));
+    const cropRightPct = Math.max(0, Math.min(95, layout.cropRight * 100));
+    image.style.clipPath = `inset(0 ${cropRightPct}% 0 ${cropLeftPct}%)`;
   }
+}
+
+function bindArtworkCropHandle(handleEl, tileEl, getItem, onCommit, edge) {
+  if (!handleEl || !tileEl || typeof getItem !== "function" || typeof onCommit !== "function") {
+    return;
+  }
+  handleEl.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const item = getItem();
+    if (!item) {
+      return;
+    }
+    const initialLayout = sanitizeArtworkLayout(item.layout);
+    const startX = Number(event.clientX);
+    const tileWidth = Math.max(24, tileEl.getBoundingClientRect().width || 0);
+    const pointerId = event.pointerId;
+    let active = true;
+    tileEl.classList.add("is-cropping");
+    if (typeof handleEl.setPointerCapture === "function") {
+      try {
+        handleEl.setPointerCapture(pointerId);
+      } catch (_) {
+        // no-op
+      }
+    }
+    const onMove = (moveEvent) => {
+      if (!active) {
+        return;
+      }
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+      moveEvent.preventDefault();
+      const nextItem = getItem();
+      if (!nextItem) {
+        return;
+      }
+      const deltaX = Number(moveEvent.clientX) - startX;
+      let nextLeft = initialLayout.cropLeft;
+      let nextRight = initialLayout.cropRight;
+      if (edge === "left") {
+        nextLeft = initialLayout.cropLeft + deltaX / tileWidth;
+      } else {
+        nextRight = initialLayout.cropRight - deltaX / tileWidth;
+      }
+      const cropped = sanitizeArtworkLayout({ ...initialLayout, cropLeft: nextLeft, cropRight: nextRight });
+      nextItem.layout = cropped;
+      applyArtworkTileScale(tileEl, cropped);
+      syncSelectedAssetScaleControls();
+    };
+    const onUp = (upEvent) => {
+      if (!active) {
+        return;
+      }
+      if (upEvent.pointerId !== pointerId) {
+        return;
+      }
+      active = false;
+      tileEl.classList.remove("is-cropping");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (typeof handleEl.releasePointerCapture === "function") {
+        try {
+          handleEl.releasePointerCapture(pointerId);
+        } catch (_) {
+          // no-op
+        }
+      }
+      onCommit();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  });
 }
 
 function scheduleArtworkLayoutSync() {
@@ -5907,7 +6008,7 @@ function syncSelectedAssetScaleControls() {
   const parentRect = parentEl ? parentEl.getBoundingClientRect() : { left: 0, top: 0 };
   const tileRect = selectedTile.getBoundingClientRect();
   const left = tileRect.left - parentRect.left + tileRect.width * 0.5;
-  const top = tileRect.bottom - parentRect.top + 6;
+  const top = tileRect.bottom - parentRect.top + 16;
   assetScaleControls.style.display = "inline-flex";
   assetScaleControls.style.left = `${Math.round(left)}px`;
   assetScaleControls.style.top = `${Math.round(top)}px`;
@@ -5927,7 +6028,7 @@ function nudgeSelectedAssetScale(delta) {
       return;
     }
     const layout = sanitizeArtworkLayout(selected.item.layout);
-    selected.item.layout = sanitizeArtworkLayout({ scale: layout.scale + step });
+    selected.item.layout = sanitizeArtworkLayout({ ...layout, scale: layout.scale + step });
     savePartitionArtworks(partitionArtworks);
     renderPartitionEditor(selected.key);
     render3dPreview();
@@ -5941,7 +6042,7 @@ function nudgeSelectedAssetScale(delta) {
     return;
   }
   const layout = sanitizeArtworkLayout(item.layout);
-  item.layout = sanitizeArtworkLayout({ scale: layout.scale + step });
+  item.layout = sanitizeArtworkLayout({ ...layout, scale: layout.scale + step });
   saveArtworks(loopArtworks);
   renderLoopPreview();
   sendLoopConfigToPreview();
@@ -6095,7 +6196,41 @@ function renderLoopPreview() {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src);
     tile.appendChild(image);
-    applyArtworkTileScale(tile, item.layout.scale);
+    applyArtworkTileScale(tile, item.layout);
+    const cropHandleLeft = document.createElement("button");
+    cropHandleLeft.type = "button";
+    cropHandleLeft.className = "asset-crop-handle";
+    cropHandleLeft.dataset.edge = "left";
+    cropHandleLeft.setAttribute("aria-label", "Crop left side");
+    tile.appendChild(cropHandleLeft);
+    const cropHandleRight = document.createElement("button");
+    cropHandleRight.type = "button";
+    cropHandleRight.className = "asset-crop-handle";
+    cropHandleRight.dataset.edge = "right";
+    cropHandleRight.setAttribute("aria-label", "Crop right side");
+    tile.appendChild(cropHandleRight);
+    bindArtworkCropHandle(
+      cropHandleLeft,
+      tile,
+      () => loopArtworks.find((entry) => entry && entry.id === item.id) || null,
+      () => {
+        saveArtworks(loopArtworks);
+        renderLoopPreview();
+        sendLoopConfigToPreview();
+      },
+      "left"
+    );
+    bindArtworkCropHandle(
+      cropHandleRight,
+      tile,
+      () => loopArtworks.find((entry) => entry && entry.id === item.id) || null,
+      () => {
+        saveArtworks(loopArtworks);
+        renderLoopPreview();
+        sendLoopConfigToPreview();
+      },
+      "right"
+    );
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "remove-artwork";
@@ -6107,7 +6242,7 @@ function renderLoopPreview() {
     });
     tile.appendChild(remove);
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork")) {
+      if (event.target && event.target.closest(".remove-artwork, .asset-crop-handle")) {
         return;
       }
       selectOnlyLinearArtwork(item.id);
@@ -6241,6 +6376,7 @@ async function initPartitionSortable(partitionKey, trackEl) {
       animation: 140,
       // Prefer native DnD; forced fallback can break reorder in some browsers.
       draggable: ".partition-preview-item",
+      filter: ".asset-crop-handle",
       invertSwap: true,
       swapThreshold: 0.65,
       ghostClass: "sortable-ghost",
@@ -6318,7 +6454,43 @@ function renderPartitionEditor(partitionKey) {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src, key);
     tile.appendChild(image);
-    applyArtworkTileScale(tile, item.layout.scale);
+    applyArtworkTileScale(tile, item.layout);
+    const cropHandleLeft = document.createElement("button");
+    cropHandleLeft.type = "button";
+    cropHandleLeft.className = "asset-crop-handle";
+    cropHandleLeft.dataset.edge = "left";
+    cropHandleLeft.setAttribute("aria-label", "Crop left side");
+    tile.appendChild(cropHandleLeft);
+    const cropHandleRight = document.createElement("button");
+    cropHandleRight.type = "button";
+    cropHandleRight.className = "asset-crop-handle";
+    cropHandleRight.dataset.edge = "right";
+    cropHandleRight.setAttribute("aria-label", "Crop right side");
+    tile.appendChild(cropHandleRight);
+    bindArtworkCropHandle(
+      cropHandleLeft,
+      tile,
+      () => (partitionArtworks[key] || []).find((entry) => entry && entry.id === item.id) || null,
+      () => {
+        savePartitionArtworks(partitionArtworks);
+        renderPartitionEditor(key);
+        render3dPreview();
+        sendLoopConfigToPreview();
+      },
+      "left"
+    );
+    bindArtworkCropHandle(
+      cropHandleRight,
+      tile,
+      () => (partitionArtworks[key] || []).find((entry) => entry && entry.id === item.id) || null,
+      () => {
+        savePartitionArtworks(partitionArtworks);
+        renderPartitionEditor(key);
+        render3dPreview();
+        sendLoopConfigToPreview();
+      },
+      "right"
+    );
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "remove-artwork";
@@ -6330,7 +6502,7 @@ function renderPartitionEditor(partitionKey) {
     });
     tile.appendChild(remove);
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork")) {
+      if (event.target && event.target.closest(".remove-artwork, .asset-crop-handle")) {
         return;
       }
       selectOnlyPartitionArtwork(key, item.id);
@@ -6485,6 +6657,7 @@ async function initLoopSortable() {
       animation: 150,
       // Prefer native DnD; forced fallback can break reorder in some browsers.
       draggable: ".loop-preview-item",
+      filter: ".asset-crop-handle",
       invertSwap: true,
       swapThreshold: 0.65,
       ghostClass: "sortable-ghost",
@@ -6607,9 +6780,9 @@ function updateActiveWindow() {
       activeRect = secondaryRect;
     }
     const centeredLeft = activeRect.left + activeRect.width / 2 - parentRect.left + parentScrollLeft;
-    const outsideBottomTop = visualizationRect.bottom - parentRect.top + parentScrollTop + 6;
+    const outsideTop = visualizationRect.top - parentRect.top + parentScrollTop - 14;
     loopElapsedTime.style.left = `${centeredLeft}px`;
-    loopElapsedTime.style.top = `${outsideBottomTop}px`;
+    loopElapsedTime.style.top = `${outsideTop}px`;
     loopElapsedTime.style.transform = "translateX(-50%)";
   }
 }

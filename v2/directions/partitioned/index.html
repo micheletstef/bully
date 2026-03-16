@@ -508,8 +508,12 @@
             const tx = 0;
             const ty = 0;
             const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
+            const cropLeft = Number.isFinite(Number(layout.cropLeft)) ? Math.max(0, Math.min(0.9, Number(layout.cropLeft))) : 0;
+            const cropRight = Number.isFinite(Number(layout.cropRight)) ? Math.max(0, Math.min(0.9, Number(layout.cropRight))) : 0;
             image.style.transformOrigin = "center center";
             image.dataset.layoutScale = String(scale);
+            image.dataset.cropLeft = String(cropLeft);
+            image.dataset.cropRight = String(cropRight);
             image.style.transform = `translate(${tx}px, ${ty}px)`;
             track.appendChild(image);
             allImages.push(image);
@@ -573,7 +577,12 @@
           const rowImages = rowImagesByTrack.get(track) || [];
           rowImages.forEach((image) => {
             const scale = Number.isFinite(Number(image.dataset.layoutScale)) ? Number(image.dataset.layoutScale) : 1;
+            const cropLeft = Number.isFinite(Number(image.dataset.cropLeft)) ? Number(image.dataset.cropLeft) : 0;
+            const cropRight = Number.isFinite(Number(image.dataset.cropRight)) ? Number(image.dataset.cropRight) : 0;
+            const cropLeftPct = Math.max(0, Math.min(95, cropLeft * 100));
+            const cropRightPct = Math.max(0, Math.min(95, cropRight * 100));
             image.style.height = `${Math.max(1, Math.round(artworkHeight * scale))}px`;
+            image.style.clipPath = `inset(0 ${cropRightPct}% 0 ${cropLeftPct}%)`;
           });
         });
 
@@ -760,9 +769,11 @@
                 ? {
                     x: Number.isFinite(Number(entry.x)) ? Number(entry.x) : 0,
                     y: Number.isFinite(Number(entry.y)) ? Number(entry.y) : 0,
-                    scale: Number.isFinite(Number(entry.scale)) ? Math.max(0.1, Math.min(8, Number(entry.scale))) : 1
+                    scale: Number.isFinite(Number(entry.scale)) ? Math.max(0.1, Math.min(8, Number(entry.scale))) : 1,
+                    cropLeft: Number.isFinite(Number(entry.cropLeft)) ? Math.max(0, Math.min(0.9, Number(entry.cropLeft))) : 0,
+                    cropRight: Number.isFinite(Number(entry.cropRight)) ? Math.max(0, Math.min(0.9, Number(entry.cropRight))) : 0
                   }
-                : { x: 0, y: 0, scale: 1 }
+                : { x: 0, y: 0, scale: 1, cropLeft: 0, cropRight: 0 }
             );
           });
         }

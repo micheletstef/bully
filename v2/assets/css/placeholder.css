@@ -590,7 +590,7 @@ body.sidebar-resizing {
   cursor: grab;
   transition: transform 150ms ease, opacity 150ms ease;
   user-select: none;
-  overflow: visible;
+  overflow: hidden;
   z-index: 3;
 }
 
@@ -1277,7 +1277,7 @@ body.dark-mode .view-controls-panel {
   outline-offset: -1px;
   cursor: grab;
   background: transparent;
-  overflow: visible;
+  overflow: hidden;
   z-index: 3;
 }
 
@@ -1298,6 +1298,41 @@ body.dark-mode .view-controls-panel {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.asset-crop-handle {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 20px;
+  margin-top: -10px;
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  border-radius: 3px;
+  padding: 0;
+  display: none;
+  z-index: 5;
+  cursor: ew-resize;
+}
+
+.asset-crop-handle[data-edge="left"] {
+  left: 1px;
+}
+
+.asset-crop-handle[data-edge="right"] {
+  right: 1px;
+}
+
+.loop-preview-item.is-selected .asset-crop-handle,
+.partition-preview-item.is-selected .asset-crop-handle,
+.loop-preview-item.is-cropping .asset-crop-handle,
+.partition-preview-item.is-cropping .asset-crop-handle {
+  display: block;
+}
+
+body.dark-mode .asset-crop-handle {
+  border-color: #fff;
+  background: #000;
 }
 
 .remove-artwork {
