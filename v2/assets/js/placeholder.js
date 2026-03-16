@@ -103,7 +103,8 @@ const DIRECTION_DISPLAY_NAMES = {
   "loop maker": "loop maker"
 };
 const SIDEBAR_LABEL_MAX_CHARS = 32;
-const PREVIEW_TILE_MIN_WIDTH_PX = 84;
+const PREVIEW_TILE_FIXED_WIDTH_PX = 168;
+const PREVIEW_TILE_FIXED_HEIGHT_PX = 96;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 680;
@@ -376,14 +377,7 @@ function generateArtworkId() {
 }
 
 function sanitizeArtworkLayout(layoutLike) {
-  const source = layoutLike && typeof layoutLike === "object" ? layoutLike : {};
-  const xRaw = Number(source.x);
-  const yRaw = Number(source.y);
-  const scaleRaw = Number(source.scale);
-  const x = Number.isFinite(xRaw) ? Math.max(-12000, Math.min(12000, xRaw)) : 0;
-  const y = Number.isFinite(yRaw) ? Math.max(-12000, Math.min(12000, yRaw)) : 0;
-  const scale = Number.isFinite(scaleRaw) ? Math.max(0.1, Math.min(8, scaleRaw)) : 1;
-  return { x, y, scale };
+  return { x: 0, y: 0, scale: 1 };
 }
 
 function createArtworkItem(src, name) {
@@ -5350,10 +5344,9 @@ function syncPartitionEditorVisuals() {
   if (!partitionEditors) {
     return;
   }
-  const stageHeight = Math.max(1, loopStageHeight);
-  const baseScale = computeLinearEditorLayoutScale();
-  const baseArtHeight = Math.max(8, Math.round(stageHeight * baseScale * 100) / 100);
+  const baseArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   partitionEditors.style.setProperty("--partition-preview-art-height", `${baseArtHeight}px`);
+  partitionEditors.style.setProperty("--partition-preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
   partitionEditors.style.setProperty("--partition-preview-pad-tb", "0px");
   partitionEditors.style.setProperty("--partition-preview-pad-lr", "0px");
   partitionEditors.style.setProperty("--partition-preview-gap", "0px");
@@ -5365,13 +5358,10 @@ function syncPartitionEditorVisuals() {
       return;
     }
     const settings = partitionSettingsForKey(partitionKey);
-    const layout = computePartitionEditorLayoutScale(partitionKey);
-    const scale = layout.scale;
-    const scaledPadTB = Math.max(0, Math.round(layout.padTopBottomPx * 100) / 100);
-    const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
-    const scaledGap = Math.max(0, Math.round(Math.max(0, settings.assetGap) * scale * 100) / 100);
-    const trackHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
-    const trackArtHeight = Math.max(8, Math.round((stageHeight - Math.max(0, settings.padTopBottom) * 2) * scale * 100) / 100);
+    const scaledPadLR = 12;
+    const scaledGap = 0;
+    const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + 20;
+    const trackArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
     const safeTop = Math.max(0, Math.round((trackHeight - trackArtHeight) * 0.5 * 100) / 100);
     const trackPadTB = 0;
     const trackPadLR = 0;
@@ -5380,6 +5370,7 @@ function syncPartitionEditorVisuals() {
     trackEl.style.setProperty("--partition-preview-art-height", `${trackArtHeight}px`);
     trackEl.style.setProperty("--partition-preview-pad-tb", `${trackPadTB}px`);
     trackEl.style.setProperty("--partition-preview-pad-lr", `${trackPadLR}px`);
+    trackEl.style.setProperty("--partition-preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
     trackEl.style.setProperty("--partition-preview-gap", `${scaledGap}px`);
     trackEl.style.setProperty("--partition-preview-bg", settings.backgroundColor);
     trackEl.style.setProperty("--partition-safe-left", `${spacerWidth}px`);
@@ -5411,28 +5402,20 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = computeLinearEditorLayoutScale();
-  const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
-  const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
-  const scaledTrackHeightRaw = Math.max(1, loopStageHeight) * scale;
-  const scaledTrackHeight = Math.max(
-    MIN_PREVIEW_TRACK_HEIGHT,
-    Math.round(scaledTrackHeightRaw * 100) / 100
-  );
-  const scaledPadTB = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
-  const scaledPadLR = Math.round(scaledPadLRRaw * 100) / 100;
-  const scaledArtHeightRaw = Math.max(1, (Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * scale);
-  const scaledArtHeight = Math.max(8, Math.round(scaledArtHeightRaw * 100) / 100);
+  const scaledPadLR = 12;
+  const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + 20;
+  const scaledArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   const safeTop = Math.max(0, Math.round((scaledTrackHeight - scaledArtHeight) * 0.5 * 100) / 100);
   loopVisualization.style.setProperty("--preview-pad-tb", "0px");
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
   loopVisualization.style.setProperty("--preview-art-height", `${scaledArtHeight}px`);
+  loopVisualization.style.setProperty("--preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
   loopVisualization.style.setProperty("--preview-safe-left", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-right", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-top", `${safeTop}px`);
   loopVisualization.style.setProperty("--preview-safe-height", `${scaledArtHeight}px`);
-  loopVisualization.style.height = `${LEGACY_LINEAR_PREVIEW_HEIGHT_PX}px`;
+  loopVisualization.style.height = `${scaledTrackHeight + 8}px`;
   syncPreviewSpacers();
 }
 
@@ -5744,8 +5727,7 @@ function placePickedAssetInLinear(eventLike) {
     return false;
   }
   const newItem = createArtworkItem(picked.src, picked.name);
-  const designToEditorScale = computeEditorDesignToPixelScale();
-  newItem.layout = computeDroppedArtworkLayout(eventLike, loopPreviewTrack, designToEditorScale);
+  newItem.layout = sanitizeArtworkLayout(null);
   loopArtworks.push(newItem);
   addAssetToLibrary(newItem.src, newItem.name);
   saveArtworks(loopArtworks);
@@ -5764,8 +5746,7 @@ function placePickedAssetInPartition(partitionKey, eventLike) {
     return false;
   }
   const newItem = createArtworkItem(picked.src, picked.name);
-  const designToEditorScale = computeEditorDesignToPixelScale();
-  newItem.layout = computeDroppedArtworkLayout(eventLike, trackEl, designToEditorScale);
+  newItem.layout = sanitizeArtworkLayout(null);
   partitionArtworks[key].push(newItem);
   addAssetToLibrary(newItem.src, newItem.name);
   savePartitionArtworks(partitionArtworks);
@@ -5778,143 +5759,8 @@ function placePickedAssetInPartition(partitionKey, eventLike) {
 }
 
 function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options = {}) {
-  if (!tileEl) {
-    return;
-  }
-  const POINTER_MOVE_DEADZONE_PX = 3;
-  const dropContainerSelector =
-    options && typeof options.dropContainerSelector === "string" ? options.dropContainerSelector : "";
-  const onRemove = options && typeof options.onRemove === "function" ? options.onRemove : null;
-  const finishDrag = (eventLike = null, { cancelled = false } = {}) => {
-    if (!artworkEditorDragState || artworkEditorDragState.item !== getItem()) {
-      return;
-    }
-    const state = artworkEditorDragState;
-    artworkEditorDragState = null;
-    if (typeof state.cleanup === "function") {
-      state.cleanup();
-    }
-    if (state.pointerId !== null && tileEl.hasPointerCapture && tileEl.hasPointerCapture(state.pointerId)) {
-      tileEl.releasePointerCapture(state.pointerId);
-    }
-    if (!state.hasMoved) {
-      return;
-    }
-    if (!cancelled && state.mode === "move" && onRemove && dropContainerSelector) {
-      const cx = eventLike && Number.isFinite(Number(eventLike.clientX)) ? Number(eventLike.clientX) : null;
-      const cy = eventLike && Number.isFinite(Number(eventLike.clientY)) ? Number(eventLike.clientY) : null;
-      if (cx !== null && cy !== null) {
-        const dropTarget = document.elementFromPoint(cx, cy);
-        const droppedContainer = dropTarget ? dropTarget.closest(dropContainerSelector) : null;
-        if (!droppedContainer) {
-          onRemove();
-          return;
-        }
-      }
-    }
-    onCommit();
-  };
-  tileEl.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) {
-      return;
-    }
-    const target = event.target;
-    if (target && target.closest && target.closest(".remove-artwork")) {
-      return;
-    }
-    const item = getItem();
-    if (!item) {
-      return;
-    }
-    event.preventDefault();
-    const pointerId = typeof event.pointerId === "number" ? event.pointerId : null;
-    const onWindowPointerUp = (upEvent) => finishDrag(upEvent, { cancelled: false });
-    const onWindowPointerCancel = (cancelEvent) => finishDrag(cancelEvent, { cancelled: true });
-    const onWindowBlur = () => finishDrag(null, { cancelled: true });
-    window.addEventListener("pointerup", onWindowPointerUp, true);
-    window.addEventListener("pointercancel", onWindowPointerCancel, true);
-    window.addEventListener("blur", onWindowBlur, true);
-    artworkEditorDragState = {
-      item,
-      targetEl: tileEl,
-      mode:
-        target && target.classList && target.classList.contains("artwork-width-handle")
-          ? "scale-width"
-          : target && target.classList && target.classList.contains("artwork-anchor")
-            ? "scale"
-            : "move",
-      corner:
-        target && target.dataset && typeof target.dataset.corner === "string"
-          ? target.dataset.corner
-          : "br",
-      edge:
-        target && target.dataset && typeof target.dataset.edge === "string"
-          ? target.dataset.edge
-          : "right",
-      startX: event.clientX,
-      startY: event.clientY,
-      startLayout: sanitizeArtworkLayout(item.layout),
-      scaleToPixels: Math.max(0.01, Number(scaleToPixels) || 1),
-      hasMoved: false,
-      pointerId,
-      cleanup: () => {
-        window.removeEventListener("pointerup", onWindowPointerUp, true);
-        window.removeEventListener("pointercancel", onWindowPointerCancel, true);
-        window.removeEventListener("blur", onWindowBlur, true);
-      }
-    };
-    if (pointerId !== null && tileEl.setPointerCapture) {
-      tileEl.setPointerCapture(pointerId);
-    }
-  });
-
-  tileEl.addEventListener("pointermove", (event) => {
-    if (!artworkEditorDragState || artworkEditorDragState.item !== getItem()) {
-      return;
-    }
-    const state = artworkEditorDragState;
-    const dx = event.clientX - state.startX;
-    const dy = event.clientY - state.startY;
-    if (Math.hypot(dx, dy) < POINTER_MOVE_DEADZONE_PX) {
-      return;
-    }
-    state.hasMoved = true;
-    const next = sanitizeArtworkLayout(state.startLayout);
-    if (state.mode === "scale") {
-      const corner = String(state.corner || "br");
-      const sx = corner.includes("l") ? -1 : 1;
-      const sy = corner.includes("t") ? -1 : 1;
-      const signed = sx * dx + sy * dy;
-      next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(signed / 180)));
-      applyArtworkTileScale(state.targetEl, next.scale);
-    } else if (state.mode === "scale-width") {
-      const edge = String(state.edge || "right");
-      const signedDx = edge === "left" ? -dx : dx;
-      next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(signedDx / 220)));
-      applyArtworkTileScale(state.targetEl, next.scale);
-    } else {
-      const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
-      const rawX = state.startLayout.x + dx / state.scaleToPixels;
-      const rawY = state.startLayout.y + dy / state.scaleToPixels;
-      next.x = Math.round(rawX / gridUnit) * gridUnit;
-      next.y = Math.round(rawY / gridUnit) * gridUnit;
-    }
-    state.item.layout = sanitizeArtworkLayout(next);
-    applyArtworkTileTransform(state.targetEl, state.item, state.scaleToPixels);
-    scheduleArtworkLayoutSync();
-  });
-
-  tileEl.addEventListener("pointerup", (event) => {
-    finishDrag(event, { cancelled: false });
-  });
-
-  tileEl.addEventListener("pointercancel", (event) => {
-    finishDrag(event, { cancelled: true });
-  });
-
-  tileEl.addEventListener("lostpointercapture", (event) => {
-    finishDrag(event, { cancelled: false });
-  });
+  // Disabled on purpose: keep original reorder-only behavior.
+  return;
 }
 
 function renderLoopPreview() {
@@ -5938,7 +5784,6 @@ function renderLoopPreview() {
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
     tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
-    tile.style.minWidth = `${PREVIEW_TILE_MIN_WIDTH_PX}px`;
     if (selectedLinearArtworkIds.has(item.id)) {
       tile.classList.add("is-selected");
     }
@@ -5959,46 +5804,13 @@ function renderLoopPreview() {
       removeArtworkById(item.id);
     });
     tile.appendChild(remove);
-    ["tl", "tr", "bl", "br"].forEach((corner) => {
-      const anchor = document.createElement("button");
-      anchor.type = "button";
-      anchor.className = "artwork-anchor";
-      anchor.dataset.corner = corner;
-      anchor.setAttribute("aria-label", "Resize asset");
-      tile.appendChild(anchor);
-    });
-    ["left", "right"].forEach((edge) => {
-      const handle = document.createElement("button");
-      handle.type = "button";
-      handle.className = "artwork-width-handle";
-      handle.dataset.edge = edge;
-      handle.setAttribute("aria-label", "Resize artwork width");
-      tile.appendChild(handle);
-    });
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor, .artwork-width-handle")) {
+      if (event.target && event.target.closest(".remove-artwork")) {
         return;
       }
       selectOnlyLinearArtwork(item.id);
       syncLinearSelectionClasses();
     });
-    applyArtworkTileScale(tile, item.layout.scale);
-    applyArtworkTileTransform(tile, item, designToEditorScale);
-    bindArtworkEditorDrag(
-      tile,
-      () => item,
-      () => {
-        saveArtworks(loopArtworks);
-        renderLoopPreview();
-      },
-      designToEditorScale,
-      {
-        dropContainerSelector: ".loop-preview-track",
-        onRemove: () => {
-          removeArtworkById(item.id);
-        }
-      }
-    );
     loopPreviewTrack.appendChild(tile);
   });
   const spacerEnd = document.createElement("div");
@@ -6202,7 +6014,6 @@ function renderPartitionEditor(partitionKey) {
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
     tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
-    tile.style.minWidth = `${PREVIEW_TILE_MIN_WIDTH_PX}px`;
     if (selectedPartitionArtworkIds[key].has(item.id)) {
       tile.classList.add("is-selected");
     }
@@ -6223,48 +6034,13 @@ function renderPartitionEditor(partitionKey) {
       removePartitionArtwork(key, index);
     });
     tile.appendChild(remove);
-    ["tl", "tr", "bl", "br"].forEach((corner) => {
-      const anchor = document.createElement("button");
-      anchor.type = "button";
-      anchor.className = "artwork-anchor";
-      anchor.dataset.corner = corner;
-      anchor.setAttribute("aria-label", "Resize asset");
-      tile.appendChild(anchor);
-    });
-    ["left", "right"].forEach((edge) => {
-      const handle = document.createElement("button");
-      handle.type = "button";
-      handle.className = "artwork-width-handle";
-      handle.dataset.edge = edge;
-      handle.setAttribute("aria-label", "Resize artwork width");
-      tile.appendChild(handle);
-    });
     tile.addEventListener("click", (event) => {
-      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor, .artwork-width-handle")) {
+      if (event.target && event.target.closest(".remove-artwork")) {
         return;
       }
       selectOnlyPartitionArtwork(key, item.id);
       syncPartitionSelectionClasses(key);
     });
-    applyArtworkTileScale(tile, item.layout.scale);
-    applyArtworkTileTransform(tile, item, designToEditorScale);
-    bindArtworkEditorDrag(
-      tile,
-      () => item,
-      () => {
-        savePartitionArtworks(partitionArtworks);
-        renderPartitionEditor(key);
-        render3dPreview();
-        sendLoopConfigToPreview();
-      },
-      designToEditorScale,
-      {
-        dropContainerSelector: ".partition-preview-track",
-        onRemove: () => {
-          removePartitionArtworkById(key, item.id);
-        }
-      }
-    );
     trackEl.appendChild(tile);
   });
 

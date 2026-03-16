@@ -581,13 +581,14 @@ body.sidebar-resizing {
 
 .loop-preview-item {
   position: relative;
-  height: var(--preview-art-height, 100%);
+  width: var(--preview-art-width, 168px);
+  height: var(--preview-art-height, 96px);
   min-width: 0;
   border: 0;
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
   background: transparent;
-  cursor: move;
+  cursor: default;
   transition: transform 150ms ease, opacity 150ms ease;
   user-select: none;
   overflow: visible;
@@ -628,8 +629,8 @@ body.sidebar-resizing {
 
 .loop-preview-item img {
   height: 100%;
-  width: auto;
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
   object-fit: contain;
   display: block;
   pointer-events: none;
@@ -1232,10 +1233,11 @@ body.dark-mode .view-controls-panel {
 .partition-preview-item {
   position: relative;
   flex: 0 0 auto;
-  height: var(--partition-preview-art-height, 52px);
+  width: var(--partition-preview-art-width, 168px);
+  height: var(--partition-preview-art-height, 96px);
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
-  cursor: move;
+  cursor: default;
   background: transparent;
   overflow: visible;
   z-index: 3;
@@ -1253,7 +1255,7 @@ body.dark-mode .view-controls-panel {
 
 .partition-preview-item img {
   height: 100%;
-  width: auto;
+  width: 100%;
   display: block;
   pointer-events: none;
   user-select: none;
@@ -1371,6 +1373,12 @@ body.dark-mode .artwork-width-handle {
 .artwork-width-handle[data-edge="right"] {
   right: -5px;
   cursor: ew-resize;
+}
+
+/* Revert editor to reorder-only tiles (no per-asset resize handles). */
+.artwork-anchor,
+.artwork-width-handle {
+  display: none !important;
 }
 
 @media (max-width: 1000px) {
