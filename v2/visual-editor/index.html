@@ -179,11 +179,43 @@
       }
 
       .settings-color-input {
-        width: 100%;
-        height: 18px;
-        border: 1px solid #b3b3b3;
+        width: 14px;
+        height: 14px;
+        border: 1px solid rgba(31, 31, 31, 0.45);
+        border-radius: 50%;
         padding: 0;
         background: #fff;
+        appearance: none;
+        -webkit-appearance: none;
+        cursor: pointer;
+      }
+
+      .settings-color-input::-webkit-color-swatch-wrapper {
+        padding: 0;
+        border-radius: 50%;
+      }
+
+      .settings-color-input::-webkit-color-swatch {
+        border: 0;
+        border-radius: 50%;
+      }
+
+      .settings-color-input::-moz-color-swatch {
+        border: 0;
+        border-radius: 50%;
+      }
+
+      .color-inline-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .color-inline-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
       }
 
       .editor-shell {
@@ -239,7 +271,7 @@
 
       .fake-asset-block {
         flex: 0 0 auto;
-        background: var(--asset-color);
+        background: transparent;
         border: 1px solid rgba(0, 0, 0, 0.22);
         cursor: pointer;
         transition: transform 180ms ease;
@@ -247,6 +279,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
+      }
+
+      .fake-asset-block.no-preview {
+        background: var(--asset-color);
       }
 
       .fake-asset-block.is-selected {
@@ -332,12 +368,17 @@
           <input id="paddingLRControl" class="settings-input" type="number" min="0" max="4000" step="1" value="0" />
         </div>
         <div class="settings-row">
-          <label class="settings-label" for="backgroundColorControl">bg color</label>
-          <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="assetColorControl">asset color</label>
-          <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+          <span class="settings-label">color</span>
+          <div class="color-inline-controls">
+            <label class="color-inline-field" for="backgroundColorControl">
+              <span>bg</span>
+              <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
+            </label>
+            <label class="color-inline-field" for="assetColorControl">
+              <span>asset</span>
+              <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+            </label>
+          </div>
         </div>
       </aside>
       <main class="editor-shell">
@@ -480,7 +521,33 @@
         if (!src) {
           return "";
         }
+        if (/^https?:\/\//i.test(src)) {
+          return src;
+        }
         return apiPath(src);
+      }
+
+      function attachPreviewImageToBlock(block, src) {
+        if (!block || !src) {
+          return;
+        }
+        const currentImage = block.querySelector(".asset-preview-image");
+        if (currentImage) {
+          return;
+        }
+        block.dataset.assetSrc = src;
+        const image = document.createElement("img");
+        image.className = "asset-preview-image";
+        image.alt = "";
+        image.decoding = "async";
+        image.loading = "lazy";
+        image.src = resolveAssetUrlFromSrc(src);
+        image.addEventListener("error", () => {
+          image.remove();
+          block.classList.add("no-preview");
+        });
+        block.classList.remove("no-preview");
+        block.appendChild(image);
       }
 
       function createAssetButton(asset) {
@@ -627,6 +694,7 @@
             .filter((entry) => !!entry);
           availableAssets = normalized;
           renderAssetList();
+          hydrateSavedAssetsWithLiveSources();
         } catch (error) {
           assetsList.innerHTML = "";
           const message = document.createElement("div");
@@ -634,6 +702,45 @@
           message.textContent = "unable to load assets";
           assetsList.appendChild(message);
         }
+      }
+
+      function hydrateSavedAssetsWithLiveSources() {
+        if (!availableAssets.length) {
+          return;
+        }
+        const assetByName = new Map();
+        for (const liveAsset of availableAssets) {
+          assetByName.set(String(liveAsset.name || "").toLowerCase(), liveAsset);
+        }
+
+        let changed = false;
+        for (const savedAsset of editorState.assets) {
+          if (savedAsset && typeof savedAsset.src === "string" && savedAsset.src) {
+            continue;
+          }
+          const match = assetByName.get(String(savedAsset && savedAsset.name ? savedAsset.name : "").toLowerCase());
+          if (!match) {
+            continue;
+          }
+          savedAsset.src = match.src;
+          savedAsset.group = match.group;
+          changed = true;
+        }
+
+        if (!changed) {
+          return;
+        }
+
+        const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
+        for (const block of blocks) {
+          const assetId = block.dataset.assetId;
+          const savedAsset = editorState.assets.find((asset) => asset.id === assetId);
+          if (!savedAsset || !savedAsset.src) {
+            continue;
+          }
+          attachPreviewImageToBlock(block, savedAsset.src);
+        }
+        saveEditorState();
       }
 
       function appendAssetBlock(asset) {
@@ -646,17 +753,9 @@
         block.dataset.scalePercent = String(asset.scalePercent);
         block.dataset.rotationTurns = String(asset.rotationTurns || 0);
         if (typeof asset.src === "string" && asset.src) {
-          block.dataset.assetSrc = asset.src;
-          const image = document.createElement("img");
-          image.className = "asset-preview-image";
-          image.alt = "";
-          image.decoding = "async";
-          image.loading = "lazy";
-          image.src = resolveAssetUrlFromSrc(asset.src);
-          image.addEventListener("error", () => {
-            image.remove();
-          });
-          block.appendChild(image);
+          attachPreviewImageToBlock(block, asset.src);
+        } else {
+          block.classList.add("no-preview");
         }
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
@@ -1095,11 +1194,11 @@
       });
 
       assetScaleDownButton.addEventListener("click", () => {
-        updateSelectedAssetScale(-10);
+        updateSelectedAssetScale(-5);
       });
 
       assetScaleUpButton.addEventListener("click", () => {
-        updateSelectedAssetScale(10);
+        updateSelectedAssetScale(5);
       });
 
       assetRotateButton.addEventListener("click", () => {
