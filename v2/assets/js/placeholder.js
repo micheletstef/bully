@@ -6154,7 +6154,15 @@ function nudgeSelectedAssetScale(delta) {
     const layout = sanitizeArtworkLayout(selected.item.layout);
     selected.item.layout = sanitizeArtworkLayout({ ...layout, scale: layout.scale + step });
     savePartitionArtworks(partitionArtworks);
-    renderPartitionEditor(selected.key);
+    const trackEl = partitionTrackElement(selected.key);
+    if (trackEl && selected.item && selected.item.id) {
+      const tile = trackEl.querySelector(`.partition-preview-item[data-artwork-id="${selected.item.id}"]`);
+      if (tile) {
+        applyArtworkTileScale(tile, selected.item.layout);
+      }
+    }
+    syncPartitionEditorVisuals();
+    updatePartitionActiveWindows();
     render3dPreview();
     sendLoopConfigToPreview();
     syncSelectedAssetScaleControls();
@@ -6168,7 +6176,15 @@ function nudgeSelectedAssetScale(delta) {
   const layout = sanitizeArtworkLayout(item.layout);
   item.layout = sanitizeArtworkLayout({ ...layout, scale: layout.scale + step });
   saveArtworks(loopArtworks);
-  renderLoopPreview();
+  if (loopPreviewTrack && item.id) {
+    const tile = loopPreviewTrack.querySelector(`.loop-preview-item[data-artwork-id="${item.id}"]`);
+    if (tile) {
+      applyArtworkTileScale(tile, item.layout);
+    }
+  }
+  syncVisualizationGeometry();
+  updateActiveWindow();
+  render3dPreview();
   sendLoopConfigToPreview();
   syncSelectedAssetScaleControls();
 }
@@ -6347,7 +6363,10 @@ function renderLoopPreview() {
       () => loopArtworks.find((entry) => entry && entry.id === item.id) || null,
       () => {
         saveArtworks(loopArtworks);
-        renderLoopPreview();
+        syncVisualizationGeometry();
+        updateActiveWindow();
+        syncSelectedAssetScaleControls();
+        render3dPreview();
         sendLoopConfigToPreview();
       },
       "left"
@@ -6358,7 +6377,10 @@ function renderLoopPreview() {
       () => loopArtworks.find((entry) => entry && entry.id === item.id) || null,
       () => {
         saveArtworks(loopArtworks);
-        renderLoopPreview();
+        syncVisualizationGeometry();
+        updateActiveWindow();
+        syncSelectedAssetScaleControls();
+        render3dPreview();
         sendLoopConfigToPreview();
       },
       "right"
@@ -6613,7 +6635,9 @@ function renderPartitionEditor(partitionKey) {
       () => (partitionArtworks[key] || []).find((entry) => entry && entry.id === item.id) || null,
       () => {
         savePartitionArtworks(partitionArtworks);
-        renderPartitionEditor(key);
+        syncPartitionEditorVisuals();
+        updatePartitionActiveWindows();
+        syncSelectedAssetScaleControls();
         render3dPreview();
         sendLoopConfigToPreview();
       },
@@ -6625,7 +6649,9 @@ function renderPartitionEditor(partitionKey) {
       () => (partitionArtworks[key] || []).find((entry) => entry && entry.id === item.id) || null,
       () => {
         savePartitionArtworks(partitionArtworks);
-        renderPartitionEditor(key);
+        syncPartitionEditorVisuals();
+        updatePartitionActiveWindows();
+        syncSelectedAssetScaleControls();
         render3dPreview();
         sendLoopConfigToPreview();
       },
