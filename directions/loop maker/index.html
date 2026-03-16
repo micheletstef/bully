@@ -320,6 +320,32 @@
         opacity: 0.9;
       }
 
+      .export-progress {
+        margin-top: 6px;
+        display: none;
+        gap: 4px;
+      }
+
+      .export-progress-track {
+        width: 100%;
+        height: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .export-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: rgba(120, 205, 255, 0.95);
+        transition: width 120ms linear;
+      }
+
+      .export-progress-label {
+        font-size: 10px;
+        opacity: 0.85;
+        text-align: right;
+      }
+
       .now-playing {
         position: absolute;
         left: 50%;
@@ -449,6 +475,12 @@
 
         <div id="frameList" class="list"></div>
         <div id="status" class="status"></div>
+        <div id="exportProgress" class="export-progress">
+          <div class="export-progress-track">
+            <div id="exportProgressFill" class="export-progress-fill"></div>
+          </div>
+          <div id="exportProgressLabel" class="export-progress-label">0%</div>
+        </div>
       </section>
 
       <section class="preview-wrap">
@@ -513,6 +545,9 @@
       const emptyState = document.getElementById("emptyState");
       const nowPlayingLabel = document.getElementById("nowPlayingLabel");
       const status = document.getElementById("status");
+      const exportProgress = document.getElementById("exportProgress");
+      const exportProgressFill = document.getElementById("exportProgressFill");
+      const exportProgressLabel = document.getElementById("exportProgressLabel");
 
       const state = {
         frames: [],
@@ -556,6 +591,35 @@
           return;
         }
         status.textContent = String(message || "");
+      }
+
+      function setExportProgress(fraction, visible = true) {
+        if (!exportProgress || !exportProgressFill || !exportProgressLabel) {
+          return;
+        }
+        const normalized = Math.max(0, Math.min(1, Number(fraction) || 0));
+        exportProgress.style.display = visible ? "grid" : "none";
+        exportProgressFill.style.width = `${(normalized * 100).toFixed(1)}%`;
+        exportProgressLabel.textContent = `${Math.round(normalized * 100)}%`;
+      }
+
+      function triggerDownload(url, filename) {
+        if (!url) {
+          return false;
+        }
+        try {
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = filename || "loop-maker.gif";
+          anchor.rel = "noopener";
+          anchor.style.display = "none";
+          document.body.appendChild(anchor);
+          anchor.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+          document.body.removeChild(anchor);
+          return true;
+        } catch (error) {
+          return false;
+        }
       }
 
       function clearStatus() {
@@ -1409,6 +1473,7 @@
         }
         exportButton.disabled = true;
         setStatus("rendering gif...");
+        setExportProgress(0, true);
         try {
           const frames = steppedFrames();
           const loadedImages = await Promise.all(frames.map((frame) => loadImage(frame.file)));
@@ -1465,19 +1530,30 @@
           const blob = await new Promise((resolve, reject) => {
             gif.on("finished", resolve);
             gif.on("abort", () => reject(new Error("render aborted")));
+            gif.on("progress", (value) => {
+              setExportProgress(value, true);
+            });
             gif.render();
           });
 
           const outputUrl = URL.createObjectURL(blob);
-          const anchor = document.createElement("a");
-          anchor.href = outputUrl;
-          anchor.download = "loop-maker.gif";
-          anchor.click();
-          URL.revokeObjectURL(outputUrl);
-          setStatus("gif exported");
+          const downloaded = triggerDownload(outputUrl, "loop-maker.gif");
+          if (!downloaded) {
+            window.open(outputUrl, "_blank", "noopener");
+          }
+          // Avoid revoking too early; some browsers resolve download asynchronously.
+          window.setTimeout(() => {
+            URL.revokeObjectURL(outputUrl);
+          }, 15000);
+          setExportProgress(1, true);
+          setStatus(downloaded ? "gif exported (download started)" : "gif exported (opened in new tab)");
         } catch (error) {
+          setExportProgress(0, false);
           setStatus("unable to export gif");
         } finally {
+          window.setTimeout(() => {
+            setExportProgress(0, false);
+          }, 600);
           exportButton.disabled = state.frames.length === 0;
         }
       }
