@@ -5250,7 +5250,9 @@ function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  loopVisualization.style.width = "";
+  const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
+  const horizontalPadding = 8;
+  loopVisualization.style.width = `${Math.round(contentWidth + horizontalPadding)}px`;
   loopPreviewTrack.style.transform = "none";
 }
 
@@ -5969,8 +5971,7 @@ function updateActiveWindow() {
 
   const frameHeight = Math.max(1, loopVisualization.clientHeight);
   const normalizedProgress = computePreview3dLoopProgress();
-  const previewScale = getPreviewScale();
-  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
+  const scaledLoopDistance = Math.max(1, sequenceWidth);
   const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
     ? Math.max(0.01, Math.min(1, loopPlaybackViewportRatio))
     : 0.25;

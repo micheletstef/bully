@@ -434,7 +434,7 @@ body.dark-mode .orientation-choice.inactive {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(84vw, 1400px);
+  width: max-content;
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
   height: 72px;
   padding: 0;
@@ -1073,7 +1073,7 @@ body.dark-mode .view-controls-panel {
   align-items: center;
   gap: var(--partition-preview-gap, 0px);
   min-height: 54px;
-  width: min(84vw, 1400px);
+  width: max-content;
   border: 0;
   padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);
   overflow: hidden;
