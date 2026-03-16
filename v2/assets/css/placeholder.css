@@ -1182,16 +1182,16 @@ body.dark-mode .view-controls-panel {
 
 .remove-artwork {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
+  top: 1px;
+  right: 1px;
+  width: 14px;
+  height: 14px;
   border: 0;
   border-radius: 50%;
   background: rgba(211, 0, 0, 0.92);
   color: #fff;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 10px;
+  line-height: 14px;
   text-align: center;
   padding: 0;
   cursor: pointer;

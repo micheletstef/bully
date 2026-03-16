@@ -87,7 +87,8 @@ const STORAGE_KEYS = {
   themeMode: "billboard.themeMode",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
-  partitionArtworks: "billboard.partitionArtworks"
+  partitionArtworks: "billboard.partitionArtworks",
+  assetLibrary: "billboard.assetLibrary"
 };
 const PARTITION_DIRECTION_NAME = "partitioned";
 const LOOP_MAKER_DIRECTION_NAME = "loop maker";
@@ -227,6 +228,9 @@ const preview3dThreeState = {
 };
 let hasWarnedMissingThree = false;
 let preview3dAnimationFrameId = null;
+let assetLibrary = [];
+let pickedLibraryAssetId = "";
+let pickedAssetCursorEl = null;
 let preview3dPlaybackSyncState = {
   hasSample: false,
   elapsedSeconds: 0,
@@ -408,6 +412,91 @@ function cloneArtworkItems(items) {
   return (Array.isArray(items) ? items : [])
     .map((item) => normalizeArtworkItem(item))
     .filter((item) => item !== null);
+}
+
+function inferAssetLibraryGroup(name, src) {
+  const lowerName = String(name || "").toLowerCase();
+  const lowerSrc = String(src || "").toLowerCase();
+  if (
+    lowerName.endsWith(".gif") ||
+    lowerSrc.startsWith("data:image/gif") ||
+    /\.gif([?#].*)?$/.test(lowerSrc)
+  ) {
+    return "animations";
+  }
+  return "graphics";
+}
+
+function normalizeAssetLibraryEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const src = typeof entry.src === "string" ? entry.src.trim() : "";
+  if (!src) {
+    return null;
+  }
+  const nameRaw = typeof entry.name === "string" ? entry.name.trim() : "";
+  const name = nameRaw || artworkFileName(src) || "asset";
+  return {
+    id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : generateArtworkId(),
+    src,
+    name,
+    group: inferAssetLibraryGroup(name, src)
+  };
+}
+
+function saveAssetLibrary() {
+  writeStorage(STORAGE_KEYS.assetLibrary, JSON.stringify(assetLibrary));
+}
+
+function restoreAssetLibrary() {
+  const raw = readStorage(STORAGE_KEYS.assetLibrary);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => normalizeAssetLibraryEntry(entry))
+      .filter((entry) => entry !== null);
+  } catch (error) {
+    return [];
+  }
+}
+
+function addAssetToLibrary(src, name = "") {
+  const normalized = normalizeAssetLibraryEntry({ src, name });
+  if (!normalized) {
+    return;
+  }
+  const isDefaultLinearStrip =
+    normalized.src === "assets/linear-loop-strip.png" || /\/assets\/linear-loop-strip\.png$/i.test(normalized.src);
+  if (isDefaultLinearStrip) {
+    return;
+  }
+  if (assetLibrary.some((entry) => entry && entry.src === normalized.src)) {
+    return;
+  }
+  assetLibrary.push(normalized);
+  saveAssetLibrary();
+}
+
+function syncAssetLibraryFromCurrentArtworks() {
+  loopArtworks.forEach((item) => {
+    if (item && item.src) {
+      addAssetToLibrary(item.src, item.name || artworkFileName(item.src));
+    }
+  });
+  PARTITION_KEYS.forEach((key) => {
+    (partitionArtworks[key] || []).forEach((item) => {
+      if (item && item.src) {
+        addAssetToLibrary(item.src, item.name || artworkFileName(item.src));
+      }
+    });
+  });
 }
 
 function createDefaultPartitionArtworks() {
@@ -958,6 +1047,7 @@ async function addArtworkFiles(files, partitionKey = null) {
     try {
       const src = await processArtworkFile(file);
       const newItem = createArtworkItem(src, file.name || "upload");
+      addAssetToLibrary(newItem.src, newItem.name);
       if (shouldTargetPartition) {
         partitionArtworks[normalizedPartitionKey].push(newItem);
       } else {
@@ -5255,11 +5345,27 @@ function syncPreviewSpacers() {
   });
 }
 
+function computeTrackSequenceWidth(trackEl, segmentSelector) {
+  if (!trackEl) {
+    return 0;
+  }
+  const segments = [...trackEl.querySelectorAll(segmentSelector)];
+  if (!segments.length) {
+    return 0;
+  }
+  const styles = getComputedStyle(trackEl);
+  const gapRaw = Number.parseFloat(styles.gap || styles.columnGap || "0");
+  const gap = Number.isFinite(gapRaw) ? Math.max(0, gapRaw) : 0;
+  const segmentWidth = segments.reduce((sum, node) => sum + Math.max(0, node.offsetWidth || 0), 0);
+  return Math.max(1, segmentWidth + Math.max(0, segments.length - 1) * gap);
+}
+
 function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
+  // Use layout widths (offsetWidth) so clicks/selection don't jitter editor size.
+  const contentWidth = Math.max(1, computeTrackSequenceWidth(loopPreviewTrack, ".loop-preview-spacer, .loop-preview-item"));
   const horizontalPadding = 8;
   loopVisualization.style.width = `${Math.round(contentWidth + horizontalPadding)}px`;
 }
@@ -5267,6 +5373,14 @@ function syncVisualizationGeometry() {
 function computeLinearEditorLayoutScale() {
   const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
   return Math.max(0.001, LEGACY_LINEAR_TRACK_HEIGHT_PX / stageHeight);
+}
+
+function computeEditorDesignToPixelScale() {
+  const stageHeight = Math.max(1, loopStageHeight || BILLBOARD_DESIGN_HEIGHT);
+  const viewportToEditorScale = computeLinearEditorLayoutScale();
+  const designToViewportScale = stageHeight / BILLBOARD_DESIGN_HEIGHT;
+  // Design-pixel (billboard space) -> editor-pixel conversion.
+  return Math.max(0.000001, viewportToEditorScale * designToViewportScale);
 }
 
 function computePartitionEditorLayoutScale(partitionKey) {
@@ -5445,6 +5559,119 @@ function syncPartitionSelectionClasses(partitionKey) {
   });
 }
 
+function clearPickedAssetCursor() {
+  pickedLibraryAssetId = "";
+  if (pickedAssetCursorEl && pickedAssetCursorEl.parentNode) {
+    pickedAssetCursorEl.parentNode.removeChild(pickedAssetCursorEl);
+  }
+  pickedAssetCursorEl = null;
+  document.body.style.cursor = "";
+}
+
+function updatePickedCursorPosition(eventLike) {
+  if (!pickedAssetCursorEl || !eventLike) {
+    return;
+  }
+  const x = Number(eventLike.clientX);
+  const y = Number(eventLike.clientY);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return;
+  }
+  pickedAssetCursorEl.style.left = `${Math.round(x + 10)}px`;
+  pickedAssetCursorEl.style.top = `${Math.round(y + 10)}px`;
+}
+
+function pickAssetCursor(entry) {
+  clearPickedAssetCursor();
+  if (!entry || !entry.id) {
+    return;
+  }
+  pickedLibraryAssetId = entry.id;
+  document.body.style.cursor = "copy";
+  const ghost = document.createElement("img");
+  ghost.src = entry.src;
+  ghost.alt = "";
+  ghost.style.position = "fixed";
+  ghost.style.left = "-9999px";
+  ghost.style.top = "-9999px";
+  ghost.style.width = "56px";
+  ghost.style.height = "56px";
+  ghost.style.objectFit = "contain";
+  ghost.style.pointerEvents = "none";
+  ghost.style.zIndex = "9999";
+  ghost.style.filter = "drop-shadow(0 1px 2px rgba(0,0,0,0.35))";
+  ghost.style.opacity = "0.95";
+  document.body.appendChild(ghost);
+  pickedAssetCursorEl = ghost;
+}
+
+function pickedAssetEntry() {
+  if (!pickedLibraryAssetId) {
+    return null;
+  }
+  return assetLibrary.find((entry) => entry && entry.id === pickedLibraryAssetId) || null;
+}
+
+function computeDroppedArtworkLayout(eventLike, trackEl, scaleToPixels) {
+  const rect = trackEl ? trackEl.getBoundingClientRect() : null;
+  if (!rect) {
+    return sanitizeArtworkLayout(null);
+  }
+  const px = Number(eventLike && eventLike.clientX);
+  const py = Number(eventLike && eventLike.clientY);
+  if (!Number.isFinite(px) || !Number.isFinite(py)) {
+    return sanitizeArtworkLayout(null);
+  }
+  const safeScale = Math.max(0.01, Number(scaleToPixels) || 1);
+  const gridUnit = EDITOR_GRID_SIZE_PX / safeScale;
+  const rawX = (px - rect.left - rect.width * 0.5) / safeScale;
+  const rawY = (py - rect.top - rect.height * 0.5) / safeScale;
+  return sanitizeArtworkLayout({
+    x: Math.round(rawX / gridUnit) * gridUnit,
+    y: Math.round(rawY / gridUnit) * gridUnit,
+    scale: 1
+  });
+}
+
+function placePickedAssetInLinear(eventLike) {
+  const picked = pickedAssetEntry();
+  if (!picked || !loopPreviewTrack) {
+    return false;
+  }
+  const newItem = createArtworkItem(picked.src, picked.name);
+  const designToEditorScale = computeEditorDesignToPixelScale();
+  newItem.layout = computeDroppedArtworkLayout(eventLike, loopPreviewTrack, designToEditorScale);
+  loopArtworks.push(newItem);
+  addAssetToLibrary(newItem.src, newItem.name);
+  saveArtworks(loopArtworks);
+  renderLoopPreview();
+  sendLoopConfigToPreview();
+  clearPickedAssetCursor();
+  renderDirectory(knownDirections);
+  return true;
+}
+
+function placePickedAssetInPartition(partitionKey, eventLike) {
+  const key = normalizePartitionKey(partitionKey);
+  const picked = pickedAssetEntry();
+  const trackEl = partitionTrackElement(key);
+  if (!key || !picked || !trackEl) {
+    return false;
+  }
+  const newItem = createArtworkItem(picked.src, picked.name);
+  const designToEditorScale = computeEditorDesignToPixelScale();
+  newItem.layout = computeDroppedArtworkLayout(eventLike, trackEl, designToEditorScale);
+  partitionArtworks[key].push(newItem);
+  addAssetToLibrary(newItem.src, newItem.name);
+  savePartitionArtworks(partitionArtworks);
+  renderPartitionEditor(key);
+  render3dPreview();
+  sendLoopConfigToPreview();
+  clearPickedAssetCursor();
+  renderDirectory(knownDirections);
+  return true;
+}
+
 function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options = {}) {
   if (!tileEl) {
     return;
@@ -5580,7 +5807,7 @@ function renderLoopPreview() {
   const spacerStart = document.createElement("div");
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
-  const scaleToPixels = computeLinearEditorLayoutScale();
+  const designToEditorScale = computeEditorDesignToPixelScale();
   const baseArtworkHeightPx = Math.max(
     8,
     Math.round((Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * scaleToPixels * 100) / 100
@@ -5628,7 +5855,7 @@ function renderLoopPreview() {
       syncLinearSelectionClasses();
     });
     applyArtworkTileScale(tile, item.layout.scale);
-    applyArtworkTileTransform(tile, item, scaleToPixels);
+    applyArtworkTileTransform(tile, item, designToEditorScale);
     bindArtworkEditorDrag(
       tile,
       () => item,
@@ -5636,7 +5863,7 @@ function renderLoopPreview() {
         saveArtworks(loopArtworks);
         renderLoopPreview();
       },
-      scaleToPixels,
+      designToEditorScale,
       {
         dropContainerSelector: ".loop-preview-track",
         onRemove: () => {
@@ -5835,7 +6062,7 @@ function renderPartitionEditor(partitionKey) {
   spacerStart.className = "partition-preview-spacer partition-preview-segment";
   trackEl.appendChild(spacerStart);
   const settings = partitionSettingsForKey(key);
-  const scaleToPixels = computePartitionEditorLayoutScale(key).scale;
+  const designToEditorScale = computeEditorDesignToPixelScale();
   const baseArtworkHeightPx = Math.max(
     8,
     Math.round((Math.max(1, loopStageHeight) - Math.max(0, settings.padTopBottom) * 2) * scaleToPixels * 100) / 100
@@ -5883,7 +6110,7 @@ function renderPartitionEditor(partitionKey) {
       syncPartitionSelectionClasses(key);
     });
     applyArtworkTileScale(tile, item.layout.scale);
-    applyArtworkTileTransform(tile, item, scaleToPixels);
+    applyArtworkTileTransform(tile, item, designToEditorScale);
     bindArtworkEditorDrag(
       tile,
       () => item,
@@ -5893,7 +6120,7 @@ function renderPartitionEditor(partitionKey) {
         render3dPreview();
         sendLoopConfigToPreview();
       },
-      scaleToPixels,
+      designToEditorScale,
       {
         dropContainerSelector: ".partition-preview-track",
         onRemove: () => {
@@ -5952,11 +6179,7 @@ function updatePartitionActiveWindows() {
       return;
     }
 
-    const styles = getComputedStyle(trackEl);
-    const gapRaw = Number.parseFloat(styles.gap || styles.columnGap || "0");
-    const gap = Number.isFinite(gapRaw) ? Math.max(0, gapRaw) : 0;
-    const itemWidth = previewSegments.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0);
-    const sequenceWidth = Math.max(1, itemWidth + Math.max(0, previewSegments.length - 1) * gap);
+    const sequenceWidth = Math.max(1, computeTrackSequenceWidth(trackEl, ".partition-preview-segment"));
     const distance = sequenceWidth;
     const ratioRaw = Number(partitionViewportRatios[partitionKey]);
     const viewportRatio = Number.isFinite(ratioRaw)
@@ -6016,6 +6239,16 @@ function bindPartitionTrackDrop(trackEl, partitionKey) {
       return;
     }
     await addArtworkFiles(event.dataTransfer.files, key);
+  });
+
+  trackEl.addEventListener("click", (event) => {
+    if (!currentDirectionIsPartitioned()) {
+      return;
+    }
+    if (placePickedAssetInPartition(key, event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   });
 }
 
@@ -6087,7 +6320,7 @@ function updateActiveWindow() {
     return;
   }
 
-  const sequenceWidth = loopPreviewTrack.scrollWidth;
+  const sequenceWidth = computeTrackSequenceWidth(loopPreviewTrack, ".loop-preview-spacer, .loop-preview-item");
   if (!Number.isFinite(sequenceWidth) || sequenceWidth <= 0) {
     loopActiveWindow.style.display = "none";
     if (loopActiveWindowSecondary) {
@@ -6294,6 +6527,50 @@ function renderDirectory(directions) {
     });
   }
 
+  const assetsSection = document.createElement("section");
+  assetsSection.className = "directory-section";
+  const assetsTitle = document.createElement("h2");
+  assetsTitle.textContent = "assets";
+  assetsSection.appendChild(assetsTitle);
+  const groupedAssets = {
+    animations: assetLibrary.filter((entry) => entry.group === "animations"),
+    graphics: assetLibrary.filter((entry) => entry.group !== "animations")
+  };
+  const appendAssetGroup = (label, entries) => {
+    const labelEl = document.createElement("div");
+    labelEl.className = "settings-hint";
+    labelEl.textContent = label;
+    assetsSection.appendChild(labelEl);
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.className = "settings-hint";
+      empty.textContent = "(none)";
+      assetsSection.appendChild(empty);
+      return;
+    }
+    entries.forEach((entry) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "direction-item output-item";
+      button.textContent = entry.name || artworkFileName(entry.src) || "asset";
+      if (entry.id === pickedLibraryAssetId) {
+        button.classList.add("active");
+      }
+      button.addEventListener("click", () => {
+        if (pickedLibraryAssetId === entry.id) {
+          clearPickedAssetCursor();
+        } else {
+          pickAssetCursor(entry);
+        }
+        renderDirectory(knownDirections);
+      });
+      assetsSection.appendChild(button);
+    });
+  };
+  appendAssetGroup("animations", groupedAssets.animations);
+  appendAssetGroup("graphics", groupedAssets.graphics);
+  outputsSection.appendChild(assetsSection);
+
   directoryPanel.appendChild(outputsSection);
 
   if (restoredActiveButton) {
@@ -6328,6 +6605,8 @@ async function init() {
   loopArtworks = restoreArtworks();
   partitionArtworks = restorePartitionArtworks();
   partitionSettingsByKey = restorePartitionSettings();
+  assetLibrary = restoreAssetLibrary();
+  syncAssetLibraryFromCurrentArtworks();
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
   loopDurationSeconds = currentSpeedSeconds();
   loopTraverseSeconds = loopDurationSeconds;
@@ -6734,10 +7013,20 @@ async function init() {
     "mousemove",
     (event) => {
       updateLatestPointerFromEvent(event);
+      updatePickedCursorPosition(event);
     },
     { passive: true }
   );
   if (loopVisualization) {
+    loopVisualization.addEventListener("click", (event) => {
+      if (currentDirectionIsPartitioned()) {
+        return;
+      }
+      if (placePickedAssetInLinear(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
     loopVisualization.addEventListener("dragover", (event) => {
       if (currentDirectionIsPartitioned()) {
         return;
