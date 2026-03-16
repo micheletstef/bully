@@ -365,6 +365,27 @@ async function getDirectoryNames(path) {
   return parseDirectoryListing(html);
 }
 
+function parseDirectoryFileListing(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const links = [...doc.querySelectorAll('a[href]')];
+  return links
+    .map((link) => normalizeHref(link.getAttribute("href")))
+    .filter((href) => href && !href.endsWith("/"))
+    .filter((href) => href !== "./" && href !== "../")
+    .map((href) => decodeURIComponent(href))
+    .filter((name) => name && !name.startsWith("."));
+}
+
+async function getDirectoryFileNames(path) {
+  const response = await fetch(path, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Cannot read ${path}`);
+  }
+  const html = await response.text();
+  return parseDirectoryFileListing(html);
+}
+
 function directionPath(name) {
   return `directions/${encodeURIComponent(name)}/index.html`;
 }
@@ -1186,16 +1207,7 @@ async function addArtworkFiles(files, partitionKey = null) {
 
   for (const file of validFiles) {
     try {
-      let src = "";
-      try {
-        const uploaded = await uploadAssetFileToServer(file, inferAssetLibraryGroup(file.name, ""));
-        src = typeof uploaded.src === "string" ? uploaded.src : "";
-      } catch (error) {
-        src = "";
-      }
-      if (!src) {
-        src = await processArtworkFile(file);
-      }
+      const src = await processArtworkFile(file);
       const newItem = createArtworkItem(src, file.name || "upload");
       addAssetToLibrary(newItem.src, newItem.name);
       if (shouldTargetPartition) {
@@ -1222,69 +1234,68 @@ async function addArtworkFiles(files, partitionKey = null) {
 async function fetchAssetLibraryFromServer() {
   try {
     const response = await fetch(apiPath("api/assets"), { cache: "no-store" });
-    if (!response.ok) {
-      return [];
+    if (response.ok) {
+      const parsed = await response.json();
+      const entries = Array.isArray(parsed) ? parsed : Array.isArray(parsed && parsed.entries) ? parsed.entries : [];
+      return entries
+        .map((entry) => normalizeAssetLibraryEntry(entry))
+        .filter((entry) => entry !== null);
     }
-    const parsed = await response.json();
-    const entries = Array.isArray(parsed) ? parsed : Array.isArray(parsed && parsed.entries) ? parsed.entries : [];
-    return entries
-      .map((entry) => normalizeAssetLibraryEntry(entry))
-      .filter((entry) => entry !== null);
-  } catch (error) {
-    return [];
+  } catch (_) {
+    // Fall back to directory listing when API isn't available.
   }
-}
-
-async function uploadAssetFileToServer(file, group = "graphics") {
-  const targetGroup = group === "animations" ? "animations" : "graphics";
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("group", targetGroup);
-  const response = await fetch(apiPath("api/assets"), {
-    method: "POST",
-    body: formData
-  });
-  if (!response.ok) {
-    throw new Error("Could not upload asset");
+  try {
+    const supported = new Set(["svg", "png", "jpg", "jpeg", "jpt", "gif", "pdf", "webp"]);
+    const groups = ["animations", "graphics"];
+    const discovered = [];
+    for (const group of groups) {
+      const folderPath = `assets/${group}/`;
+      const names = await getDirectoryFileNames(folderPath);
+      names.forEach((name) => {
+        const ext = fileExtension(name);
+        if (!supported.has(ext)) {
+          return;
+        }
+        const entry = normalizeAssetLibraryEntry({
+          src: `${folderPath}${encodeURIComponent(name)}`,
+          name,
+          group
+        });
+        if (entry) {
+          discovered.push(entry);
+        }
+      });
+    }
+    return discovered;
+  } catch (_) {
+    return null;
   }
-  return response.json();
 }
 
 async function refreshAssetLibraryFromServer(options = {}) {
-  const { shouldRender = true } = options;
+  const { shouldRender = true, replace = false } = options;
   const serverAssets = await fetchAssetLibraryFromServer();
-  serverAssets.forEach((entry) => {
-    addAssetToLibrary(entry.src, entry.name);
-  });
+  if (!Array.isArray(serverAssets)) {
+    if (replace) {
+      assetLibrary = [];
+      saveAssetLibrary();
+      if (shouldRender && knownDirections.length) {
+        renderDirectory(knownDirections);
+      }
+    }
+    return;
+  }
+  if (replace) {
+    assetLibrary = [...serverAssets];
+    saveAssetLibrary();
+  } else {
+    serverAssets.forEach((entry) => {
+      addAssetToLibrary(entry.src, entry.name);
+    });
+  }
   if (shouldRender && knownDirections.length) {
     renderDirectory(knownDirections);
   }
-}
-
-async function addFilesToAssetLibraryGroup(files, group = "graphics") {
-  const validFiles = [...files].filter((file) => isSupportedArtworkFile(file));
-  if (!validFiles.length) {
-    return;
-  }
-  const targetGroup = group === "animations" ? "animations" : "graphics";
-  for (const file of validFiles) {
-    try {
-      let src = "";
-      try {
-        const uploaded = await uploadAssetFileToServer(file, targetGroup);
-        src = typeof uploaded.src === "string" ? uploaded.src : "";
-      } catch (error) {
-        src = "";
-      }
-      if (!src) {
-        src = await processArtworkFile(file);
-      }
-      addAssetToLibrary(src, file.name || artworkFileName(src));
-    } catch (error) {
-      // Ignore single-file failures and continue with others.
-    }
-  }
-  await refreshAssetLibraryFromServer();
 }
 
 async function canLoadDirection(name) {
@@ -5810,16 +5821,31 @@ function applyArtworkTileScale(targetEl, layoutLike) {
   const visibleRatio = Math.max(0.05, 1 - (layout.cropLeft + layout.cropRight));
   const image = targetEl.querySelector("img");
   let fullWidthPx = Number(targetEl.dataset.fullWidthPx);
-  if ((!Number.isFinite(fullWidthPx) || fullWidthPx <= 0) && image) {
+  const hasNaturalSize =
+    !!image &&
+    Number.isFinite(Number(image.naturalWidth)) &&
+    Number.isFinite(Number(image.naturalHeight)) &&
+    Number(image.naturalWidth) > 0 &&
+    Number(image.naturalHeight) > 0;
+  if (hasNaturalSize && image) {
+    fullWidthPx = (Number(image.naturalWidth) / Number(image.naturalHeight)) * safeBaseHeight;
+    targetEl.dataset.fullWidthPx = String(fullWidthPx);
+  } else if ((!Number.isFinite(fullWidthPx) || fullWidthPx <= 0) && image) {
     const naturalWidth = Number(image.naturalWidth);
     const naturalHeight = Number(image.naturalHeight);
     if (Number.isFinite(naturalWidth) && naturalWidth > 0 && Number.isFinite(naturalHeight) && naturalHeight > 0) {
       fullWidthPx = (naturalWidth / naturalHeight) * safeBaseHeight;
+      targetEl.dataset.fullWidthPx = String(fullWidthPx);
     } else {
-      const measured = Number(image.getBoundingClientRect().width);
-      fullWidthPx = Number.isFinite(measured) && measured > 0 ? measured : safeBaseHeight;
+      const measuredImage = Number(image.getBoundingClientRect().width);
+      const measuredTile = Number(targetEl.getBoundingClientRect().width);
+      const measured = Number.isFinite(measuredImage) && measuredImage > 0 ? measuredImage : measuredTile;
+      if (Number.isFinite(measured) && measured > 1) {
+        fullWidthPx = measured / Math.max(0.05, scale * visibleRatio);
+      } else {
+        fullWidthPx = safeBaseHeight;
+      }
     }
-    targetEl.dataset.fullWidthPx = String(fullWidthPx);
   }
   const widthPx = Math.max(8, Math.round((Number.isFinite(fullWidthPx) && fullWidthPx > 0 ? fullWidthPx : safeBaseHeight) * scale * visibleRatio));
   targetEl.style.width = `${widthPx}px`;
@@ -6298,6 +6324,7 @@ function renderLoopPreview() {
     image.addEventListener(
       "load",
       () => {
+        delete tile.dataset.fullWidthPx;
         applyArtworkTileScale(tile, item.layout);
       },
       { once: true }
@@ -6563,6 +6590,7 @@ function renderPartitionEditor(partitionKey) {
     image.addEventListener(
       "load",
       () => {
+        delete tile.dataset.fullWidthPx;
         applyArtworkTileScale(tile, item.layout);
       },
       { once: true }
@@ -7040,31 +7068,6 @@ function renderDirectory(directions) {
     labelEl.className = "settings-hint asset-group-label";
     labelEl.textContent = label;
     header.appendChild(labelEl);
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".svg,.png,.jpg,.jpeg,.jpt,.gif,.pdf";
-    input.multiple = true;
-    input.className = "asset-group-input";
-
-    const uploadButton = document.createElement("button");
-    uploadButton.type = "button";
-    uploadButton.className = "asset-group-upload";
-    uploadButton.textContent = "upload";
-    uploadButton.title = `Upload files to ${label}`;
-    uploadButton.addEventListener("click", () => {
-      input.click();
-    });
-    input.addEventListener("change", async () => {
-      const files = input.files ? [...input.files] : [];
-      input.value = "";
-      if (!files.length) {
-        return;
-      }
-      await addFilesToAssetLibraryGroup(files, label);
-    });
-    header.appendChild(uploadButton);
-    header.appendChild(input);
     group.appendChild(header);
 
     if (!entries.length) {
@@ -7146,9 +7149,7 @@ async function init() {
   partitionArtworks = restorePartitionArtworks();
   partitionSettingsByKey = restorePartitionSettings();
   assetLibrary = restoreAssetLibrary();
-  seedBundledAnimationAssets();
-  syncAssetLibraryFromCurrentArtworks();
-  await refreshAssetLibraryFromServer({ shouldRender: false });
+  await refreshAssetLibraryFromServer({ shouldRender: false, replace: true });
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
   loopDurationSeconds = currentSpeedSeconds();
   loopTraverseSeconds = loopDurationSeconds;

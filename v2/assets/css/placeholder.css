@@ -323,27 +323,6 @@ body.sidebar-resizing {
   padding-left: 20px;
 }
 
-.asset-group-input {
-  display: none;
-}
-
-.asset-group-upload {
-  border: 0;
-  background: transparent;
-  color: #1f1f1f;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.asset-group-upload:hover,
-.asset-group-upload:focus {
-  outline: none;
-}
-
 .asset-library-item::before {
   content: "";
 }
@@ -1387,10 +1366,6 @@ body.dark-mode .view-controls-panel {
 body.dark-mode .asset-crop-handle {
   border-color: #fff;
   background: #000;
-}
-
-body.dark-mode .asset-group-upload {
-  color: #fff;
 }
 
 .remove-artwork {
