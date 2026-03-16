@@ -423,13 +423,28 @@
         return { padTopBottom, padLeftRight };
       }
 
+      function compute3dLikeTextureViewport(stageHeight) {
+        const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+        const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+        const targetHeight = Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+        const scale = Math.max(0.08, targetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const viewportWidth = Math.max(64, Math.round(BILLBOARD_DESIGN_WIDTH * scale));
+        return { targetHeight, viewportWidth };
+      }
+
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const partitionSettings = settingsForPartition(partitionKey);
         const partitionHeight = await resolvePartitionHeight(container);
         const partitionWidth = await resolvePartitionWidth(container, partitionKey);
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const paddingTargetHeight = verticalFlow ? partitionWidth : partitionHeight;
+        const stageHeight = loopStage
+          ? Math.max(1, Number(loopStage.clientHeight) || Number(loopStage.getBoundingClientRect().height) || partitionHeight)
+          : partitionHeight;
+        const textureViewport = compute3dLikeTextureViewport(stageHeight);
+        const partitionRatio = Math.max(0.0001, Number(PARTITION_WIDTHS[partitionKey]) || 0) / PARTITION_TOTAL_WIDTH;
+        const partitionTargetHeight = Math.max(128, Math.round(textureViewport.viewportWidth * partitionRatio));
+        const paddingTargetHeight = verticalFlow ? partitionTargetHeight : textureViewport.targetHeight;
         const scaledPadding = computeScaledPaddingFrom3dMath(
           partitionSettings.padTopBottom,
           partitionSettings.padLeftRight,

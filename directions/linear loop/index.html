@@ -150,6 +150,12 @@
         return { padTopBottom, padLeftRight };
       }
 
+      function compute3dLikeTargetHeight(stageHeight) {
+        const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+        const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+        return Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+      }
+
       function normalizeArtworkSource(path) {
         if (/^(https?:|data:|blob:)/.test(path)) {
           return path;
@@ -183,12 +189,13 @@
           Number(window.innerHeight) || 0
         );
         const stageHeight = Math.max(1, Number(loopStage.clientHeight) || viewportHeight);
+        const paddingTargetHeight = compute3dLikeTargetHeight(stageHeight);
         const padTopBottomDesign = Math.max(0, Number(state.padTopBottom) || 0);
         const padLeftRightDesign = Math.max(0, Number(state.padLeftRight) || 0);
         const scaledPadding = computeScaledPaddingFrom3dMath(
           padTopBottomDesign,
           padLeftRightDesign,
-          stageHeight,
+          paddingTargetHeight,
           viewportHeight
         );
         const appliedPadTopBottom = scaledPadding.padTopBottom;

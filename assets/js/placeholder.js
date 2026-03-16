@@ -3473,6 +3473,12 @@ function buildSnapshotHtml(config) {
         return { padTopBottom, padLeftRight };
       }
 
+      function compute3dLikeTargetHeight(stageHeight) {
+        const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+        const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+        return Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+      }
+
       function normalizeArtworkSource(path) {
         const source = String(path || "").trim();
         if (!source) {
@@ -3508,10 +3514,11 @@ function buildSnapshotHtml(config) {
           Number(window.innerHeight) || 0
         );
         const stageHeight = Math.max(1, Number(loopStage.clientHeight) || viewportHeight);
+        const paddingTargetHeight = compute3dLikeTargetHeight(stageHeight);
         const scaledPadding = computeScaledPaddingFrom3dMath(
           Number(state.padTopBottom) || 0,
           Number(state.padLeftRight) || 0,
-          stageHeight,
+          paddingTargetHeight,
           viewportHeight
         );
         const sources = state.artworks.length
@@ -4064,13 +4071,30 @@ function buildPartitionedSnapshotHtml(config) {
         return { padTopBottom, padLeftRight };
       }
 
+      function compute3dLikeTextureViewport(stageHeight) {
+        const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+        const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+        const targetHeight = Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+        const scale = Math.max(0.08, targetHeight / 3480);
+        const viewportWidth = Math.max(64, Math.round(5900 * scale));
+        return { targetHeight, viewportWidth };
+      }
+
       async function renderPartition(container, sources, partitionKey) {
         container.innerHTML = "";
         const partitionSettings = settingsForPartition(partitionKey);
         const partitionHeight = await resolvePartitionHeight(container);
         const partitionWidth = await resolvePartitionWidth(container, partitionKey);
         const verticalFlow = orientationForPartition(partitionKey) === "vertical";
-        const paddingTargetHeight = verticalFlow ? partitionWidth : partitionHeight;
+        const stageHeight = Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+        const textureViewport = compute3dLikeTextureViewport(stageHeight);
+        const partitionRatio = Math.max(0.0001, Number(PARTITION_WIDTHS[partitionKey]) || 0) / PARTITION_TOTAL_WIDTH;
+        const partitionTargetHeight = Math.max(128, Math.round(textureViewport.viewportWidth * partitionRatio));
+        const paddingTargetHeight = verticalFlow ? partitionTargetHeight : textureViewport.targetHeight;
         const scaledPadding = computeScaledPaddingFrom3dMath(
           partitionSettings.padTopBottom,
           partitionSettings.padLeftRight,
