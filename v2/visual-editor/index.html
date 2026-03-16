@@ -426,6 +426,7 @@
         position: relative;
         overflow: hidden;
         background: transparent;
+        border: 1px solid transparent;
       }
 
       .flat-billboard-asset.no-preview {
@@ -1606,14 +1607,16 @@
         flatBillboardTrack.innerHTML = "";
         const orderedBlocks = Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block"));
         for (const sourceBlock of orderedBlocks) {
-          const renderedWidth = sourceBlock.offsetWidth;
-          const renderedHeight = sourceBlock.offsetHeight;
+          const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
+          if (!editorMetrics) {
+            continue;
+          }
           const previewImage = sourceBlock.querySelector(".asset-preview-image");
 
           const targetBlock = document.createElement("div");
           targetBlock.className = "flat-billboard-asset";
-          targetBlock.style.width = Math.max(1, renderedWidth * scaleFactor) + "px";
-          targetBlock.style.height = Math.max(1, renderedHeight * scaleFactor) + "px";
+          targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
+          targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
 
           if (previewImage instanceof HTMLImageElement) {
             const assetImage = document.createElement("img");
@@ -1621,16 +1624,9 @@
             assetImage.alt = "";
             assetImage.decoding = "async";
             assetImage.loading = "lazy";
-            const sourceWidth = parseFloat(previewImage.style.width || "0");
-            const sourceHeight = parseFloat(previewImage.style.height || "0");
-            const sourceOffsetX = parseFloat((previewImage.style.transform || "").replace(/[^\d.-]/g, "")) || 0;
-            if (sourceWidth > 0) {
-              assetImage.style.width = Math.max(1, sourceWidth * scaleFactor) + "px";
-            }
-            if (sourceHeight > 0) {
-              assetImage.style.height = Math.max(1, sourceHeight * scaleFactor) + "px";
-            }
-            assetImage.style.transform = "translateX(" + sourceOffsetX * scaleFactor + "px)";
+            assetImage.style.width = Math.max(1, editorMetrics.fullScaledWidth * scaleFactor) + "px";
+            assetImage.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
+            assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
             const src = sourceBlock.dataset.assetSrc || "";
             const group = sourceBlock.dataset.assetGroup || "";
             resolvePreviewUrl(src, group)
