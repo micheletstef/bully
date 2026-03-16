@@ -99,6 +99,7 @@ const DIRECTION_DISPLAY_NAMES = {
   partitioned: "partitioned billboard",
   "loop maker": "loop maker"
 };
+const SIDEBAR_LABEL_MAX_CHARS = 32;
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 const DEFAULT_PARTITION_ARTWORKS = {
   left: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
@@ -349,6 +350,15 @@ function getDirectionDisplayName(name) {
   }
   const mapped = DIRECTION_DISPLAY_NAMES[raw.toLowerCase()];
   return mapped || raw;
+}
+
+function truncateSidebarLabel(value, maxChars = SIDEBAR_LABEL_MAX_CHARS) {
+  const label = String(value || "").trim();
+  const safeMaxChars = Number.isFinite(maxChars) ? Math.max(4, Math.floor(maxChars)) : SIDEBAR_LABEL_MAX_CHARS;
+  if (!label || label.length <= safeMaxChars) {
+    return label;
+  }
+  return `${label.slice(0, safeMaxChars - 1)}…`;
 }
 
 function generateArtworkId() {
@@ -5810,7 +5820,7 @@ function renderLoopPreview() {
   const designToEditorScale = computeEditorDesignToPixelScale();
   const baseArtworkHeightPx = Math.max(
     8,
-    Math.round((Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * scaleToPixels * 100) / 100
+    Math.round((Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * designToEditorScale * 100) / 100
   );
 
   loopArtworks.forEach((item, index) => {
@@ -6065,7 +6075,7 @@ function renderPartitionEditor(partitionKey) {
   const designToEditorScale = computeEditorDesignToPixelScale();
   const baseArtworkHeightPx = Math.max(
     8,
-    Math.round((Math.max(1, loopStageHeight) - Math.max(0, settings.padTopBottom) * 2) * scaleToPixels * 100) / 100
+    Math.round((Math.max(1, loopStageHeight) - Math.max(0, settings.padTopBottom) * 2) * designToEditorScale * 100) / 100
   );
 
   items.forEach((item, index) => {
@@ -6457,7 +6467,9 @@ function renderDirectory(directions) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "direction-item";
-    button.textContent = getDirectionDisplayName(name);
+    const displayName = getDirectionDisplayName(name);
+    button.textContent = truncateSidebarLabel(displayName);
+    button.title = displayName;
     button.dataset.directionName = name;
     button.addEventListener("click", () => {
       loadDirection(directionPath(name), name);
@@ -6500,7 +6512,9 @@ function renderDirectory(directions) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "direction-item output-item";
-      button.textContent = snapshot.name || snapshot.createdAt || "saved output";
+      const outputLabel = String(snapshot.name || snapshot.createdAt || "saved output");
+      button.textContent = truncateSidebarLabel(outputLabel);
+      button.title = outputLabel;
       button.addEventListener("click", () => {
         loadOutputSnapshot(snapshot);
         setActiveSidebarItem(button, `output:${snapshot.id || ""}`);
@@ -6552,7 +6566,9 @@ function renderDirectory(directions) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "direction-item output-item";
-      button.textContent = entry.name || artworkFileName(entry.src) || "asset";
+      const assetLabel = String(entry.name || artworkFileName(entry.src) || "asset");
+      button.textContent = truncateSidebarLabel(assetLabel);
+      button.title = assetLabel;
       if (entry.id === pickedLibraryAssetId) {
         button.classList.add("active");
       }

@@ -207,6 +207,13 @@ body.dark-mode .orientation-choice.inactive {
   text-transform: lowercase;
 }
 
+.directory-panel .directory-section h2,
+.directory-panel .settings-hint,
+.directory-panel .direction-item {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .direction-item {
   display: block;
   width: 100%;
@@ -218,6 +225,9 @@ body.dark-mode .orientation-choice.inactive {
   font-family: "Courier New", Courier, monospace;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .direction-item::before {
@@ -917,7 +927,8 @@ body.dark-mode .view-controls-panel {
 }
 
 .output-item {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .output-remove-button {
