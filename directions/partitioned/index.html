@@ -436,17 +436,20 @@
           paddingTargetHeight,
           partitionHeight
         );
-        const appliedPadTB = verticalFlow ? scaledPadding.padLeftRight : scaledPadding.padTopBottom;
-        const appliedPadLR = verticalFlow ? scaledPadding.padTopBottom : scaledPadding.padLeftRight;
+        // Match 3D semantics:
+        // - padTopBottom is panel inset (swapped to left/right when vertical)
+        // - padLeftRight is sequence spacer padding (applied via sidePadding below)
+        const panelInsetTopBottom = verticalFlow ? 0 : scaledPadding.padTopBottom;
+        const panelInsetLeftRight = verticalFlow ? scaledPadding.padTopBottom : 0;
+        const sidePadding = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
         container.style.setProperty("--loop-row-gap", `${Math.max(0, Number(partitionSettings.rowGap) || 0)}px`);
-        container.style.paddingTop = `${Math.max(0, Number(appliedPadTB) || 0)}px`;
-        container.style.paddingBottom = `${Math.max(0, Number(appliedPadTB) || 0)}px`;
-        container.style.paddingLeft = `${Math.max(0, Number(appliedPadLR) || 0)}px`;
-        container.style.paddingRight = `${Math.max(0, Number(appliedPadLR) || 0)}px`;
+        container.style.paddingTop = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
+        container.style.paddingBottom = `${Math.max(0, Number(panelInsetTopBottom) || 0)}px`;
+        container.style.paddingLeft = `${Math.max(0, Number(panelInsetLeftRight) || 0)}px`;
+        container.style.paddingRight = `${Math.max(0, Number(panelInsetLeftRight) || 0)}px`;
         container.style.boxSizing = "border-box";
         const rowCount = Math.max(1, Math.round(Number(partitionSettings.rowCount) || 1));
         const verticalTrackHeight = verticalFlow ? Math.max(1, Math.round(partitionWidth)) : null;
-        const sidePadding = 0;
         const rows = [];
         const allImages = [];
         let firstSequenceNodes = [];
