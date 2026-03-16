@@ -3138,7 +3138,10 @@ function computePreview3dLoopProgress() {
     preview3dPlaybackSyncState.syncedAtMs = nowMs;
   }
   const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedContinuous : loopElapsedSeconds;
-  const extrapolatedElapsed = elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+  const extrapolatedDeltaSeconds = Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+  // Avoid large drift when browser throttles timers/background tabs.
+  const safeDeltaSeconds = Math.min(0.25, extrapolatedDeltaSeconds);
+  const extrapolatedElapsed = elapsedBase + safeDeltaSeconds;
   progress = ((extrapolatedElapsed % duration) + duration) / duration;
   progress = ((progress % 1) + 1) % 1;
   return progress;
@@ -3154,7 +3157,8 @@ function computePreview3dElapsedSeconds() {
     preview3dPlaybackSyncState.syncedAtMs = nowMs;
   }
   const elapsedBase = hasSyncedSample ? preview3dPlaybackSyncState.elapsedContinuous : loopElapsedSeconds;
-  return elapsedBase + Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+  const extrapolatedDeltaSeconds = Math.max(0, (nowMs - preview3dPlaybackSyncState.syncedAtMs) / 1000);
+  return elapsedBase + Math.min(0.25, extrapolatedDeltaSeconds);
 }
 
 function drawSurfaceViewportWindow(ctx, surface, progress, destX, destY, destWidth, destHeight) {
@@ -6409,7 +6413,7 @@ function updateActiveWindow() {
     return;
   }
 
-  const frameHeight = Math.max(1, loopVisualization.clientHeight);
+  const frameHeight = Math.max(1, loopPreviewTrack.clientHeight || loopVisualization.clientHeight);
   const normalizedProgress = computePreview3dLoopProgress();
   const scaledLoopDistance = Math.max(1, sequenceWidth);
   const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
@@ -6427,10 +6431,10 @@ function updateActiveWindow() {
   const traverseElapsed = traverseDuration * traverseProgress;
   loopTraverseSeconds = traverseDuration;
   const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
+  const frameTopOffset = Math.max(0, loopPreviewTrack.offsetTop);
   const mainWidth = Math.min(activeWidth, Math.max(0, scaledLoopDistance - x));
   const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
-  const frameTopOffset = 0;
 
   loopActiveWindow.style.top = `${frameTopOffset}px`;
   loopActiveWindow.style.height = `${frameHeight}px`;
