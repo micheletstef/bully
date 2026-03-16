@@ -436,7 +436,7 @@ body.dark-mode .orientation-choice.inactive {
   transform: translateX(-50%);
   width: max-content;
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
-  height: 72px;
+  height: 84px;
   padding: 0;
   overflow: hidden;
   background: #f1f1f1;
@@ -451,7 +451,8 @@ body.dark-mode .orientation-choice.inactive {
 
 .loop-preview-track {
   position: absolute;
-  top: calc(4px + var(--preview-pad-tb, 0px));
+  top: 50%;
+  transform: translateY(-50%);
   height: var(--preview-track-height, 46px);
   left: 4px;
   display: flex;
@@ -469,7 +470,7 @@ body.dark-mode .orientation-choice.inactive {
   top: var(--preview-safe-top, 0px);
   width: calc(100% - var(--preview-safe-left, 0px) - var(--preview-safe-right, 0px));
   height: var(--preview-safe-height, 100%);
-  border: 1px solid rgba(211, 0, 0, 0.65);
+  border: 1px solid rgba(32, 103, 220, 0.75);
   box-sizing: border-box;
   pointer-events: none;
   z-index: 2;
@@ -1072,7 +1073,7 @@ body.dark-mode .view-controls-panel {
   display: flex;
   align-items: center;
   gap: var(--partition-preview-gap, 0px);
-  min-height: 54px;
+  min-height: 62px;
   width: max-content;
   border: 0;
   padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);
@@ -1088,7 +1089,7 @@ body.dark-mode .view-controls-panel {
   top: var(--partition-safe-top, 0px);
   width: calc(100% - var(--partition-safe-left, 0px) - var(--partition-safe-right, 0px));
   height: var(--partition-safe-height, 100%);
-  border: 1px solid rgba(211, 0, 0, 0.65);
+  border: 1px solid rgba(32, 103, 220, 0.75);
   box-sizing: border-box;
   pointer-events: none;
   z-index: 2;
@@ -1115,7 +1116,7 @@ body.dark-mode .view-controls-panel {
 .partition-preview-item {
   position: relative;
   flex: 0 0 auto;
-  height: var(--partition-preview-art-height, 46px);
+  height: var(--partition-preview-art-height, 52px);
   outline: 1px solid rgba(0, 0, 0, 0.22);
   outline-offset: -1px;
   cursor: move;
@@ -1124,7 +1125,7 @@ body.dark-mode .view-controls-panel {
 }
 
 .partition-preview-spacer {
-  height: var(--partition-preview-art-height, 46px);
+  height: var(--partition-preview-art-height, 52px);
   flex: 0 0 auto;
 }
 

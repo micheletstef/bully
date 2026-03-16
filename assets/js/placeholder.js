@@ -160,8 +160,8 @@ let partitionLoopDistances = {
   right: 1
 };
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
-const LEGACY_LINEAR_PREVIEW_HEIGHT_PX = 72;
-const LEGACY_LINEAR_TRACK_HEIGHT_PX = 46;
+const LEGACY_LINEAR_PREVIEW_HEIGHT_PX = 84;
+const LEGACY_LINEAR_TRACK_HEIGHT_PX = 52;
 const BILLBOARD_DESIGN_WIDTH = 5900;
 const BILLBOARD_DESIGN_HEIGHT = 3480;
 const BILLBOARD_MODEL_URL = "assets/models/D_Billboard_MockUp.glb";
@@ -5253,7 +5253,6 @@ function syncVisualizationGeometry() {
   const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
   const horizontalPadding = 8;
   loopVisualization.style.width = `${Math.round(contentWidth + horizontalPadding)}px`;
-  loopPreviewTrack.style.transform = "none";
 }
 
 function computeLinearEditorLayoutScale() {
