@@ -474,6 +474,7 @@
           calc(100% - (var(--safe-right-ratio) * 100%)) 0,
           0 calc(var(--safe-top-ratio) * 100%),
           0 calc(100% - (var(--safe-bottom-ratio) * 100%));
+        overflow: hidden;
       }
 
       .flat-billboard-track {
@@ -1621,19 +1622,16 @@
         }
         const direction = editorState.settings.marqueeDirection;
         const horizontal = direction === "rtl" || direction === "ltr";
-        const firstOriginal = originals[0];
-        const firstCopy = flatBillboardTrack.querySelector(".flat-billboard-asset.marquee-copy");
-        if (firstCopy instanceof HTMLElement) {
-          if (horizontal) {
-            return Math.max(1, firstCopy.offsetLeft - firstOriginal.offsetLeft);
+        const gap = Math.max(0, parseFloat(flatBillboardTrack.style.gap || "0") || 0);
+        let run = 0;
+        for (let index = 0; index < originals.length; index += 1) {
+          const block = originals[index];
+          run += horizontal ? block.offsetWidth : block.offsetHeight;
+          if (index < originals.length - 1) {
+            run += gap;
           }
-          return Math.max(1, firstCopy.offsetTop - firstOriginal.offsetTop);
         }
-        const lastOriginal = originals[originals.length - 1];
-        if (horizontal) {
-          return Math.max(1, lastOriginal.offsetLeft + lastOriginal.offsetWidth - firstOriginal.offsetLeft);
-        }
-        return Math.max(1, lastOriginal.offsetTop + lastOriginal.offsetHeight - firstOriginal.offsetTop);
+        return Math.max(1, run);
       }
 
       function applyFlatBillboardTrackTransform() {
