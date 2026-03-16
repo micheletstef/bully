@@ -321,7 +321,7 @@
       }
 
       .export-progress {
-        margin-top: 6px;
+        margin-top: 2px;
         display: none;
         gap: 4px;
       }
@@ -466,6 +466,12 @@
           <div class="row">
             <button id="exportButton" type="button" disabled>export gif</button>
             <p class="hint">exports in current frame order</p>
+            <div id="exportProgress" class="export-progress">
+              <div class="export-progress-track">
+                <div id="exportProgressFill" class="export-progress-fill"></div>
+              </div>
+              <div id="exportProgressLabel" class="export-progress-label">0%</div>
+            </div>
           </div>
 
           <div class="row">
@@ -475,12 +481,6 @@
 
         <div id="frameList" class="list"></div>
         <div id="status" class="status"></div>
-        <div id="exportProgress" class="export-progress">
-          <div class="export-progress-track">
-            <div id="exportProgressFill" class="export-progress-fill"></div>
-          </div>
-          <div id="exportProgressLabel" class="export-progress-label">0%</div>
-        </div>
       </section>
 
       <section class="preview-wrap">
@@ -1484,6 +1484,7 @@
         setExportProgress(0, true);
         await nextUiTick();
         try {
+          const MAX_EXPORT_SIDE = 1200;
           const frames = steppedFrames();
           if (!frames.length) {
             throw new Error("no frames");
@@ -1517,19 +1518,25 @@
           const baseCropRect = cropRectForImage(firstImage);
           const width = Math.max(1, baseCropRect.sw);
           const height = Math.max(1, baseCropRect.sh);
+          const exportScale = Math.min(1, MAX_EXPORT_SIDE / Math.max(width, height));
+          const exportWidth = Math.max(1, Math.round(width * exportScale));
+          const exportHeight = Math.max(1, Math.round(height * exportScale));
+          if (exportScale < 1) {
+            setStatus(`encoding gif (downscaled to ${exportWidth}x${exportHeight})...`);
+          }
           const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = exportWidth;
+          canvas.height = exportHeight;
           const context = canvas.getContext("2d", { willReadFrequently: true });
           if (!context) {
             throw new Error("canvas unsupported");
           }
 
           const gif = new GIF({
-            workers: 2,
-            quality: 8,
-            width,
-            height,
+            workers: 1,
+            quality: 10,
+            width: exportWidth,
+            height: exportHeight,
             workerScript: "https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js"
           });
 
@@ -1542,14 +1549,14 @@
             const normalizedOffset = offsets.get(frameKey(frame, index));
             const scaleFactor = scales.get(frameKey(frame, index)) || 1;
             const appliedScale = Math.max(0.6, Math.min(1.8, Number(scaleFactor) || 1));
-            const scaledWidth = width * appliedScale;
-            const scaledHeight = height * appliedScale;
-            const baseX = (width - scaledWidth) * 0.5;
-            const baseY = (height - scaledHeight) * 0.5;
+            const scaledWidth = exportWidth * appliedScale;
+            const scaledHeight = exportHeight * appliedScale;
+            const baseX = (exportWidth - scaledWidth) * 0.5;
+            const baseY = (exportHeight - scaledHeight) * 0.5;
             const offset = normalizedOffset
               ? { x: normalizedOffset.oxNorm * scaledWidth, y: normalizedOffset.oyNorm * scaledHeight }
               : autoCenterShiftPx(frame, image, cropRect, scaledWidth, scaledHeight);
-            context.clearRect(0, 0, width, height);
+            context.clearRect(0, 0, exportWidth, exportHeight);
             context.drawImage(
               image,
               cropRect.sx,
@@ -1580,7 +1587,7 @@
             gif.render();
             window.setTimeout(() => {
               reject(new Error("gif render timeout"));
-            }, 120000);
+            }, 600000);
           });
 
           const outputUrl = URL.createObjectURL(blob);
@@ -1595,12 +1602,10 @@
           setExportProgress(1, true);
           setStatus(downloaded ? "gif exported (download started)" : "gif exported (opened in new tab)");
         } catch (error) {
-          setExportProgress(0, false);
-          setStatus("unable to export gif");
+          setExportProgress(0, true);
+          const message = error && error.message ? error.message : "unknown error";
+          setStatus(`unable to export gif: ${message}`);
         } finally {
-          window.setTimeout(() => {
-            setExportProgress(0, false);
-          }, 600);
           exportButton.disabled = state.frames.length === 0;
         }
       }
