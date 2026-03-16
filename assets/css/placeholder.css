@@ -443,8 +443,8 @@ body.dark-mode .orientation-choice.inactive {
   border: 1px solid rgba(0, 0, 0, 0.2);
   --editor-grid-size: 16px;
   background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 0, 0, 0.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
   background-size: var(--editor-grid-size) var(--editor-grid-size);
   background-position: 0 0;
 }
@@ -466,6 +466,19 @@ body.dark-mode .orientation-choice.inactive {
   gap: var(--preview-gap, 0px);
   z-index: 1;
   overflow: visible;
+}
+
+.loop-preview-track::after {
+  content: "";
+  position: absolute;
+  left: var(--preview-safe-left, 0px);
+  top: var(--preview-safe-top, 0px);
+  width: calc(100% - var(--preview-safe-left, 0px) - var(--preview-safe-right, 0px));
+  height: var(--preview-safe-height, 100%);
+  border: 1px solid rgba(211, 0, 0, 0.65);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .loop-preview-spacer {
@@ -1074,10 +1087,23 @@ body.dark-mode .view-controls-panel {
   border: 1px solid rgba(0, 0, 0, 0.2);
   --editor-grid-size: 16px;
   background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 0, 0, 0.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
   background-size: var(--editor-grid-size) var(--editor-grid-size);
   background-position: 0 0;
+}
+
+.partition-preview-track::after {
+  content: "";
+  position: absolute;
+  left: var(--partition-safe-left, 0px);
+  top: var(--partition-safe-top, 0px);
+  width: calc(100% - var(--partition-safe-left, 0px) - var(--partition-safe-right, 0px));
+  height: var(--partition-safe-height, 100%);
+  border: 1px solid rgba(211, 0, 0, 0.65);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .partition-preview-track.drag-over {
@@ -1175,6 +1201,10 @@ body.dark-mode .view-controls-panel {
 .artwork-anchor-tr { right: -4px; top: -4px; }
 .artwork-anchor-bl { left: -4px; bottom: -4px; }
 .artwork-anchor-br { right: -4px; bottom: -4px; }
+.artwork-anchor-tl,
+.artwork-anchor-br { cursor: nwse-resize; }
+.artwork-anchor-tr,
+.artwork-anchor-bl { cursor: nesw-resize; }
 
 @media (max-width: 1000px) {
   .app-shell {

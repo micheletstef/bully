@@ -242,7 +242,8 @@
             const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
             const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
             image.style.transformOrigin = "center center";
-            image.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+            image.dataset.layoutScale = String(scale);
+            image.style.transform = `translate(${tx}px, ${ty}px)`;
             track.appendChild(image);
             allImages.push(image);
             if (rowImagesByTrack.has(track)) {
@@ -302,7 +303,8 @@
           const artworkHeight = Math.max(1, Math.round(rowHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
           const rowImages = rowImagesByTrack.get(track) || [];
           rowImages.forEach((image) => {
-            image.style.height = `${artworkHeight}px`;
+            const scale = Number.isFinite(Number(image.dataset.layoutScale)) ? Number(image.dataset.layoutScale) : 1;
+            image.style.height = `${Math.max(1, Math.round(artworkHeight * scale))}px`;
           });
         });
 
