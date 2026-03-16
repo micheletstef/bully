@@ -123,6 +123,12 @@ let draggingArtworkIndex = null;
 let artworkEditorDragState = null;
 let artworkEditorSyncFrameId = null;
 const EDITOR_GRID_SIZE_PX = 16;
+let selectedLinearArtworkId = "";
+const selectedPartitionArtworkIds = {
+  left: "",
+  curve: "",
+  right: ""
+};
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
 let loopPlaybackViewportRatio = 0.25;
@@ -5262,12 +5268,7 @@ function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const totalWidth = loopPreviewTrack.scrollWidth;
-  if (!Number.isFinite(totalWidth) || totalWidth <= 0) {
-    return;
-  }
-  const horizontalPadding = 8;
-  loopVisualization.style.width = `${totalWidth + horizontalPadding}px`;
+  // Keep visualization as a fixed artboard width.
 }
 
 function computeLinearEditorLayoutScale() {
@@ -5343,12 +5344,10 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
       return;
     }
     event.preventDefault();
-    const target = event.target;
-    const isScaleHandle = !!(target && target.classList && target.classList.contains("artwork-scale-handle"));
     artworkEditorDragState = {
       item,
       targetEl: tileEl,
-      mode: isScaleHandle ? "scale" : "move",
+      mode: "move",
       startX: event.clientX,
       startY: event.clientY,
       startLayout: sanitizeArtworkLayout(item.layout),
@@ -5365,15 +5364,11 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
     const next = sanitizeArtworkLayout(state.startLayout);
-    if (state.mode === "scale") {
-      next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(-dy * 0.01)));
-    } else {
-      const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
-      const rawX = state.startLayout.x + dx / state.scaleToPixels;
-      const rawY = state.startLayout.y + dy / state.scaleToPixels;
-      next.x = Math.round(rawX / gridUnit) * gridUnit;
-      next.y = Math.round(rawY / gridUnit) * gridUnit;
-    }
+    const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
+    const rawX = state.startLayout.x + dx / state.scaleToPixels;
+    const rawY = state.startLayout.y + dy / state.scaleToPixels;
+    next.x = Math.round(rawX / gridUnit) * gridUnit;
+    next.y = Math.round(rawY / gridUnit) * gridUnit;
     state.item.layout = sanitizeArtworkLayout(next);
     applyArtworkTileTransform(state.targetEl, state.item, state.scaleToPixels);
     scheduleArtworkLayoutSync();
@@ -5386,7 +5381,7 @@ function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options
     tileEl.releasePointerCapture(event.pointerId);
     const state = artworkEditorDragState;
     artworkEditorDragState = null;
-    if (state.mode === "move" && onRemove && dropContainerSelector) {
+    if (onRemove && dropContainerSelector) {
       const dropTarget = document.elementFromPoint(event.clientX, event.clientY);
       const droppedContainer = dropTarget ? dropTarget.closest(dropContainerSelector) : null;
       if (!droppedContainer) {
@@ -5428,12 +5423,30 @@ function renderLoopPreview() {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src);
     tile.appendChild(image);
-    const scaleHandle = document.createElement("button");
-    scaleHandle.type = "button";
-    scaleHandle.className = "artwork-scale-handle";
-    scaleHandle.title = "scale artwork";
-    scaleHandle.textContent = "↘";
-    tile.appendChild(scaleHandle);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "artwork-close-button";
+    closeButton.title = "remove artwork";
+    closeButton.textContent = "×";
+    closeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeArtworkById(item.id);
+    });
+    tile.appendChild(closeButton);
+    ["tl", "tr", "bl", "br"].forEach((anchorKey) => {
+      const anchor = document.createElement("span");
+      anchor.className = `artwork-anchor artwork-anchor-${anchorKey}`;
+      tile.appendChild(anchor);
+    });
+    if (selectedLinearArtworkId === item.id) {
+      tile.classList.add("selected");
+    }
+    tile.addEventListener("click", (event) => {
+      event.preventDefault();
+      selectedLinearArtworkId = item.id;
+      renderLoopPreview();
+    });
     applyArtworkTileTransform(tile, item, layoutScale);
     bindArtworkEditorDrag(
       tile,
@@ -5653,12 +5666,30 @@ function renderPartitionEditor(partitionKey) {
     image.draggable = false;
     applyEditorAssetColorToImage(image, item.src, key);
     tile.appendChild(image);
-    const scaleHandle = document.createElement("button");
-    scaleHandle.type = "button";
-    scaleHandle.className = "artwork-scale-handle";
-    scaleHandle.title = "scale artwork";
-    scaleHandle.textContent = "↘";
-    tile.appendChild(scaleHandle);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "artwork-close-button";
+    closeButton.title = "remove artwork";
+    closeButton.textContent = "×";
+    closeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removePartitionArtworkById(key, item.id);
+    });
+    tile.appendChild(closeButton);
+    ["tl", "tr", "bl", "br"].forEach((anchorKey) => {
+      const anchor = document.createElement("span");
+      anchor.className = `artwork-anchor artwork-anchor-${anchorKey}`;
+      tile.appendChild(anchor);
+    });
+    if (selectedPartitionArtworkIds[key] === item.id) {
+      tile.classList.add("selected");
+    }
+    tile.addEventListener("click", (event) => {
+      event.preventDefault();
+      selectedPartitionArtworkIds[key] = item.id;
+      renderPartitionEditor(key);
+    });
     applyArtworkTileTransform(tile, item, partitionLayout.scale);
     bindArtworkEditorDrag(
       tile,

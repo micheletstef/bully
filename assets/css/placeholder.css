@@ -434,14 +434,19 @@ body.dark-mode .orientation-choice.inactive {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: max-content;
+  width: min(84vw, 1400px);
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
   height: 168px;
   padding: 0;
-  overflow-x: visible;
-  overflow-y: visible;
+  overflow: hidden;
   background: #f1f1f1;
   border: 1px solid rgba(0, 0, 0, 0.2);
+  --editor-grid-size: 16px;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+  background-size: var(--editor-grid-size) var(--editor-grid-size);
+  background-position: 0 0;
 }
 
 .loop-visualization.drag-over {
@@ -460,12 +465,7 @@ body.dark-mode .orientation-choice.inactive {
   width: fit-content;
   gap: var(--preview-gap, 0px);
   z-index: 1;
-  --editor-grid-size: 16px;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
-  background-size: var(--editor-grid-size) var(--editor-grid-size);
-  background-position: 0 0;
+  overflow: visible;
 }
 
 .loop-preview-spacer {
@@ -1066,7 +1066,7 @@ body.dark-mode .view-controls-panel {
   align-items: center;
   gap: var(--partition-preview-gap, 0px);
   min-height: 136px;
-  width: fit-content;
+  width: min(84vw, 1400px);
   border: 0;
   padding: var(--partition-preview-pad-tb, 4px) var(--partition-preview-pad-lr, 4px);
   overflow: hidden;
@@ -1124,21 +1124,57 @@ body.dark-mode .view-controls-panel {
 }
 
 .artwork-scale-handle {
+  display: none;
+}
+
+.artwork-close-button {
   position: absolute;
+  top: -8px;
   right: -8px;
-  bottom: -8px;
   width: 16px;
   height: 16px;
   border: 1px solid #222;
   background: #fff;
   color: #111;
   font-family: "Courier New", Courier, monospace;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 12px;
   padding: 0;
-  cursor: nwse-resize;
-  z-index: 5;
+  cursor: pointer;
+  z-index: 6;
+  display: none;
 }
+
+.loop-preview-item.selected,
+.partition-preview-item.selected {
+  outline: 2px solid #d30000;
+  outline-offset: -2px;
+}
+
+.loop-preview-item.selected .artwork-close-button,
+.partition-preview-item.selected .artwork-close-button {
+  display: block;
+}
+
+.artwork-anchor {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #d30000;
+  background: #fff;
+  z-index: 6;
+  display: none;
+}
+
+.loop-preview-item.selected .artwork-anchor,
+.partition-preview-item.selected .artwork-anchor {
+  display: block;
+}
+
+.artwork-anchor-tl { left: -4px; top: -4px; }
+.artwork-anchor-tr { right: -4px; top: -4px; }
+.artwork-anchor-bl { left: -4px; bottom: -4px; }
+.artwork-anchor-br { right: -4px; bottom: -4px; }
 
 @media (max-width: 1000px) {
   .app-shell {
