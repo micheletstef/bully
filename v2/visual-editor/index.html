@@ -243,6 +243,10 @@
         border: 1px solid rgba(0, 0, 0, 0.22);
         cursor: pointer;
         transition: transform 180ms ease;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
       .fake-asset-block.is-selected {
@@ -253,6 +257,16 @@
       .fake-asset-block.is-dragging {
         opacity: 0.45;
         cursor: grabbing;
+      }
+
+      .asset-preview-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
       }
 
       .asset-scale-controls {
@@ -462,6 +476,13 @@
         };
       }
 
+      function resolveAssetUrlFromSrc(src) {
+        if (!src) {
+          return "";
+        }
+        return apiPath(src);
+      }
+
       function createAssetButton(asset) {
         const button = document.createElement("button");
         button.type = "button";
@@ -624,6 +645,19 @@
         block.dataset.originalHeight = String(asset.height);
         block.dataset.scalePercent = String(asset.scalePercent);
         block.dataset.rotationTurns = String(asset.rotationTurns || 0);
+        if (typeof asset.src === "string" && asset.src) {
+          block.dataset.assetSrc = asset.src;
+          const image = document.createElement("img");
+          image.className = "asset-preview-image";
+          image.alt = "";
+          image.decoding = "async";
+          image.loading = "lazy";
+          image.src = resolveAssetUrlFromSrc(asset.src);
+          image.addEventListener("error", () => {
+            image.remove();
+          });
+          block.appendChild(image);
+        }
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
       }
