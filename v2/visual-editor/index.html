@@ -329,9 +329,11 @@
           return;
         }
         const safeHeight = getSafeAssetHeight();
-        const scaledWidth = Math.max(1, Math.round((originalWidth / originalHeight) * safeHeight));
+        const scale = Math.min(1, safeHeight / originalHeight);
+        const scaledWidth = Math.max(1, Math.round(originalWidth * scale));
+        const scaledHeight = Math.max(1, Math.round(originalHeight * scale));
         block.style.width = scaledWidth + "px";
-        block.style.height = safeHeight + "px";
+        block.style.height = scaledHeight + "px";
       }
 
       function updateAllAssetBlockSizes() {
