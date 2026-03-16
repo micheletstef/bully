@@ -30,7 +30,7 @@
       .page-shell {
         width: 100%;
         display: grid;
-        grid-template-columns: 260px 220px 1fr;
+        grid-template-columns: 260px 260px 1fr;
         gap: 24px;
         align-items: start;
       }
@@ -814,6 +814,19 @@
         });
       }
 
+      function removeSelectedAsset() {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          return false;
+        }
+        const selectedAssetId = selectedBlock.dataset.assetId;
+        selectedBlock.remove();
+        editorState.assets = editorState.assets.filter((asset) => asset.id !== selectedAssetId);
+        selectAssetBlock(null);
+        saveEditorState();
+        return true;
+      }
+
       function setVerticalAlignment(alignKey, shouldPersist) {
         if (!alignmentMap[alignKey]) {
           return;
@@ -986,6 +999,24 @@
 
       window.addEventListener("resize", () => {
         positionScaleControls();
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement) {
+          const tagName = target.tagName.toLowerCase();
+          const isTypingField = target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
+          if (isTypingField) {
+            return;
+          }
+        }
+        if (event.key !== "Backspace") {
+          return;
+        }
+        const didRemove = removeSelectedAsset();
+        if (didRemove) {
+          event.preventDefault();
+        }
       });
 
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
