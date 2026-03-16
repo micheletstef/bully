@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>linear billboard</title>
+    <style>
+      :root {
+        --loop-duration: 16s;
+        --loop-distance: 1024px;
+        --loop-pad-tb: 0px;
+        --loop-pad-lr: 0px;
+        --loop-bg: #fff8a5;
+        --loop-gap: 0px;
+        --loop-row-gap: 0px;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body,
+      .canvas {
+        background: var(--loop-bg);
+      }
+
+      .canvas {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Courier New", Courier, monospace;
+        color: #1f1f1f;
+      }
+
+      .loop-stage {
+        position: absolute;
+        top: var(--loop-pad-tb);
+        bottom: var(--loop-pad-tb);
+        left: 0;
+        right: 0;
+        overflow: hidden;
+      }
+
+      .loop-fill {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--loop-row-gap);
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .loop-row {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .loop-row-track {
+        display: flex;
+        gap: var(--loop-gap);
+        width: max-content;
+        height: 100%;
+        animation: loop-x var(--loop-duration) linear infinite;
+        animation-delay: var(--loop-row-delay, 0s);
+        animation-direction: var(--loop-row-direction, normal);
+        opacity: 0.98;
+      }
+
+      .loop-row-track.vertical-scroll {
+        transform-origin: top left;
+      }
+
+      @keyframes loop-x {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(-1 * var(--loop-distance)));
+        }
+      }
+
+      @keyframes loop-y {
+        from {
+          transform: translateY(var(--loop-vertical-shift, 100%)) rotate(-90deg) translateX(calc(-1 * var(--loop-distance)));
+        }
+        to {
+          transform: translateY(var(--loop-vertical-shift, 100%)) rotate(-90deg) translateX(0);
+        }
+      }
+
+      .loop-artwork {
+        height: 100%;
+        width: auto;
+        flex: 0 0 auto;
+      }
+
+      .loop-artwork.vertical {
+        transform: none;
+      }
+
+      .loop-spacer {
+        height: 100%;
+        flex: 0 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div id="loopStage" class="loop-stage">
+        <div id="loopFill" class="loop-fill"></div>
+      </div>
+    </div>
+    <script>
+      const loopFill = document.getElementById("loopFill");
+      const loopStage = document.getElementById("loopStage");
+      const BILLBOARD_DESIGN_WIDTH = 5900;
+      const BILLBOARD_DESIGN_HEIGHT = 3480;
+      const state = {
+        seconds: 16,
+        artworks: ["../../assets/linear-loop-strip.png"],
+        artworkTransforms: [],
+        padTopBottom: 0,
+        padLeftRight: 0,
+        backgroundColor: "#fff8a5",
+        loopDistance: 1024,
+        assetGap: 0,
+        artworkOrientation: "horizontal",
+        rowCount: 1,
+        rowOffset: 0,
+        rowGap: 0
+      };
+      let playbackTimer = null;
+      let primaryTrack = null;
+
+      function computeScaledPaddingFrom3dMath(padTopBottomDesign, padLeftRightDesign, targetHeight, viewportHeight) {
+        const safeTargetHeight = Math.max(1, Number(targetHeight) || 0);
+        const safeViewportHeight = Math.max(1, Number(viewportHeight) || 0);
+        const scale = Math.max(0.08, safeTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const safePadTBDesign = Math.max(
+          0,
+          Math.min(BILLBOARD_DESIGN_HEIGHT / 2 - 1, Number(padTopBottomDesign) || 0)
+        );
+        const safePadLRDesign = Math.max(0, Number(padLeftRightDesign) || 0);
+        const padTopBottom = Math.min(safePadTBDesign * scale, Math.max(0, (safeViewportHeight - 1) / 2));
+        const padLeftRight = Math.max(0, safePadLRDesign * scale);
+        return { padTopBottom, padLeftRight };
+      }
+
+      function compute3dLikeTargetHeight(stageHeight) {
+        const safeStageHeight = Math.max(1, Number(stageHeight) || 0);
+        const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+        return Math.min(Math.max(256, Math.round(safeStageHeight * dpr * 0.95)), 960);
+      }
+
+      function normalizeArtworkSource(path) {
+        if (/^(https?:|data:|blob:)/.test(path)) {
+          return path;
+        }
+        if (path.startsWith("../../") || path.startsWith("../")) {
+          return path;
+        }
+        if (path.startsWith("assets/")) {
+          return `../../${path}`;
+        }
+        return path;
+      }
+
+      function waitForImage(img) {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }
+
+      async function renderLoop() {
+        loopFill.innerHTML = "";
+        primaryTrack = null;
+        const viewportHeight = Math.max(
+          1,
+          Number(document.documentElement.clientHeight) || 0,
+          Number(window.innerHeight) || 0
+        );
+        const stageHeight = Math.max(1, Number(loopStage.clientHeight) || viewportHeight);
+        const paddingTargetHeight = compute3dLikeTargetHeight(stageHeight);
+        const padTopBottomDesign = Math.max(0, Number(state.padTopBottom) || 0);
+        const padLeftRightDesign = Math.max(0, Number(state.padLeftRight) || 0);
+        const scaledPadding = computeScaledPaddingFrom3dMath(
+          padTopBottomDesign,
+          padLeftRightDesign,
+          paddingTargetHeight,
+          viewportHeight
+        );
+        const layoutScale = Math.max(0.08, paddingTargetHeight / BILLBOARD_DESIGN_HEIGHT);
+        const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * layoutScale));
+        const appliedPadTopBottom = 0;
+        const appliedPadLeftRight = scaledPadding.padLeftRight;
+
+        const sources = state.artworks.length
+          ? state.artworks.map(normalizeArtworkSource)
+          : ["../../assets/linear-loop-strip.png"];
+        const transforms = Array.isArray(state.artworkTransforms) ? state.artworkTransforms : [];
+        const rowCount = Math.max(1, Math.round(Number(state.rowCount) || 1));
+        const sidePadding = appliedPadLeftRight;
+        const rows = [];
+        const rowImagesByTrack = new Map();
+        const allImages = [];
+        let firstSequenceNodes = [];
+        let firstSequenceStartNode = null;
+        let secondSequenceStartNode = null;
+
+        function appendSequence(track, collectNodes) {
+          const nodes = [];
+          let startNode = null;
+
+          if (sidePadding > 0) {
+            const spacerStart = document.createElement("div");
+            spacerStart.className = "loop-spacer";
+            spacerStart.style.width = `${sidePadding}px`;
+            track.appendChild(spacerStart);
+            nodes.push(spacerStart);
+            startNode = spacerStart;
+          }
+
+          sources.forEach((src, idx) => {
+            const image = document.createElement("img");
+            image.className = "loop-artwork";
+            image.src = src;
+            image.alt = "";
+            image.style.marginRight = `${scaledGap}px`;
+            const layoutRaw = transforms[idx];
+            const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
+            const tx = Number.isFinite(Number(layout.x)) ? Number(layout.x) * layoutScale : 0;
+            const ty = Number.isFinite(Number(layout.y)) ? Number(layout.y) * layoutScale : 0;
+            const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
+            image.style.transformOrigin = "center center";
+            image.dataset.layoutScale = String(scale);
+            image.style.transform = `translate(${tx}px, ${ty}px)`;
+            track.appendChild(image);
+            allImages.push(image);
+            if (rowImagesByTrack.has(track)) {
+              rowImagesByTrack.get(track).push(image);
+            }
+            nodes.push(image);
+            if (!startNode) {
+              startNode = image;
+            }
+          });
+
+          if (sidePadding > 0) {
+            const spacerEnd = document.createElement("div");
+            spacerEnd.className = "loop-spacer";
+            spacerEnd.style.width = `${sidePadding}px`;
+            track.appendChild(spacerEnd);
+            nodes.push(spacerEnd);
+          }
+
+          if (collectNodes) {
+            firstSequenceNodes = nodes;
+            firstSequenceStartNode = startNode;
+          }
+
+          return startNode;
+        }
+
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          const row = document.createElement("div");
+          row.className = "loop-row";
+          const track = document.createElement("div");
+          track.className = "loop-row-track";
+          track.style.gap = "0px";
+          track.style.alignItems = "center";
+          const verticalFlow = state.artworkOrientation === "vertical";
+          if (verticalFlow) {
+            track.classList.add("vertical-scroll");
+          }
+          row.appendChild(track);
+          loopFill.appendChild(row);
+          rows.push(track);
+          rowImagesByTrack.set(track, []);
+
+          appendSequence(track, rowIndex === 0);
+          const secondStart = appendSequence(track, false);
+          if (rowIndex === 0) {
+            secondSequenceStartNode = secondStart;
+          }
+        }
+
+        await Promise.all(allImages.map(waitForImage));
+
+        rows.forEach((track) => {
+          const rowHeight = track.parentElement
+            ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+            : Math.max(1, Math.round(loopStage.getBoundingClientRect().height));
+          const artworkHeight = Math.max(1, Math.round(rowHeight - Math.max(0, Number(scaledPadding.padTopBottom) || 0) * 2));
+          const rowImages = rowImagesByTrack.get(track) || [];
+          rowImages.forEach((image) => {
+            const scale = Number.isFinite(Number(image.dataset.layoutScale)) ? Number(image.dataset.layoutScale) : 1;
+            image.style.height = `${Math.max(1, Math.round(artworkHeight * scale))}px`;
+          });
+        });
+
+        const verticalFlow = state.artworkOrientation === "vertical";
+        const gapSize = scaledGap;
+        let loopDistance = 0;
+        if (firstSequenceStartNode && secondSequenceStartNode) {
+          const firstRect = firstSequenceStartNode.getBoundingClientRect();
+          const secondRect = secondSequenceStartNode.getBoundingClientRect();
+          loopDistance = verticalFlow
+            ? secondRect.top - firstRect.top
+            : secondRect.left - firstRect.left;
+        }
+        if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
+          const firstRowImages = rows.length ? rowImagesByTrack.get(rows[0]) || [] : [];
+          const imagesWidth = firstRowImages.reduce((sum, image) => sum + image.getBoundingClientRect().width, 0);
+          loopDistance = sidePadding * 2 + imagesWidth + firstRowImages.length * gapSize;
+        }
+        const safeDistance = loopDistance > 0 ? loopDistance : 1;
+        state.loopDistance = safeDistance;
+
+        const offsetSecondsPerRow = ((Number(state.rowOffset) || 0) / safeDistance) * state.seconds;
+        rows.forEach((track, rowIndex) => {
+          const delay = -1 * offsetSecondsPerRow * rowIndex;
+          const rowHeight = track.parentElement
+            ? Math.max(1, Math.round(track.parentElement.getBoundingClientRect().height))
+            : Math.max(1, Math.round(loopStage.getBoundingClientRect().height));
+          track.style.setProperty("--loop-row-delay", `${delay}s`);
+          track.style.setProperty("--loop-vertical-shift", `${rowHeight}px`);
+          track.style.animationName = verticalFlow ? "loop-y" : "loop-x";
+          track.style.setProperty("--loop-row-direction", "normal");
+        });
+
+        primaryTrack = rows[0] || null;
+
+        document.documentElement.style.setProperty("--loop-distance", `${safeDistance}px`);
+        document.documentElement.style.setProperty("--loop-duration", `${state.seconds}s`);
+        document.documentElement.style.setProperty("--loop-pad-tb", `${appliedPadTopBottom}px`);
+        document.documentElement.style.setProperty("--loop-bg", state.backgroundColor);
+        document.documentElement.style.setProperty("--loop-gap", `${gapSize}px`);
+        document.documentElement.style.setProperty("--loop-row-gap", `${Math.max(0, Number(state.rowGap) || 0)}px`);
+        emitPlayback();
+      }
+
+      function emitPlayback() {
+        const durationMs = Math.max(1, state.seconds * 1000);
+        const animationSource = primaryTrack || loopFill;
+        const animation = animationSource.getAnimations()[0];
+        let elapsedMs = 0;
+
+        if (animation && Number.isFinite(animation.currentTime)) {
+          const currentTime = Number(animation.currentTime);
+          elapsedMs = ((currentTime % durationMs) + durationMs) % durationMs;
+        } else {
+          elapsedMs = performance.now() % durationMs;
+        }
+
+        const progress = elapsedMs / durationMs;
+        const verticalFlow = state.artworkOrientation === "vertical";
+        const viewportSize = loopStage
+          ? verticalFlow
+            ? loopStage.clientHeight
+            : loopStage.clientWidth
+          : 0;
+        const stageHeight = loopStage ? loopStage.clientHeight : 0;
+        const viewportRatio =
+          state.loopDistance > 0 ? Math.min(1, Math.max(0.01, viewportSize / state.loopDistance)) : 0.25;
+
+        window.parent.postMessage(
+          {
+            type: "loopPlayback",
+            progress,
+            viewportRatio,
+            elapsedSeconds: elapsedMs / 1000,
+            durationSeconds: durationMs / 1000,
+            stageHeight,
+            assetGap: state.assetGap,
+            loopDistance: state.loopDistance
+          },
+          "*"
+        );
+      }
+
+      function startPlaybackEmitter() {
+        if (playbackTimer) {
+          clearInterval(playbackTimer);
+        }
+        emitPlayback();
+        playbackTimer = setInterval(emitPlayback, 50);
+      }
+
+      function applyConfig(payload) {
+        const seconds = Number(payload.seconds);
+        if (Number.isFinite(seconds) && seconds > 0) {
+          state.seconds = seconds;
+        }
+
+        if (Array.isArray(payload.artworks)) {
+          const cleaned = payload.artworks
+            .map((item) => String(item).trim())
+            .filter((item) => item.length > 0);
+          if (cleaned.length) {
+            state.artworks = cleaned;
+          }
+        }
+        if (Array.isArray(payload.artworkTransforms)) {
+          state.artworkTransforms = payload.artworkTransforms.map((entry) =>
+            entry && typeof entry === "object"
+              ? {
+                  x: Number.isFinite(Number(entry.x)) ? Number(entry.x) : 0,
+                  y: Number.isFinite(Number(entry.y)) ? Number(entry.y) : 0,
+                  scale: Number.isFinite(Number(entry.scale)) ? Math.max(0.1, Math.min(8, Number(entry.scale))) : 1
+                }
+              : { x: 0, y: 0, scale: 1 }
+          );
+        }
+
+        const padTopBottom = Number(payload.padTopBottom);
+        if (Number.isFinite(padTopBottom) && padTopBottom >= 0) {
+          state.padTopBottom = padTopBottom;
+        }
+
+        const padLeftRight = Number(payload.padLeftRight);
+        if (Number.isFinite(padLeftRight) && padLeftRight >= 0) {
+          state.padLeftRight = padLeftRight;
+        }
+
+        if (typeof payload.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(payload.backgroundColor)) {
+          state.backgroundColor = payload.backgroundColor;
+        }
+
+        const assetGap = Number(payload.assetGap);
+        if (Number.isFinite(assetGap) && assetGap >= 0) {
+          state.assetGap = assetGap;
+        }
+
+        if (typeof payload.artworkOrientation === "string") {
+          state.artworkOrientation = payload.artworkOrientation === "vertical" ? "vertical" : "horizontal";
+        } else {
+          const artworkRotation = Number(payload.artworkRotation);
+          if (Number.isFinite(artworkRotation)) {
+            const normalized = ((artworkRotation % 360) + 360) % 360;
+            state.artworkOrientation = normalized === 90 || normalized === 270 ? "vertical" : "horizontal";
+          }
+        }
+
+        const rowCount = Number(payload.rowCount);
+        if (Number.isFinite(rowCount) && rowCount >= 1) {
+          state.rowCount = Math.round(rowCount);
+        }
+
+        const rowOffset = Number(payload.rowOffset);
+        if (Number.isFinite(rowOffset) && rowOffset >= 0) {
+          state.rowOffset = rowOffset;
+        }
+
+        const rowGap = Number(payload.rowGap);
+        if (Number.isFinite(rowGap) && rowGap >= 0) {
+          state.rowGap = rowGap;
+        }
+
+        renderLoop();
+      }
+
+      window.addEventListener("message", (event) => {
+        const payload = event.data;
+        if (!payload) {
+          return;
+        }
+
+        if (payload.type === "setLoopConfig") {
+          applyConfig(payload);
+          return;
+        }
+
+        if (payload.type === "setLoopDuration") {
+          applyConfig({ seconds: payload.seconds });
+        }
+      });
+
+      renderLoop();
+      startPlaybackEmitter();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Billboard Direction Portal</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+    <link rel="stylesheet" href="assets/css/placeholder.css" />
+  </head>
+  <body>
+    <div class="top-toggle-bar" aria-label="Interface toggles">
+      <button id="viewControlsToggleButton" class="panel-toggle-button view-toggle-button" type="button" aria-label="Toggle view controls" title="view controls">
+        <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path class="icon-eye-shape" d="M12 4C7 4 3.1 7.5 1.5 12c1.6 4.5 5.5 8 10.5 8s8.9-3.5 10.5-8C20.9 7.5 17 4 12 4Z" />
+          <circle class="icon-eye-cutout" cx="12" cy="12" r="4.2" />
+          <circle class="icon-eye-pupil" cx="12" cy="12" r="2.2" />
+        </svg>
+      </button>
+      <button id="settingsToggleButton" class="panel-toggle-button settings-toggle-button" type="button" aria-label="Toggle direction settings" title="direction settings">
+        ⚙
+      </button>
+      <button id="themeToggleButton" class="theme-toggle-button" type="button" aria-label="Toggle dark mode">☀</button>
+    </div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div id="directoryPanel" class="directory-panel"></div>
+        <aside class="controls-column" aria-label="settings controls">
+          <div class="settings-panel">
+            <h3 id="settingsTitle" class="settings-title">linear billboard settings</h3>
+
+            <section class="settings-group">
+              <div id="partitionSettingsTabs" class="partition-settings-tabs" role="tablist" aria-label="Partition settings tabs">
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="left" aria-selected="true">7th</button>
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="curve" aria-selected="false">curve</button>
+                <button type="button" class="partition-settings-tab" role="tab" data-partition-key="right" aria-selected="false">47th</button>
+              </div>
+              <div class="settings-row settings-row-speed">
+                <span class="settings-label">speed</span>
+                <input
+                  id="speedControl"
+                  type="range"
+                  min="4"
+                  max="40"
+                  step="1"
+                  value="16"
+                />
+                <span id="speedValue" class="settings-inline-value">16s</span>
+              </div>
+              <div class="settings-row settings-row-compact-pairs">
+                <span class="settings-label">padding</span>
+                <div class="settings-inline-controls">
+                  <label class="settings-inline-field" for="padTBControl">
+                    <span>tb</span>
+                    <input id="padTBControl" class="input-compact" type="number" min="0" max="1200" step="1" value="0" />
+                  </label>
+                  <label class="settings-inline-field" for="padLRControl">
+                    <span>lr</span>
+                    <input id="padLRControl" class="input-compact" type="number" min="0" max="2400" step="1" value="0" />
+                  </label>
+                </div>
+              </div>
+              <div class="settings-row">
+                <span class="settings-label">bg color</span>
+                <div class="settings-inline-controls">
+                  <input id="bgColorControl" type="color" value="#fff8a5" />
+                  <label class="settings-inline-field" for="assetColorControl">
+                    <span>asset</span>
+                    <input id="assetColorControl" type="color" value="#111111" />
+                  </label>
+                </div>
+              </div>
+              <div class="settings-row">
+                <span class="settings-label">asset gap</span>
+                <input id="assetGapControl" type="number" min="0" max="800" step="1" value="0" />
+              </div>
+              <div id="linearOrientationRow" class="settings-row">
+                <span class="settings-label">artwork orientation</span>
+                <div class="orientation-toggle" role="radiogroup" aria-label="Artwork orientation">
+                  <button type="button" class="orientation-choice" role="radio" data-orientation-target="artworkOrientationControl" data-value="horizontal">hor</button>
+                  <span>/</span>
+                  <button type="button" class="orientation-choice" role="radio" data-orientation-target="artworkOrientationControl" data-value="vertical">vert</button>
+                </div>
+                <input id="artworkOrientationControl" type="hidden" value="horizontal" />
+              </div>
+              <div id="partitionOrientationRows">
+                <div class="settings-row">
+                  <span id="partitionActiveOrientationLabel" class="settings-label">7th orientation</span>
+                  <div class="orientation-toggle" role="radiogroup" aria-label="Partition orientation">
+                    <button
+                      type="button"
+                      id="partitionActiveOrientationHorizontal"
+                      class="orientation-choice"
+                      role="radio"
+                      data-orientation-target="partitionOrientationLeftControl"
+                      data-value="horizontal"
+                    >hor</button>
+                    <span>/</span>
+                    <button
+                      type="button"
+                      id="partitionActiveOrientationVertical"
+                      class="orientation-choice"
+                      role="radio"
+                      data-orientation-target="partitionOrientationLeftControl"
+                      data-value="vertical"
+                    >vert</button>
+                  </div>
+                  <input id="partitionOrientationLeftControl" type="hidden" value="horizontal" />
+                  <input id="partitionOrientationCurveControl" type="hidden" value="horizontal" />
+                  <input id="partitionOrientationRightControl" type="hidden" value="horizontal" />
+                </div>
+              </div>
+              <div class="settings-row settings-row-compact-pairs settings-row-rows-inline">
+                <div class="settings-inline-controls">
+                  <label class="settings-inline-field" for="rowCountControl">
+                    <span>rows</span>
+                    <input id="rowCountControl" class="input-compact input-tiny" type="number" min="1" max="12" step="1" value="1" />
+                  </label>
+                  <label class="settings-inline-field" for="rowOffsetControl">
+                    <span>off</span>
+                    <input id="rowOffsetControl" class="input-compact input-tiny" type="number" min="0" max="6000" step="1" value="0" />
+                  </label>
+                  <label class="settings-inline-field" for="rowGapControl">
+                    <span>gap</span>
+                    <input id="rowGapControl" class="input-compact input-tiny" type="number" min="0" max="1200" step="1" value="0" />
+                  </label>
+                </div>
+              </div>
+            </section>
+            <section class="settings-group">
+              <div class="settings-row settings-row-top">
+                <button id="saveVersionButton" type="button" class="action-button">save version</button>
+              </div>
+              <div id="saveVersionStatus" class="settings-hint" aria-live="polite"></div>
+            </section>
+          </div>
+          <div class="view-controls-panel" aria-labelledby="viewControlsTitle">
+          <div class="view-controls-header">
+            <h3 id="viewControlsTitle" class="settings-title">view controls</h3>
+          </div>
+          <div class="settings-row view-mode-row">
+            <span class="settings-label">view mode</span>
+            <div class="view-mode-toggle" role="radiogroup" aria-label="Preview view mode">
+              <button type="button" class="view-mode-choice" role="radio" data-value="flat">flat</button>
+              <span>/</span>
+              <button type="button" class="view-mode-choice" role="radio" data-value="3d">3D</button>
+            </div>
+            <input id="previewViewModeControl" type="hidden" value="flat" />
+          </div>
+          <div id="blenderCameraRow" class="settings-row">
+            <span class="settings-label">camera</span>
+            <select id="blenderCameraControl"></select>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">yaw</span>
+            <input id="cameraYawControl" type="range" min="-3.14" max="3.14" step="0.01" value="-0.7" />
+            <span id="cameraYawValue" class="view-control-value">-0.70</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">pitch</span>
+            <input id="cameraPitchControl" type="range" min="-1.2" max="1.45" step="0.01" value="0.11" />
+            <span id="cameraPitchValue" class="view-control-value">0.11</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">perspective</span>
+            <input id="cameraPerspectiveControl" type="range" min="0.1" max="2.5" step="0.01" value="1.33" />
+            <span id="cameraPerspectiveValue" class="view-control-value">1.33</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">screen scale</span>
+            <input id="cameraZoomControl" type="range" min="0.12" max="4.5" step="0.01" value="2.68" />
+            <span id="cameraZoomValue" class="view-control-value">2.68</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">screen x</span>
+            <input id="cameraTargetXControl" type="range" min="-3500" max="3500" step="1" value="241" />
+            <span id="cameraTargetXValue" class="view-control-value">241</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">screen y</span>
+            <input id="cameraTargetYControl" type="range" min="-6000" max="6000" step="1" value="2973" />
+            <span id="cameraTargetYValue" class="view-control-value">2973</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">screen z</span>
+            <input id="cameraTargetZControl" type="range" min="-4500" max="4500" step="1" value="0" />
+            <span id="cameraTargetZValue" class="view-control-value">0</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">projection brightness</span>
+            <input id="projectionBrightnessControl" type="range" min="0" max="5" step="0.1" value="3.4" />
+            <span id="projectionBrightnessValue" class="view-control-value">3.40</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">projection shadow</span>
+            <input id="projectionShadowControl" type="range" min="0" max="2" step="0.05" value="0.7" />
+            <span id="projectionShadowValue" class="view-control-value">0.70</span>
+          </div>
+          <div class="settings-row view-controls-slider-row camera-manual-row">
+            <span class="settings-label">projection glare</span>
+            <input id="projectionGlareControl" type="range" min="0" max="2" step="0.05" value="0.9" />
+            <span id="projectionGlareValue" class="view-control-value">0.90</span>
+          </div>
+          <div class="settings-row settings-row-top camera-manual-row">
+            <button id="resetViewControlsButton" type="button" class="action-button">reset camera</button>
+          </div>
+          </div>
+        </aside>
+      </aside>
+
+      <main class="workspace">
+        <div class="billboard-wrap">
+          <div class="billboard-frame">
+            <iframe id="billboardPreview" title="Billboard preview"></iframe>
+            <div id="billboardPreview3d" class="billboard-preview-3d" aria-hidden="true">
+              <canvas id="billboard3dCanvas" class="billboard-3d-canvas" aria-label="3D billboard preview"></canvas>
+            </div>
+            <div id="emptyState" class="empty-state"></div>
+          </div>
+          <div class="billboard-annotations" aria-hidden="true">
+            <div class="anno-top-line"></div>
+            <div class="anno-top-label">5900px width</div>
+            <div class="anno-right-line"></div>
+            <div class="anno-right-label">3480px height</div>
+            <div class="anno-marker anno-marker-1820"></div>
+            <div class="anno-marker anno-marker-2840"></div>
+            <div class="anno-label anno-label-1820">1820px</div>
+            <div class="anno-label anno-label-curve">curve</div>
+            <div class="anno-label anno-label-2840">2840px</div>
+          </div>
+        </div>
+
+        <div id="loopVisualization" class="loop-visualization" aria-label="Current loop visualization">
+          <div id="loopPreviewTrack" class="loop-preview-track"></div>
+          <div id="loopActiveWindow" class="loop-active-window"></div>
+          <div id="loopActiveWindowSecondary" class="loop-active-window"></div>
+        </div>
+        <div id="partitionEditors" class="partition-editors" aria-label="Partition visual editors">
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="partition-title">facing 7th</span>
+              <span class="partition-drop-hint">drop files to add</span>
+            </div>
+            <div id="partitionTrackLeft" class="partition-preview-track" data-partition-key="left"></div>
+          </div>
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="partition-title">curve</span>
+              <span class="partition-drop-hint">drop files to add</span>
+            </div>
+            <div id="partitionTrackCurve" class="partition-preview-track" data-partition-key="curve"></div>
+          </div>
+          <div class="partition-editor">
+            <div class="partition-editor-head">
+              <span class="partition-title">facing 47th</span>
+              <span class="partition-drop-hint">drop files to add</span>
+            </div>
+            <div id="partitionTrackRight" class="partition-preview-track" data-partition-key="right"></div>
+          </div>
+        </div>
+        <div id="loopElapsedTime" class="loop-elapsed-time">0.0s</div>
+
+        <section class="billboard-info" aria-label="Billboard reference details">
+          <div class="info-grid">
+            <table class="spec-table">
+              <tbody>
+                <tr>
+                  <th>location</th>
+                  <td>7th Avenue @ 47th Street</td>
+                </tr>
+                <tr>
+                  <th>size</th>
+                  <td>91'4"H x 154'10"W</td>
+                </tr>
+                <tr>
+                  <th>pixels</th>
+                  <td>5900px (W) x 3480px (H)</td>
+                </tr>
+                <tr>
+                  <th>loop details</th>
+                  <td>10 spots, 15 seconds each, 150 second loop.</td>
+                </tr>
+                <tr>
+                  <th>visibility</th>
+                  <td>Advertiser is guaranteed a minimum of 20 hours per day.</td>
+                </tr>
+                <tr>
+                  <th>lat/long</th>
+                  <td>40.759, -73.984</td>
+                </tr>
+                <tr>
+                  <th>orientation</th>
+                  <td>North, East, South</td>
+                </tr>
+                <tr>
+                  <th>facing 7th</th>
+                  <td>1820px (w)</td>
+                </tr>
+                <tr>
+                  <th>curve</th>
+                  <td>1020px (w)</td>
+                </tr>
+                <tr>
+                  <th>facing 47th</th>
+                  <td>3060px (w)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./assets/js/three.module.min.js"
+        }
+      }
+    </script>
+    <script type="module" src="assets/js/three-loader.js"></script>
+    <script defer src="assets/js/placeholder.js"></script>
+  </body>
+</html>
