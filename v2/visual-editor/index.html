@@ -770,11 +770,57 @@
       }
 
       function colorizeSvgSource(source, color) {
-        const insertCss = "<style data-visual-editor-colorize>*:not([fill='none']):not([fill='transparent']){fill:" + color + " !important;}*:not([stroke='none']):not([stroke='transparent']){stroke:" + color + " !important;}</style>";
-        if (source.includes("data-visual-editor-colorize")) {
-          return source.replace(/<style data-visual-editor-colorize>[\s\S]*?<\/style>/i, insertCss);
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(String(source || ""), "image/svg+xml");
+          const svg = doc.querySelector("svg");
+          if (!svg) {
+            return source;
+          }
+
+          const styleNodes = Array.from(svg.querySelectorAll("style"));
+          for (const styleNode of styleNodes) {
+            const css = String(styleNode.textContent || "");
+            if (!css) {
+              continue;
+            }
+            styleNode.textContent = css
+              .replace(/fill\s*:\s*[^;}{!]+(!important)?/gi, "fill:" + color + "$1")
+              .replace(/stroke\s*:\s*[^;}{!]+(!important)?/gi, "stroke:" + color + "$1");
+          }
+
+          const paintableTags = new Set(["path", "rect", "circle", "ellipse", "polygon", "polyline", "line", "text", "g"]);
+          const nodes = Array.from(svg.querySelectorAll("*"));
+          for (const node of nodes) {
+            const tag = String(node.tagName || "").toLowerCase();
+            if (!paintableTags.has(tag)) {
+              continue;
+            }
+            const fill = node.getAttribute("fill");
+            const stroke = node.getAttribute("stroke");
+            const fillValue = String(fill || "").trim().toLowerCase();
+            const strokeValue = String(stroke || "").trim().toLowerCase();
+
+            if ((!fill || fillValue !== "none") && !fillValue.startsWith("url(")) {
+              node.setAttribute("fill", color);
+            }
+            if (stroke && strokeValue !== "none" && !strokeValue.startsWith("url(")) {
+              node.setAttribute("stroke", color);
+            }
+
+            const style = node.getAttribute("style");
+            if (style) {
+              const rewritten = style
+                .replace(/fill\s*:\s*[^;]+/gi, "fill:" + color)
+                .replace(/stroke\s*:\s*[^;]+/gi, "stroke:" + color);
+              node.setAttribute("style", rewritten);
+            }
+          }
+
+          return new XMLSerializer().serializeToString(svg);
+        } catch (error) {
+          return source;
         }
-        return source.replace(/<svg\b([^>]*)>/i, "<svg$1>" + insertCss);
       }
 
       async function resolvePreviewUrl(src, group) {
@@ -1052,6 +1098,7 @@
 
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
+        syncBillboardPaddingFromEditorPreview();
       }
 
       function getCropValues(block) {
@@ -1114,6 +1161,7 @@
           previewImage.style.height = scaledHeight + "px";
           previewImage.style.transform = "translateX(" + offsetX + "px)";
         }
+        syncBillboardPaddingFromEditorPreview();
       }
 
       function updateAllAssetBlockSizes() {
@@ -1438,6 +1486,7 @@
         }
         editorState.assets = editorState.assets.filter((asset) => !selectedIds.has(asset.id));
         clearAssetSelection();
+        syncBillboardPaddingFromEditorPreview();
         saveEditorState();
         return selectedBlocks.length;
       }
@@ -1466,18 +1515,26 @@
         visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
         visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
         visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
-        flatBillboard.style.setProperty("--safe-top-ratio", String(normalizedTB / 3480));
-        flatBillboard.style.setProperty("--safe-bottom-ratio", String(normalizedTB / 3480));
-        flatBillboard.style.setProperty("--safe-left-ratio", String(normalizedLR / 5900));
-        flatBillboard.style.setProperty("--safe-right-ratio", String(normalizedLR / 5900));
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
         editorState.settings.paddingTB = normalizedTB;
         editorState.settings.paddingLR = normalizedLR;
+        syncBillboardPaddingFromEditorPreview();
         updateAllAssetBlockSizes();
         if (shouldPersist) {
           saveEditorState();
         }
+      }
+
+      function syncBillboardPaddingFromEditorPreview() {
+        const editorWidth = Math.max(1, visualEditorBlock.clientWidth || 1);
+        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
+        const topRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingTB / editorHeight));
+        const leftRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingLR / editorWidth));
+        flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
+        flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
+        flatBillboard.style.setProperty("--safe-left-ratio", String(leftRatio));
+        flatBillboard.style.setProperty("--safe-right-ratio", String(leftRatio));
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
@@ -1665,6 +1722,7 @@
 
       window.addEventListener("resize", () => {
         updateScaleControlsAnchorTop();
+        syncBillboardPaddingFromEditorPreview();
         positionScaleControls();
       });
 
