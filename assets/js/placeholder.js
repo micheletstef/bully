@@ -5266,16 +5266,10 @@ function syncPartitionEditorVisuals() {
 }
 
 function getPreviewScale() {
-  if (!loopVisualization) {
-    return 1;
-  }
-  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
   const stageHeight = Math.max(1, loopStageHeight);
-  const totalSourceHeight = stageHeight + Math.max(0, loopPadTopBottom) * 2;
-  if (!Number.isFinite(totalSourceHeight) || totalSourceHeight <= 0) {
-    return 1;
-  }
-  return previewHeight / totalSourceHeight;
+  // Keep editor as a consistent scaled-down billboard model.
+  const targetArtHeight = 110;
+  return targetArtHeight / stageHeight;
 }
 
 function syncVisualizationGapScaled() {
@@ -5293,7 +5287,6 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
   const scale = computeLinearEditorLayoutScale();
   const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
   const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
@@ -5315,6 +5308,7 @@ function syncVisualizationPaddingScaled() {
   loopVisualization.style.setProperty("--preview-safe-right", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-safe-top", `${safeTop}px`);
   loopVisualization.style.setProperty("--preview-safe-height", `${scaledArtHeight}px`);
+  loopVisualization.style.height = `${Math.max(24, Math.round(scaledTrackHeight + 8))}px`;
   syncPreviewSpacers();
 }
 
@@ -5336,12 +5330,10 @@ function syncVisualizationGeometry() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const availableWidth = Math.max(1, loopVisualization.clientWidth - 8);
   const contentWidth = Math.max(1, loopPreviewTrack.scrollWidth);
-  const fitScale = Math.max(0.2, Math.min(1, availableWidth / contentWidth));
-  loopVisualization.style.setProperty("--preview-fit-scale", String(fitScale));
-  loopPreviewTrack.style.transformOrigin = "left top";
-  loopPreviewTrack.style.transform = `scale(${fitScale})`;
+  const horizontalPadding = 8;
+  loopVisualization.style.width = `${Math.round(contentWidth + horizontalPadding)}px`;
+  loopPreviewTrack.style.transform = "none";
 }
 
 function computeLinearEditorLayoutScale() {
@@ -6176,9 +6168,7 @@ function updateActiveWindow() {
   const frameHeight = Math.max(1, loopVisualization.clientHeight);
   const normalizedProgress = computePreview3dLoopProgress();
   const previewScale = getPreviewScale();
-  const fitScaleRaw = Number.parseFloat(getComputedStyle(loopVisualization).getPropertyValue("--preview-fit-scale"));
-  const fitScale = Number.isFinite(fitScaleRaw) ? Math.max(0.2, Math.min(1, fitScaleRaw)) : 1;
-  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale * fitScale);
+  const scaledLoopDistance = Math.max(1, loopDistanceSource * previewScale);
   const normalizedViewportRatio = Number.isFinite(loopPlaybackViewportRatio)
     ? Math.max(0.01, Math.min(1, loopPlaybackViewportRatio))
     : 0.25;

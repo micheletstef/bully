@@ -434,7 +434,7 @@ body.dark-mode .orientation-choice.inactive {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(84vw, 1400px);
+  width: max-content;
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
   height: 168px;
   padding: 0;
