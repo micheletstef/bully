@@ -1621,12 +1621,19 @@
         }
         const direction = editorState.settings.marqueeDirection;
         const horizontal = direction === "rtl" || direction === "ltr";
-        const first = originals[0];
-        const last = originals[originals.length - 1];
-        if (horizontal) {
-          return Math.max(1, last.offsetLeft + last.offsetWidth - first.offsetLeft);
+        const firstOriginal = originals[0];
+        const firstCopy = flatBillboardTrack.querySelector(".flat-billboard-asset.marquee-copy");
+        if (firstCopy instanceof HTMLElement) {
+          if (horizontal) {
+            return Math.max(1, firstCopy.offsetLeft - firstOriginal.offsetLeft);
+          }
+          return Math.max(1, firstCopy.offsetTop - firstOriginal.offsetTop);
         }
-        return Math.max(1, last.offsetTop + last.offsetHeight - first.offsetTop);
+        const lastOriginal = originals[originals.length - 1];
+        if (horizontal) {
+          return Math.max(1, lastOriginal.offsetLeft + lastOriginal.offsetWidth - firstOriginal.offsetLeft);
+        }
+        return Math.max(1, lastOriginal.offsetTop + lastOriginal.offsetHeight - firstOriginal.offsetTop);
       }
 
       function applyFlatBillboardTrackTransform() {
@@ -1692,26 +1699,32 @@
         marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
       }
 
-      function applyMarqueeSettings(enabled, speed, direction, shouldPersist) {
+      function applyMarqueeSettings(enabled, speed, direction, shouldPersist, options = {}) {
+        const syncControls = options.syncControls !== false;
         const normalizedEnabled = !!enabled;
-        const normalizedSpeed = Math.max(5, Math.min(600, Number(speed) || 80));
+        const parsedSpeed = Number(speed);
+        const normalizedSpeed = Number.isFinite(parsedSpeed)
+          ? Math.max(5, Math.min(600, parsedSpeed))
+          : Math.max(5, Math.min(600, Number(editorState.settings.marqueeSpeed) || 80));
         const normalizedDirection = ["rtl", "ltr", "btt", "ttb"].includes(direction) ? direction : "rtl";
 
         editorState.settings.marqueeEnabled = normalizedEnabled;
         editorState.settings.marqueeSpeed = normalizedSpeed;
         editorState.settings.marqueeDirection = normalizedDirection;
 
-        marqueeSpeedControl.value = String(normalizedSpeed);
-        marqueeDirectionControl.value = normalizedDirection;
-        marqueeSpeedRow.hidden = !normalizedEnabled;
-        marqueeDirectionRow.hidden = !normalizedEnabled;
+        if (syncControls) {
+          marqueeSpeedControl.value = String(normalizedSpeed);
+          marqueeDirectionControl.value = normalizedDirection;
+          marqueeSpeedRow.hidden = !normalizedEnabled;
+          marqueeDirectionRow.hidden = !normalizedEnabled;
 
-        const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
-        for (const button of toggleButtons) {
-          const isOn = button.dataset.value === "on";
-          const isSelected = normalizedEnabled ? isOn : !isOn;
-          button.classList.toggle("inactive", !isSelected);
-          button.setAttribute("aria-checked", isSelected ? "true" : "false");
+          const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
+          for (const button of toggleButtons) {
+            const isOn = button.dataset.value === "on";
+            const isSelected = normalizedEnabled ? isOn : !isOn;
+            button.classList.toggle("inactive", !isSelected);
+            button.setAttribute("aria-checked", isSelected ? "true" : "false");
+          }
         }
 
         configureMarqueeLayout();
@@ -1722,7 +1735,14 @@
           stopMarqueeAnimation();
         }
         syncFlatBillboardArtworks();
-        if (normalizedEnabled && marqueeCycleLength() > 0) {
+        const cycle = marqueeCycleLength();
+        if (normalizedEnabled && cycle > 0) {
+          if (normalizedDirection === "ltr") {
+            billboardMarqueeOffsetX = -cycle;
+          } else if (normalizedDirection === "ttb") {
+            billboardMarqueeOffsetY = -cycle;
+          }
+          applyFlatBillboardTrackTransform();
           startMarqueeAnimation();
         }
         if (shouldPersist) {
@@ -2097,6 +2117,18 @@
       });
 
       marqueeSpeedControl.addEventListener("input", () => {
+        const raw = marqueeSpeedControl.value.trim();
+        if (!raw) {
+          return;
+        }
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) {
+          return;
+        }
+        applyMarqueeSettings(editorState.settings.marqueeEnabled, parsed, marqueeDirectionControl.value, true, { syncControls: false });
+      });
+
+      marqueeSpeedControl.addEventListener("blur", () => {
         applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
       });
 
