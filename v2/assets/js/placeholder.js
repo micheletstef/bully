@@ -473,6 +473,9 @@ function cloneArtworkItems(items) {
 function inferAssetLibraryGroup(name, src) {
   const lowerName = String(name || "").toLowerCase();
   const lowerSrc = String(src || "").toLowerCase();
+  if (/\/assets\/animations\//i.test(lowerSrc)) {
+    return "animations";
+  }
   const isWrestlerSequence = lowerName.startsWith("sm_wrestler_") || /\/assets\/animations\/sm_wrestler_/i.test(lowerSrc);
   if (
     isWrestlerSequence ||
@@ -1183,7 +1186,16 @@ async function addArtworkFiles(files, partitionKey = null) {
 
   for (const file of validFiles) {
     try {
-      const src = await processArtworkFile(file);
+      let src = "";
+      try {
+        const uploaded = await uploadAssetFileToServer(file, inferAssetLibraryGroup(file.name, ""));
+        src = typeof uploaded.src === "string" ? uploaded.src : "";
+      } catch (error) {
+        src = "";
+      }
+      if (!src) {
+        src = await processArtworkFile(file);
+      }
       const newItem = createArtworkItem(src, file.name || "upload");
       addAssetToLibrary(newItem.src, newItem.name);
       if (shouldTargetPartition) {
@@ -1203,7 +1215,76 @@ async function addArtworkFiles(files, partitionKey = null) {
     saveArtworks(loopArtworks);
     renderLoopPreview();
   }
+  await refreshAssetLibraryFromServer();
   sendLoopConfigToPreview();
+}
+
+async function fetchAssetLibraryFromServer() {
+  try {
+    const response = await fetch(apiPath("api/assets"), { cache: "no-store" });
+    if (!response.ok) {
+      return [];
+    }
+    const parsed = await response.json();
+    const entries = Array.isArray(parsed) ? parsed : Array.isArray(parsed && parsed.entries) ? parsed.entries : [];
+    return entries
+      .map((entry) => normalizeAssetLibraryEntry(entry))
+      .filter((entry) => entry !== null);
+  } catch (error) {
+    return [];
+  }
+}
+
+async function uploadAssetFileToServer(file, group = "graphics") {
+  const targetGroup = group === "animations" ? "animations" : "graphics";
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("group", targetGroup);
+  const response = await fetch(apiPath("api/assets"), {
+    method: "POST",
+    body: formData
+  });
+  if (!response.ok) {
+    throw new Error("Could not upload asset");
+  }
+  return response.json();
+}
+
+async function refreshAssetLibraryFromServer(options = {}) {
+  const { shouldRender = true } = options;
+  const serverAssets = await fetchAssetLibraryFromServer();
+  serverAssets.forEach((entry) => {
+    addAssetToLibrary(entry.src, entry.name);
+  });
+  if (shouldRender && knownDirections.length) {
+    renderDirectory(knownDirections);
+  }
+}
+
+async function addFilesToAssetLibraryGroup(files, group = "graphics") {
+  const validFiles = [...files].filter((file) => isSupportedArtworkFile(file));
+  if (!validFiles.length) {
+    return;
+  }
+  const targetGroup = group === "animations" ? "animations" : "graphics";
+  for (const file of validFiles) {
+    try {
+      let src = "";
+      try {
+        const uploaded = await uploadAssetFileToServer(file, targetGroup);
+        src = typeof uploaded.src === "string" ? uploaded.src : "";
+      } catch (error) {
+        src = "";
+      }
+      if (!src) {
+        src = await processArtworkFile(file);
+      }
+      addAssetToLibrary(src, file.name || artworkFileName(src));
+    } catch (error) {
+      // Ignore single-file failures and continue with others.
+    }
+  }
+  await refreshAssetLibraryFromServer();
 }
 
 async function canLoadDirection(name) {
@@ -5724,9 +5805,26 @@ function applyArtworkTileScale(targetEl, layoutLike) {
   }
   const layout = sanitizeArtworkLayout(layoutLike);
   const scale = layout.scale;
-  // Keep tile layout dimensions fixed so editor geometry does not collapse.
-  targetEl.style.height = "";
+  const baseHeight = Number(targetEl.dataset.baseHeightPx);
+  const safeBaseHeight = Number.isFinite(baseHeight) && baseHeight > 0 ? baseHeight : PREVIEW_TILE_FIXED_HEIGHT_PX;
+  const visibleRatio = Math.max(0.05, 1 - (layout.cropLeft + layout.cropRight));
   const image = targetEl.querySelector("img");
+  let fullWidthPx = Number(targetEl.dataset.fullWidthPx);
+  if ((!Number.isFinite(fullWidthPx) || fullWidthPx <= 0) && image) {
+    const naturalWidth = Number(image.naturalWidth);
+    const naturalHeight = Number(image.naturalHeight);
+    if (Number.isFinite(naturalWidth) && naturalWidth > 0 && Number.isFinite(naturalHeight) && naturalHeight > 0) {
+      fullWidthPx = (naturalWidth / naturalHeight) * safeBaseHeight;
+    } else {
+      const measured = Number(image.getBoundingClientRect().width);
+      fullWidthPx = Number.isFinite(measured) && measured > 0 ? measured : safeBaseHeight;
+    }
+    targetEl.dataset.fullWidthPx = String(fullWidthPx);
+  }
+  const widthPx = Math.max(8, Math.round((Number.isFinite(fullWidthPx) && fullWidthPx > 0 ? fullWidthPx : safeBaseHeight) * scale * visibleRatio));
+  targetEl.style.width = `${widthPx}px`;
+  // Keep height stable to prevent visual editor collapse.
+  targetEl.style.height = "";
   if (image) {
     image.style.height = "100%";
     image.style.transformOrigin = "center center";
@@ -6197,6 +6295,13 @@ function renderLoopPreview() {
     applyEditorAssetColorToImage(image, item.src);
     tile.appendChild(image);
     applyArtworkTileScale(tile, item.layout);
+    image.addEventListener(
+      "load",
+      () => {
+        applyArtworkTileScale(tile, item.layout);
+      },
+      { once: true }
+    );
     const cropHandleLeft = document.createElement("button");
     cropHandleLeft.type = "button";
     cropHandleLeft.className = "asset-crop-handle";
@@ -6455,6 +6560,13 @@ function renderPartitionEditor(partitionKey) {
     applyEditorAssetColorToImage(image, item.src, key);
     tile.appendChild(image);
     applyArtworkTileScale(tile, item.layout);
+    image.addEventListener(
+      "load",
+      () => {
+        applyArtworkTileScale(tile, item.layout);
+      },
+      { once: true }
+    );
     const cropHandleLeft = document.createElement("button");
     cropHandleLeft.type = "button";
     cropHandleLeft.className = "asset-crop-handle";
@@ -6918,15 +7030,49 @@ function renderDirectory(directions) {
     graphics: assetLibrary.filter((entry) => entry.group !== "animations")
   };
   const appendAssetGroup = (label, entries) => {
+    const group = document.createElement("div");
+    group.className = "asset-group";
+
+    const header = document.createElement("div");
+    header.className = "asset-group-header";
+
     const labelEl = document.createElement("div");
-    labelEl.className = "settings-hint";
+    labelEl.className = "settings-hint asset-group-label";
     labelEl.textContent = label;
-    assetsSection.appendChild(labelEl);
+    header.appendChild(labelEl);
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".svg,.png,.jpg,.jpeg,.jpt,.gif,.pdf";
+    input.multiple = true;
+    input.className = "asset-group-input";
+
+    const uploadButton = document.createElement("button");
+    uploadButton.type = "button";
+    uploadButton.className = "asset-group-upload";
+    uploadButton.textContent = "upload";
+    uploadButton.title = `Upload files to ${label}`;
+    uploadButton.addEventListener("click", () => {
+      input.click();
+    });
+    input.addEventListener("change", async () => {
+      const files = input.files ? [...input.files] : [];
+      input.value = "";
+      if (!files.length) {
+        return;
+      }
+      await addFilesToAssetLibraryGroup(files, label);
+    });
+    header.appendChild(uploadButton);
+    header.appendChild(input);
+    group.appendChild(header);
+
     if (!entries.length) {
       const empty = document.createElement("div");
-      empty.className = "settings-hint";
+      empty.className = "settings-hint asset-group-empty";
       empty.textContent = "(none)";
-      assetsSection.appendChild(empty);
+      group.appendChild(empty);
+      assetsSection.appendChild(group);
       return;
     }
     entries.forEach((entry) => {
@@ -6956,14 +7102,14 @@ function renderDirectory(directions) {
         }
         renderDirectory(knownDirections);
       });
-      assetsSection.appendChild(button);
+      group.appendChild(button);
     });
+    assetsSection.appendChild(group);
   };
   appendAssetGroup("animations", groupedAssets.animations);
   appendAssetGroup("graphics", groupedAssets.graphics);
-  outputsSection.appendChild(assetsSection);
-
   directoryPanel.appendChild(outputsSection);
+  directoryPanel.appendChild(assetsSection);
 
   if (restoredActiveButton) {
     setActiveDirection(restoredActiveButton);
@@ -7002,6 +7148,7 @@ async function init() {
   assetLibrary = restoreAssetLibrary();
   seedBundledAnimationAssets();
   syncAssetLibraryFromCurrentArtworks();
+  await refreshAssetLibraryFromServer({ shouldRender: false });
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
   loopDurationSeconds = currentSpeedSeconds();
   loopTraverseSeconds = loopDurationSeconds;

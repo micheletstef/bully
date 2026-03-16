@@ -236,6 +236,16 @@ body.sidebar-resizing {
   margin-bottom: 12px;
 }
 
+.directory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.directory-panel .directory-section {
+  margin-bottom: 0;
+}
+
 .directory-section h2 {
   margin: 0 0 6px;
   font-size: 12px;
@@ -284,10 +294,54 @@ body.sidebar-resizing {
   outline: none;
 }
 
-.asset-library-item {
+.asset-library-item.output-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding-left: 20px;
+}
+
+.asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asset-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-left: 14px;
+}
+
+.asset-group-label {
+  margin: 0;
+}
+
+.asset-group-empty {
+  padding-left: 20px;
+}
+
+.asset-group-input {
+  display: none;
+}
+
+.asset-group-upload {
+  border: 0;
+  background: transparent;
+  color: #1f1f1f;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.asset-group-upload:hover,
+.asset-group-upload:focus {
+  outline: none;
 }
 
 .asset-library-item::before {
@@ -1333,6 +1387,10 @@ body.dark-mode .view-controls-panel {
 body.dark-mode .asset-crop-handle {
   border-color: #fff;
   background: #000;
+}
+
+body.dark-mode .asset-group-upload {
+  color: #fff;
 }
 
 .remove-artwork {
