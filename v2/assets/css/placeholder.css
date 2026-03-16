@@ -6,6 +6,7 @@
   --billboard-left-ratio: 0.308475;
   --billboard-curve-ratio: 0.172881;
   --billboard-right-ratio: 0.518644;
+  --sidebar-width: 300px;
 }
 
 html,
@@ -179,7 +180,7 @@ body.dark-mode .orientation-choice.inactive {
   position: relative;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   align-items: start;
   gap: 24px;
   padding: 18px;
@@ -188,11 +189,47 @@ body.dark-mode .orientation-choice.inactive {
 
 .sidebar {
   position: relative;
-  width: 300px;
+  width: var(--sidebar-width);
+  min-width: 220px;
+  max-width: 680px;
   overflow: visible;
   padding: 0;
   background: transparent;
   z-index: 1;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -10px;
+  width: 14px;
+  height: 100vh;
+  cursor: col-resize;
+  z-index: 20;
+  touch-action: none;
+}
+
+.sidebar-resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(31, 31, 31, 0.14);
+}
+
+.sidebar-resize-handle:hover::before {
+  background: rgba(31, 31, 31, 0.35);
+}
+
+.sidebar-resize-handle:focus-visible::before {
+  background: rgba(32, 103, 220, 0.8);
+}
+
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .directory-section {
@@ -921,17 +958,23 @@ body.dark-mode .view-controls-panel {
 }
 
 .output-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  position: relative;
+  display: block;
+  width: 100%;
 }
 
 .output-item {
-  flex: 1 1 auto;
+  display: block;
+  width: 100%;
   min-width: 0;
+  padding-right: 16px;
 }
 
 .output-remove-button {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   border: 0;
   background: transparent;
   color: #7a7a7a;
@@ -1277,6 +1320,12 @@ body.dark-mode .artwork-anchor {
 
   .sidebar {
     width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .sidebar-resize-handle {
+    display: none;
   }
 
   .billboard-info {

@@ -44,6 +44,8 @@ const settingsPanel = document.querySelector(".settings-panel");
 const viewControlsPanel = document.querySelector(".view-controls-panel");
 const settingsTitle = document.getElementById("settingsTitle");
 const appShell = document.querySelector(".app-shell");
+const sidebar = document.querySelector(".sidebar");
+const sidebarResizeHandle = document.getElementById("sidebarResizeHandle");
 const billboardPreview3d = document.getElementById("billboardPreview3d");
 const billboard3dCanvas = document.getElementById("billboard3dCanvas");
 const partitionEditors = document.getElementById("partitionEditors");
@@ -85,6 +87,7 @@ const STORAGE_KEYS = {
   cameraViewPreset: "billboard.preview3dCameraViewPreset",
   cameraPresetVersion: "billboard.preview3dCameraPresetVersion",
   themeMode: "billboard.themeMode",
+  sidebarWidth: "billboard.sidebarWidth",
   direction: "billboard.selectedDirection",
   artworks: "billboard.loopArtworks",
   partitionArtworks: "billboard.partitionArtworks",
@@ -100,6 +103,9 @@ const DIRECTION_DISPLAY_NAMES = {
   "loop maker": "loop maker"
 };
 const SIDEBAR_LABEL_MAX_CHARS = 32;
+const SIDEBAR_DEFAULT_WIDTH = 300;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 680;
 const DEFAULT_ARTWORKS = [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")];
 const DEFAULT_PARTITION_ARTWORKS = {
   left: [createArtworkItem("assets/linear-loop-strip.png", "linear-loop-strip.png")],
@@ -3565,6 +3571,94 @@ function writeStorage(key, value) {
   }
 }
 
+function clampSidebarWidth(width) {
+  const parsed = Number(width);
+  if (!Number.isFinite(parsed)) {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, Math.round(parsed)));
+}
+
+function syncSidebarResizeA11y(width) {
+  if (!sidebarResizeHandle) {
+    return;
+  }
+  sidebarResizeHandle.setAttribute("aria-valuemin", String(SIDEBAR_MIN_WIDTH));
+  sidebarResizeHandle.setAttribute("aria-valuemax", String(SIDEBAR_MAX_WIDTH));
+  sidebarResizeHandle.setAttribute("aria-valuenow", String(width));
+}
+
+function applySidebarWidth(width) {
+  const clamped = clampSidebarWidth(width);
+  document.documentElement.style.setProperty("--sidebar-width", `${clamped}px`);
+  syncSidebarResizeA11y(clamped);
+  return clamped;
+}
+
+function restoreSidebarWidth() {
+  const stored = readStoredNumber(STORAGE_KEYS.sidebarWidth, SIDEBAR_DEFAULT_WIDTH);
+  return applySidebarWidth(stored);
+}
+
+function saveSidebarWidth(width) {
+  writeStorage(STORAGE_KEYS.sidebarWidth, String(clampSidebarWidth(width)));
+}
+
+function initSidebarResizeHandle() {
+  if (!sidebar || !sidebarResizeHandle) {
+    return;
+  }
+  let dragState = null;
+  const finishDrag = () => {
+    if (!dragState) {
+      return;
+    }
+    document.body.classList.remove("sidebar-resizing");
+    saveSidebarWidth(dragState.lastWidth);
+    dragState = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+  };
+  const onPointerMove = (event) => {
+    if (!dragState) {
+      return;
+    }
+    const deltaX = event.clientX - dragState.startX;
+    const nextWidth = applySidebarWidth(dragState.startWidth + deltaX);
+    dragState.lastWidth = nextWidth;
+  };
+  const onPointerUp = () => {
+    finishDrag();
+  };
+  sidebarResizeHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    const currentWidth = sidebar.getBoundingClientRect().width || SIDEBAR_DEFAULT_WIDTH;
+    dragState = {
+      startX: event.clientX,
+      startWidth: currentWidth,
+      lastWidth: currentWidth
+    };
+    document.body.classList.add("sidebar-resizing");
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  });
+  sidebarResizeHandle.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+    event.preventDefault();
+    const delta = event.key === "ArrowRight" ? 16 : -16;
+    const currentWidth = sidebar.getBoundingClientRect().width || SIDEBAR_DEFAULT_WIDTH;
+    const nextWidth = applySidebarWidth(currentWidth + delta);
+    saveSidebarWidth(nextWidth);
+  });
+}
+
 function readStoredNumber(key, fallback) {
   const raw = readStorage(key);
   if (raw === null || raw === "") {
@@ -6607,6 +6701,8 @@ function renderDirectory(directions) {
 }
 
 async function init() {
+  restoreSidebarWidth();
+  initSidebarResizeHandle();
   applyThemeMode(readStorage(STORAGE_KEYS.themeMode) || "light");
   restoreSpeed();
   restoreLoopLayoutSettings();
