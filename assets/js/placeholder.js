@@ -122,6 +122,7 @@ let activePartitionSettingsKey = "left";
 let draggingArtworkIndex = null;
 let artworkEditorDragState = null;
 let artworkEditorSyncFrameId = null;
+const EDITOR_GRID_SIZE_PX = 16;
 let pdfJsModulePromise = null;
 let loopPlaybackProgress = 0;
 let loopPlaybackViewportRatio = 0.25;
@@ -5158,9 +5159,10 @@ function syncPartitionEditorVisuals() {
   if (!partitionEditors) {
     return;
   }
-  const baseScale = getPartitionPreviewScale();
   const stageHeight = Math.max(1, loopStageHeight);
-  partitionEditors.style.setProperty("--partition-preview-art-height", `${Math.max(8, Math.round(stageHeight * baseScale * 100) / 100)}px`);
+  const baseScale = computeLinearEditorLayoutScale();
+  const baseArtHeight = Math.max(8, Math.round(stageHeight * baseScale * 100) / 100);
+  partitionEditors.style.setProperty("--partition-preview-art-height", `${baseArtHeight}px`);
   partitionEditors.style.setProperty("--partition-preview-pad-tb", "0px");
   partitionEditors.style.setProperty("--partition-preview-pad-lr", "0px");
   partitionEditors.style.setProperty("--partition-preview-gap", "0px");
@@ -5172,16 +5174,17 @@ function syncPartitionEditorVisuals() {
       return;
     }
     const settings = partitionSettingsForKey(partitionKey);
-    const totalSourceHeight = Math.max(1, stageHeight + Math.max(0, settings.padTopBottom) * 2);
-    const scale = 54 / totalSourceHeight;
-    const scaledArtHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
-    const scaledPadTB = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
+    const layout = computePartitionEditorLayoutScale(partitionKey);
+    const scale = layout.scale;
+    const scaledPadTB = Math.max(0, Math.round(layout.padTopBottomPx * 100) / 100);
     const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
     const scaledGap = Math.max(0, Math.round(Math.max(0, settings.assetGap) * scale * 100) / 100);
-    const trackArtHeight = scaledArtHeight;
-    const trackPadTB = scaledPadTB;
-    const trackPadLR = scaledPadLR;
+    const trackHeight = Math.max(8, Math.round(stageHeight * scale * 100) / 100);
+    const trackArtHeight = Math.max(8, Math.round((stageHeight - Math.max(0, settings.padTopBottom) * 2) * scale * 100) / 100);
+    const trackPadTB = 0;
+    const trackPadLR = 0;
     const spacerWidth = scaledPadLR;
+    trackEl.style.minHeight = `${Math.max(54, trackHeight)}px`;
     trackEl.style.setProperty("--partition-preview-art-height", `${trackArtHeight}px`);
     trackEl.style.setProperty("--partition-preview-pad-tb", `${trackPadTB}px`);
     trackEl.style.setProperty("--partition-preview-pad-lr", `${trackPadLR}px`);
@@ -5210,7 +5213,7 @@ function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = getPreviewScale();
+  const scale = computeLinearEditorLayoutScale();
   const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
   const scaledGap = Math.round(scaledGapRaw * 100) / 100;
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
@@ -5222,7 +5225,7 @@ function syncVisualizationPaddingScaled() {
     return;
   }
   const previewHeight = Math.max(1, loopVisualization.clientHeight - 8);
-  const scale = getPreviewScale();
+  const scale = computeLinearEditorLayoutScale();
   const scaledPadTBRaw = Math.max(0, loopPadTopBottom) * scale;
   const scaledPadLRRaw = Math.max(0, loopPadLeftRight) * scale;
   const scaledTrackHeightRaw = Math.max(1, loopStageHeight) * scale;
@@ -5230,12 +5233,14 @@ function syncVisualizationPaddingScaled() {
     MIN_PREVIEW_TRACK_HEIGHT,
     Math.round(scaledTrackHeightRaw * 100) / 100
   );
-  const maxPadTB = Math.max(0, (previewHeight - scaledTrackHeight) / 2);
-  const scaledPadTB = Math.round(Math.min(maxPadTB, scaledPadTBRaw) * 100) / 100;
+  const scaledPadTB = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
   const scaledPadLR = Math.round(scaledPadLRRaw * 100) / 100;
-  loopVisualization.style.setProperty("--preview-pad-tb", `${scaledPadTB}px`);
+  const scaledArtHeightRaw = Math.max(1, (Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * scale);
+  const scaledArtHeight = Math.max(8, Math.round(scaledArtHeightRaw * 100) / 100);
+  loopVisualization.style.setProperty("--preview-pad-tb", "0px");
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
+  loopVisualization.style.setProperty("--preview-art-height", `${scaledArtHeight}px`);
   syncPreviewSpacers();
 }
 
@@ -5297,16 +5302,16 @@ function computePartitionEditorLayoutScale(partitionKey) {
   };
 }
 
-function applyArtworkTileTransform(imageEl, item, scaleToPixels) {
-  if (!imageEl) {
+function applyArtworkTileTransform(targetEl, item, scaleToPixels) {
+  if (!targetEl) {
     return;
   }
   const layout = sanitizeArtworkLayout(item && item.layout);
   const pixelScale = Math.max(0.01, Number(scaleToPixels) || 1);
   const tx = layout.x * pixelScale;
   const ty = layout.y * pixelScale;
-  imageEl.style.transformOrigin = "center center";
-  imageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${layout.scale})`;
+  targetEl.style.transformOrigin = "center center";
+  targetEl.style.transform = `translate(${tx}px, ${ty}px) scale(${layout.scale})`;
 }
 
 function scheduleArtworkLayoutSync() {
@@ -5322,10 +5327,13 @@ function scheduleArtworkLayoutSync() {
   });
 }
 
-function bindArtworkEditorDrag(tileEl, imageEl, getItem, onCommit, scaleToPixels) {
-  if (!tileEl || !imageEl) {
+function bindArtworkEditorDrag(tileEl, getItem, onCommit, scaleToPixels, options = {}) {
+  if (!tileEl) {
     return;
   }
+  const dropContainerSelector =
+    options && typeof options.dropContainerSelector === "string" ? options.dropContainerSelector : "";
+  const onRemove = options && typeof options.onRemove === "function" ? options.onRemove : null;
   tileEl.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) {
       return;
@@ -5339,7 +5347,7 @@ function bindArtworkEditorDrag(tileEl, imageEl, getItem, onCommit, scaleToPixels
     const isScaleHandle = !!(target && target.classList && target.classList.contains("artwork-scale-handle"));
     artworkEditorDragState = {
       item,
-      imageEl,
+      targetEl: tileEl,
       mode: isScaleHandle ? "scale" : "move",
       startX: event.clientX,
       startY: event.clientY,
@@ -5360,11 +5368,14 @@ function bindArtworkEditorDrag(tileEl, imageEl, getItem, onCommit, scaleToPixels
     if (state.mode === "scale") {
       next.scale = Math.max(0.1, Math.min(8, state.startLayout.scale * Math.exp(-dy * 0.01)));
     } else {
-      next.x = state.startLayout.x + dx / state.scaleToPixels;
-      next.y = state.startLayout.y + dy / state.scaleToPixels;
+      const gridUnit = EDITOR_GRID_SIZE_PX / state.scaleToPixels;
+      const rawX = state.startLayout.x + dx / state.scaleToPixels;
+      const rawY = state.startLayout.y + dy / state.scaleToPixels;
+      next.x = Math.round(rawX / gridUnit) * gridUnit;
+      next.y = Math.round(rawY / gridUnit) * gridUnit;
     }
     state.item.layout = sanitizeArtworkLayout(next);
-    applyArtworkTileTransform(state.imageEl, state.item, state.scaleToPixels);
+    applyArtworkTileTransform(state.targetEl, state.item, state.scaleToPixels);
     scheduleArtworkLayoutSync();
   });
 
@@ -5373,7 +5384,16 @@ function bindArtworkEditorDrag(tileEl, imageEl, getItem, onCommit, scaleToPixels
       return;
     }
     tileEl.releasePointerCapture(event.pointerId);
+    const state = artworkEditorDragState;
     artworkEditorDragState = null;
+    if (state.mode === "move" && onRemove && dropContainerSelector) {
+      const dropTarget = document.elementFromPoint(event.clientX, event.clientY);
+      const droppedContainer = dropTarget ? dropTarget.closest(dropContainerSelector) : null;
+      if (!droppedContainer) {
+        onRemove();
+        return;
+      }
+    }
     onCommit();
   });
 
@@ -5414,17 +5434,22 @@ function renderLoopPreview() {
     scaleHandle.title = "scale artwork";
     scaleHandle.textContent = "↘";
     tile.appendChild(scaleHandle);
-    applyArtworkTileTransform(image, item, layoutScale);
+    applyArtworkTileTransform(tile, item, layoutScale);
     bindArtworkEditorDrag(
       tile,
-      image,
       () => item,
       () => {
         saveArtworks(loopArtworks);
         sendLoopConfigToPreview();
         render3dPreview();
       },
-      layoutScale
+      layoutScale,
+      {
+        dropContainerSelector: ".loop-preview-track",
+        onRemove: () => {
+          removeArtworkById(item.id);
+        }
+      }
     );
 
     loopPreviewTrack.appendChild(tile);
@@ -5634,17 +5659,22 @@ function renderPartitionEditor(partitionKey) {
     scaleHandle.title = "scale artwork";
     scaleHandle.textContent = "↘";
     tile.appendChild(scaleHandle);
-    applyArtworkTileTransform(image, item, partitionLayout.scale);
+    applyArtworkTileTransform(tile, item, partitionLayout.scale);
     bindArtworkEditorDrag(
       tile,
-      image,
       () => item,
       () => {
         savePartitionArtworks(partitionArtworks);
         sendLoopConfigToPreview();
         render3dPreview();
       },
-      partitionLayout.scale
+      partitionLayout.scale,
+      {
+        dropContainerSelector: ".partition-preview-track",
+        onRemove: () => {
+          removePartitionArtworkById(key, item.id);
+        }
+      }
     );
 
     trackEl.appendChild(tile);
