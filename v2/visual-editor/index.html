@@ -778,7 +778,6 @@
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
       let billboardMarqueeOffsetY = 0;
-      let billboardMirrorScale = 1;
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -1963,7 +1962,7 @@
           billboardViewportOffsetX = 0;
           billboardViewportOffsetY = 0;
         } else {
-          const scaleFactor = Math.max(0.0001, billboardMirrorScale || billboardScaleFactor());
+          const scaleFactor = billboardScaleFactor();
           billboardViewportOffsetX = -(editorStage.scrollLeft * scaleFactor);
           billboardViewportOffsetY = -(editorStage.scrollTop * scaleFactor);
         }
@@ -1986,60 +1985,8 @@
         if (!flatBillboardTrack) {
           return;
         }
-        const baseScale = billboardScaleFactor();
-        const basePaddingTB = (Number(editorState.settings.paddingTB) || 0) * baseScale;
-        const basePaddingLR = (Number(editorState.settings.paddingLR) || 0) * baseScale;
-        const baseGap = (Number(editorState.settings.assetGap) || 0) * baseScale;
+        const scaleFactor = billboardScaleFactor();
         const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
-        const direction = editorState.settings.marqueeDirection;
-        const isVerticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
-
-        const orderedBlocks = getPrimaryAssetBlocks();
-        const renderedItems = [];
-        for (const sourceBlock of orderedBlocks) {
-          const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
-          if (!editorMetrics) {
-            continue;
-          }
-          renderedItems.push({
-            sourceBlock,
-            editorMetrics,
-          });
-        }
-
-        let fitScale = 1;
-        if (renderedItems.length) {
-          if (isVerticalMarquee) {
-            let contentHeight = 0;
-            for (let index = 0; index < renderedItems.length; index += 1) {
-              contentHeight += renderedItems[index].editorMetrics.scaledHeight * baseScale;
-              if (index < renderedItems.length - 1) {
-                contentHeight += baseGap;
-              }
-            }
-            const totalHeight = contentHeight + basePaddingTB * 2;
-            const availableHeight = Math.max(1, flatBillboard.clientHeight || 1);
-            if (totalHeight > availableHeight) {
-              fitScale = Math.max(0.01, availableHeight / totalHeight);
-            }
-          } else {
-            let contentWidth = 0;
-            for (let index = 0; index < renderedItems.length; index += 1) {
-              contentWidth += renderedItems[index].editorMetrics.scaledWidth * baseScale;
-              if (index < renderedItems.length - 1) {
-                contentWidth += baseGap;
-              }
-            }
-            const totalWidth = contentWidth + basePaddingLR * 2;
-            const availableWidth = Math.max(1, flatBillboard.clientWidth || 1);
-            if (totalWidth > availableWidth) {
-              fitScale = Math.max(0.01, availableWidth / totalWidth);
-            }
-          }
-        }
-
-        const scaleFactor = baseScale * fitScale;
-        billboardMirrorScale = scaleFactor;
         const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
         const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
         const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
@@ -2052,9 +1999,12 @@
         flatBillboardTrack.style.alignItems = align;
 
         flatBillboardTrack.innerHTML = "";
-        for (const item of renderedItems) {
-          const sourceBlock = item.sourceBlock;
-          const editorMetrics = item.editorMetrics;
+        const orderedBlocks = getPrimaryAssetBlocks();
+        for (const sourceBlock of orderedBlocks) {
+          const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
+          if (!editorMetrics) {
+            continue;
+          }
           const previewImage = sourceBlock.querySelector(".asset-preview-image");
 
           const targetBlock = document.createElement("div");
