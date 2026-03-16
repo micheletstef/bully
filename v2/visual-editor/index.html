@@ -173,6 +173,7 @@
       </main>
     </div>
     <script>
+      const STORAGE_KEY = "v2VisualEditorState";
       const fakeAssets = [
         { name: "hero-banner.psd", width: 160, height: 48 },
         { name: "logo-alt.png", width: 110, height: 70 },
@@ -190,6 +191,72 @@
         bottom: "flex-end",
       };
 
+      function loadEditorState() {
+        const defaultState = {
+          assets: [],
+          settings: {
+            verticalAlignment: "top",
+          },
+        };
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            return defaultState;
+          }
+          const parsed = JSON.parse(raw);
+          const parsedAssets = Array.isArray(parsed.assets) ? parsed.assets : [];
+          const sanitizedAssets = parsedAssets
+            .filter((asset) => asset && typeof asset === "object")
+            .map((asset) => ({
+              name: typeof asset.name === "string" ? asset.name : "asset",
+              width: Number.isFinite(asset.width) ? asset.width : 100,
+              height: Number.isFinite(asset.height) ? asset.height : 60,
+            }))
+            .filter((asset) => asset.width > 0 && asset.height > 0);
+          const savedAlignment = parsed?.settings?.verticalAlignment;
+          const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
+          return {
+            assets: sanitizedAssets,
+            settings: {
+              verticalAlignment,
+            },
+          };
+        } catch (error) {
+          return defaultState;
+        }
+      }
+
+      function saveEditorState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(editorState));
+      }
+
+      function appendAssetBlock(asset) {
+        const block = document.createElement("div");
+        block.className = "fake-asset-block";
+        block.style.width = asset.width + "px";
+        block.style.height = asset.height + "px";
+        visualEditorBlock.appendChild(block);
+      }
+
+      function setVerticalAlignment(alignKey, shouldPersist) {
+        if (!alignmentMap[alignKey]) {
+          return;
+        }
+        const buttons = alignmentSettings.querySelectorAll(".alignment-button");
+        for (const button of buttons) {
+          const isSelected = button.dataset.align === alignKey;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-checked", isSelected ? "true" : "false");
+        }
+        visualEditorBlock.style.alignItems = alignmentMap[alignKey];
+        editorState.settings.verticalAlignment = alignKey;
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
+      const editorState = loadEditorState();
+
       for (const asset of fakeAssets) {
         const button = document.createElement("button");
         button.type = "button";
@@ -202,11 +269,14 @@
           }
           button.classList.add("active");
 
-          const block = document.createElement("div");
-          block.className = "fake-asset-block";
-          block.style.width = asset.width + "px";
-          block.style.height = asset.height + "px";
-          visualEditorBlock.appendChild(block);
+          const assetSnapshot = {
+            name: asset.name,
+            width: asset.width,
+            height: asset.height,
+          };
+          editorState.assets.push(assetSnapshot);
+          appendAssetBlock(assetSnapshot);
+          saveEditorState();
         });
         assetsList.appendChild(button);
       }
@@ -220,15 +290,13 @@
         if (!alignKey || !alignmentMap[alignKey]) {
           return;
         }
-
-        const buttons = alignmentSettings.querySelectorAll(".alignment-button");
-        for (const button of buttons) {
-          const isSelected = button === target;
-          button.classList.toggle("inactive", !isSelected);
-          button.setAttribute("aria-checked", isSelected ? "true" : "false");
-        }
-        visualEditorBlock.style.alignItems = alignmentMap[alignKey];
+        setVerticalAlignment(alignKey, true);
       });
+
+      setVerticalAlignment(editorState.settings.verticalAlignment, false);
+      for (const savedAsset of editorState.assets) {
+        appendAssetBlock(savedAsset);
+      }
     </script>
   </body>
 </html>
