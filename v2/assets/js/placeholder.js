@@ -160,8 +160,8 @@ let partitionLoopDistances = {
   right: 1
 };
 const MIN_PREVIEW_TRACK_HEIGHT = 8;
-const LEGACY_LINEAR_PREVIEW_HEIGHT_PX = 84;
-const LEGACY_LINEAR_TRACK_HEIGHT_PX = 52;
+const LEGACY_LINEAR_PREVIEW_HEIGHT_PX = 116;
+const LEGACY_LINEAR_TRACK_HEIGHT_PX = 72;
 const BILLBOARD_DESIGN_WIDTH = 5900;
 const BILLBOARD_DESIGN_HEIGHT = 3480;
 const BILLBOARD_MODEL_URL = "assets/models/D_Billboard_MockUp.glb";
@@ -5537,12 +5537,22 @@ function renderLoopPreview() {
   const spacerStart = document.createElement("div");
   spacerStart.className = "loop-preview-spacer";
   loopPreviewTrack.appendChild(spacerStart);
+  const scaleToPixels = computeLinearEditorLayoutScale();
+  const baseArtworkHeightPx = Math.max(
+    8,
+    Math.round((Math.max(1, loopStageHeight) - Math.max(0, loopPadTopBottom) * 2) * scaleToPixels * 100) / 100
+  );
 
   loopArtworks.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "loop-preview-item";
     tile.dataset.index = String(index);
     tile.dataset.artworkId = item.id;
+    tile.dataset.baseHeightPx = String(baseArtworkHeightPx);
+    if (selectedLinearArtworkIds.has(item.id)) {
+      tile.classList.add("is-selected");
+    }
+    item.layout = sanitizeArtworkLayout(item.layout);
 
     const image = document.createElement("img");
     image.alt = "";
@@ -5559,6 +5569,38 @@ function renderLoopPreview() {
       removeArtworkById(item.id);
     });
     tile.appendChild(remove);
+    ["tl", "tr", "bl", "br"].forEach((corner) => {
+      const anchor = document.createElement("button");
+      anchor.type = "button";
+      anchor.className = "artwork-anchor";
+      anchor.dataset.corner = corner;
+      anchor.setAttribute("aria-label", "Resize asset");
+      tile.appendChild(anchor);
+    });
+    tile.addEventListener("click", (event) => {
+      if (event.target && event.target.closest(".remove-artwork, .artwork-anchor")) {
+        return;
+      }
+      selectOnlyLinearArtwork(item.id);
+      renderLoopPreview();
+    });
+    applyArtworkTileScale(tile, item.layout.scale);
+    applyArtworkTileTransform(tile, item, scaleToPixels);
+    bindArtworkEditorDrag(
+      tile,
+      () => item,
+      () => {
+        saveArtworks(loopArtworks);
+        renderLoopPreview();
+      },
+      scaleToPixels,
+      {
+        dropContainerSelector: ".loop-preview-track",
+        onRemove: () => {
+          removeArtworkById(item.id);
+        }
+      }
+    );
     loopPreviewTrack.appendChild(tile);
   });
   const spacerEnd = document.createElement("div");
@@ -5569,7 +5611,6 @@ function renderLoopPreview() {
     loopPreviewSortable.destroy();
   }
   loopPreviewSortable = null;
-  initLoopSortable();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();

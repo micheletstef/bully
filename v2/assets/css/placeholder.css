@@ -130,6 +130,12 @@ body.dark-mode .partition-preview-track {
     linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
 }
 
+body.dark-mode .loop-preview-track {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+}
+
 body.dark-mode .loop-active-window,
 body.dark-mode .partition-active-window {
   border-color: #fff;
@@ -467,6 +473,11 @@ body.dark-mode .orientation-choice.inactive {
   gap: var(--preview-gap, 0px);
   z-index: 1;
   overflow: visible;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.09) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 0 0;
 }
 
 .loop-preview-track::after {
@@ -499,6 +510,12 @@ body.dark-mode .orientation-choice.inactive {
   transition: transform 150ms ease, opacity 150ms ease;
   user-select: none;
   overflow: visible;
+  z-index: 3;
+}
+
+.loop-preview-item.is-selected {
+  outline: 2px solid rgba(32, 103, 220, 0.9);
+  outline-offset: -2px;
 }
 
 .loop-preview-item.dragging {
@@ -1176,6 +1193,13 @@ body.dark-mode .view-controls-panel {
 
 .loop-preview-item:hover .remove-artwork,
 .partition-preview-item:hover .remove-artwork {
+  display: block;
+}
+
+.loop-preview-item:hover .artwork-anchor,
+.loop-preview-item.is-selected .artwork-anchor,
+.partition-preview-item:hover .artwork-anchor,
+.partition-preview-item.is-selected .artwork-anchor {
   display: block;
 }
 
