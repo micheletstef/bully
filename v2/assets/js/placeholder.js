@@ -57,6 +57,10 @@ const loopVisualization = document.getElementById("loopVisualization");
 const loopActiveWindow = document.getElementById("loopActiveWindow");
 const loopActiveWindowSecondary = document.getElementById("loopActiveWindowSecondary");
 const loopElapsedTime = document.getElementById("loopElapsedTime");
+const assetScaleControls = document.getElementById("assetScaleControls");
+const assetScaleDownButton = document.getElementById("assetScaleDownButton");
+const assetScaleUpButton = document.getElementById("assetScaleUpButton");
+const assetScaleValue = document.getElementById("assetScaleValue");
 const themeToggleButton = document.getElementById("themeToggleButton");
 const settingsToggleButton = document.getElementById("settingsToggleButton");
 const viewControlsToggleButton = document.getElementById("viewControlsToggleButton");
@@ -391,7 +395,10 @@ function generateArtworkId() {
 }
 
 function sanitizeArtworkLayout(layoutLike) {
-  return { x: 0, y: 0, scale: 1 };
+  const source = layoutLike && typeof layoutLike === "object" ? layoutLike : {};
+  const scaleRaw = Number(source.scale);
+  const scale = Number.isFinite(scaleRaw) ? Math.max(0.1, Math.min(8, scaleRaw)) : 1;
+  return { x: 0, y: 0, scale };
 }
 
 function createArtworkItem(src, name) {
@@ -1277,6 +1284,7 @@ function syncDirectionModeUI() {
     applyLinearSettingsToControls();
     renderLoopPreview();
   }
+  syncSelectedAssetScaleControls();
   render3dPreview();
 }
 
@@ -5819,6 +5827,7 @@ function syncLinearSelectionClasses() {
     const id = tile && tile.dataset ? String(tile.dataset.artworkId || "") : "";
     tile.classList.toggle("is-selected", !!id && selectedLinearArtworkIds.has(id));
   });
+  syncSelectedAssetScaleControls();
 }
 
 function syncPartitionSelectionClasses(partitionKey) {
@@ -5831,6 +5840,80 @@ function syncPartitionSelectionClasses(partitionKey) {
     const id = tile && tile.dataset ? String(tile.dataset.artworkId || "") : "";
     tile.classList.toggle("is-selected", !!id && selectedPartitionArtworkIds[key].has(id));
   });
+  syncSelectedAssetScaleControls();
+}
+
+function getSelectedLinearArtworkItem() {
+  const id = [...selectedLinearArtworkIds][0] || "";
+  if (!id) {
+    return null;
+  }
+  return loopArtworks.find((item) => item && item.id === id) || null;
+}
+
+function getSelectedPartitionArtwork() {
+  const key = activePartitionSettingsKeyValue();
+  const id = [...selectedPartitionArtworkIds[key]][0] || "";
+  if (!id) {
+    return { key, item: null };
+  }
+  const item = (partitionArtworks[key] || []).find((entry) => entry && entry.id === id) || null;
+  return { key, item };
+}
+
+function currentSelectedAssetScale() {
+  if (currentDirectionIsPartitioned()) {
+    const selected = getSelectedPartitionArtwork();
+    return selected.item ? sanitizeArtworkLayout(selected.item.layout).scale : null;
+  }
+  const item = getSelectedLinearArtworkItem();
+  return item ? sanitizeArtworkLayout(item.layout).scale : null;
+}
+
+function syncSelectedAssetScaleControls() {
+  if (!assetScaleControls || !assetScaleValue || currentDirectionIsLoopMaker()) {
+    return;
+  }
+  const scale = currentSelectedAssetScale();
+  if (!Number.isFinite(scale)) {
+    assetScaleControls.style.display = "none";
+    return;
+  }
+  assetScaleControls.style.display = "inline-flex";
+  assetScaleValue.textContent = `${Math.round(scale * 100)}%`;
+}
+
+function nudgeSelectedAssetScale(delta) {
+  const step = Number(delta);
+  if (!Number.isFinite(step) || step === 0) {
+    return;
+  }
+  if (currentDirectionIsPartitioned()) {
+    const selected = getSelectedPartitionArtwork();
+    if (!selected.item) {
+      syncSelectedAssetScaleControls();
+      return;
+    }
+    const layout = sanitizeArtworkLayout(selected.item.layout);
+    selected.item.layout = sanitizeArtworkLayout({ scale: layout.scale + step });
+    savePartitionArtworks(partitionArtworks);
+    renderPartitionEditor(selected.key);
+    render3dPreview();
+    sendLoopConfigToPreview();
+    syncSelectedAssetScaleControls();
+    return;
+  }
+  const item = getSelectedLinearArtworkItem();
+  if (!item) {
+    syncSelectedAssetScaleControls();
+    return;
+  }
+  const layout = sanitizeArtworkLayout(item.layout);
+  item.layout = sanitizeArtworkLayout({ scale: layout.scale + step });
+  saveArtworks(loopArtworks);
+  renderLoopPreview();
+  sendLoopConfigToPreview();
+  syncSelectedAssetScaleControls();
 }
 
 function clearPickedAssetCursor() {
@@ -7093,6 +7176,18 @@ async function init() {
       loopRowGap = currentRowGap();
       render3dPreview();
       sendLoopConfigToPreview();
+    });
+  }
+
+  if (assetScaleDownButton) {
+    assetScaleDownButton.addEventListener("click", () => {
+      nudgeSelectedAssetScale(-0.1);
+    });
+  }
+
+  if (assetScaleUpButton) {
+    assetScaleUpButton.addEventListener("click", () => {
+      nudgeSelectedAssetScale(0.1);
     });
   }
 

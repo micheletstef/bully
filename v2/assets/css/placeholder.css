@@ -659,6 +659,42 @@ body.sidebar-resizing {
   display: none;
 }
 
+.asset-scale-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 152px);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+}
+
+.asset-scale-button {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #1f1f1f;
+  background: #fff;
+  color: #1f1f1f;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.asset-scale-value {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11px;
+}
+
+body.dark-mode .asset-scale-button {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+}
+
 .partition-editors {
   position: absolute;
   left: 50%;

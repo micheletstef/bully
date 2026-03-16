@@ -507,7 +507,7 @@
             const layout = layoutRaw && typeof layoutRaw === "object" ? layoutRaw : {};
             const tx = 0;
             const ty = 0;
-            const scale = 1;
+            const scale = Number.isFinite(Number(layout.scale)) ? Math.max(0.1, Math.min(8, Number(layout.scale))) : 1;
             image.style.transformOrigin = "center center";
             image.dataset.layoutScale = String(scale);
             image.style.transform = `translate(${tx}px, ${ty}px)`;
