@@ -6430,8 +6430,12 @@ function updateActiveWindow() {
     : 0;
   const traverseElapsed = traverseDuration * traverseProgress;
   loopTraverseSeconds = traverseDuration;
-  const baseX = loopPreviewTrack.offsetLeft - loopVisualization.scrollLeft;
-  const frameTopOffset = Math.max(0, loopPreviewTrack.offsetTop);
+  const visualizationRect = loopVisualization.getBoundingClientRect();
+  const trackRect = loopPreviewTrack.getBoundingClientRect();
+  const parentScrollLeft = loopVisualization.scrollLeft || 0;
+  const parentScrollTop = loopVisualization.scrollTop || 0;
+  const baseX = trackRect.left - visualizationRect.left + parentScrollLeft;
+  const frameTopOffset = trackRect.top - visualizationRect.top + parentScrollTop;
   const mainWidth = Math.min(activeWidth, Math.max(0, scaledLoopDistance - x));
   const overflowWidth = Math.max(0, activeWidth - mainWidth);
   const drawX = baseX + x;
