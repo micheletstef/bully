@@ -3,10 +3,10 @@ window.THREE = THREE;
 
 async function loadGLTFLoader() {
   const candidates = [
-    "./GLTFLoader.js",
+    // Try CDN first to avoid noisy 404s for missing local copies.
+    "https://unpkg.com/three@0.183.2/examples/jsm/loaders/GLTFLoader.js?module",
     "../../node_modules/three/examples/jsm/loaders/GLTFLoader.js",
-    "/node_modules/three/examples/jsm/loaders/GLTFLoader.js",
-    "https://unpkg.com/three@0.181.0/examples/jsm/loaders/GLTFLoader.js?module"
+    "/node_modules/three/examples/jsm/loaders/GLTFLoader.js"
   ];
   for (const specifier of candidates) {
     try {

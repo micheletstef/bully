@@ -447,6 +447,16 @@ function artworkFileName(path) {
   return parts[parts.length - 1] || clean;
 }
 
+function normalizeAssetMatchKey(value) {
+  const fileName = artworkFileName(value).toLowerCase();
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  return stem.replace(/-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i, "");
+}
+
+function isManagedAssetPath(src) {
+  return /^assets\/(animations|graphics)\//i.test(String(src || ""));
+}
+
 function isAcceptableArtworkSource(src) {
   const value = String(src || "").trim();
   if (!value) {
@@ -572,6 +582,58 @@ function addAssetToLibrary(src, name = "") {
   }
   assetLibrary.push(normalized);
   saveAssetLibrary();
+}
+
+function reconcileArtworksWithAssetLibrary() {
+  if (!Array.isArray(assetLibrary) || !assetLibrary.length) {
+    return false;
+  }
+  const bySrc = new Map();
+  const byKey = new Map();
+  assetLibrary.forEach((entry) => {
+    if (!entry || !entry.src) {
+      return;
+    }
+    bySrc.set(entry.src, entry);
+    const key = normalizeAssetMatchKey(entry.name || entry.src);
+    if (key && !byKey.has(key)) {
+      byKey.set(key, entry);
+    }
+  });
+
+  const reconcileItem = (item) => {
+    if (!item || !isManagedAssetPath(item.src) || bySrc.has(item.src)) {
+      return false;
+    }
+    const key = normalizeAssetMatchKey(item.name || item.src);
+    const replacement = byKey.get(key);
+    if (!replacement) {
+      return false;
+    }
+    item.src = replacement.src;
+    item.name = replacement.name || artworkFileName(replacement.src);
+    return true;
+  };
+
+  let changed = false;
+  loopArtworks.forEach((item) => {
+    if (reconcileItem(item)) {
+      changed = true;
+    }
+  });
+  PARTITION_KEYS.forEach((key) => {
+    (partitionArtworks[key] || []).forEach((item) => {
+      if (reconcileItem(item)) {
+        changed = true;
+      }
+    });
+  });
+
+  if (changed) {
+    saveArtworks(loopArtworks);
+    savePartitionArtworks(partitionArtworks);
+  }
+  return changed;
 }
 
 function syncAssetLibraryFromCurrentArtworks() {
@@ -7176,6 +7238,7 @@ async function init() {
   partitionSettingsByKey = restorePartitionSettings();
   assetLibrary = restoreAssetLibrary();
   await refreshAssetLibraryFromServer({ shouldRender: false, replace: true });
+  reconcileArtworksWithAssetLibrary();
   activePartitionSettingsKey = activePartitionSettingsKeyValue();
   loopDurationSeconds = currentSpeedSeconds();
   loopTraverseSeconds = loopDurationSeconds;
