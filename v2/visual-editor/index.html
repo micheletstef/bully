@@ -479,12 +479,16 @@
 
       .flat-billboard-track {
         position: absolute;
-        inset: 0;
+        left: 0;
+        top: 0;
+        width: max-content;
+        height: 100%;
         display: flex;
         flex-wrap: nowrap;
         align-items: flex-start;
         pointer-events: none;
         transform: translate(0px, 0px);
+        overflow: visible;
       }
 
       .flat-billboard-asset {
@@ -1601,6 +1605,8 @@
         const direction = editorState.settings.marqueeDirection;
         const isVertical = direction === "btt" || direction === "ttb";
         flatBillboardTrack.style.flexDirection = isVertical ? "column" : "row";
+        flatBillboardTrack.style.width = isVertical ? "100%" : "max-content";
+        flatBillboardTrack.style.height = isVertical ? "max-content" : "100%";
       }
 
       function buildMarqueeCopies() {
