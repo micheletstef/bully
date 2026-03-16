@@ -96,12 +96,31 @@
         text-overflow: ellipsis;
       }
 
-      .asset-button::before {
-        content: "[ ] ";
+      .asset-button-content {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
       }
 
-      .asset-button.active::before {
-        content: "[•] ";
+      .asset-thumb {
+        width: 10px;
+        height: 10px;
+        border: 1px solid rgba(31, 31, 31, 0.35);
+        object-fit: cover;
+        flex: 0 0 auto;
+        background: #fff;
+      }
+
+      .asset-button.active .asset-thumb {
+        border-color: rgba(0, 255, 255, 0.95);
+      }
+
+      .asset-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .asset-button:hover,
@@ -446,7 +465,26 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "asset-button";
-        button.textContent = truncateLabel(asset.name, 34);
+        const content = document.createElement("span");
+        content.className = "asset-button-content";
+
+        const thumb = document.createElement("img");
+        thumb.className = "asset-thumb";
+        thumb.src = asset.url;
+        thumb.alt = "";
+        thumb.decoding = "async";
+        thumb.loading = "lazy";
+        thumb.addEventListener("error", () => {
+          thumb.removeAttribute("src");
+        });
+
+        const label = document.createElement("span");
+        label.className = "asset-label";
+        label.textContent = truncateLabel(asset.name, 34);
+
+        content.appendChild(thumb);
+        content.appendChild(label);
+        button.appendChild(content);
         button.title = asset.name;
         button.addEventListener("click", async () => {
           const activeButton = assetsList.querySelector(".asset-button.active");
@@ -468,7 +506,7 @@
           };
           editorState.assets.push(assetSnapshot);
           appendAssetBlock(assetSnapshot);
-          selectAssetBlock(visualEditorBlock.lastElementChild);
+          selectSingleAssetBlock(visualEditorBlock.lastElementChild);
           saveEditorState();
         });
         return button;
@@ -631,8 +669,16 @@
         positionScaleControls();
       }
 
+      function getSelectedAssetBlocks() {
+        return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block.is-selected"));
+      }
+
       function getSelectedAssetBlock() {
-        return visualEditorBlock.querySelector(".fake-asset-block.is-selected");
+        const selectedBlocks = getSelectedAssetBlocks();
+        if (selectedBlocks.length !== 1) {
+          return null;
+        }
+        return selectedBlocks[0];
       }
 
       function setScaleControlsVisible(isVisible) {
@@ -673,28 +719,52 @@
         if (!selectedBlock) {
           assetScaleDownButton.disabled = true;
           assetScaleUpButton.disabled = true;
+          assetRotateButton.disabled = true;
           return;
         }
         const currentPercent = Number(selectedBlock.dataset.scalePercent) || 100;
         const limits = getScaleLimits(selectedBlock);
         assetScaleDownButton.disabled = currentPercent <= limits.minPercent;
         assetScaleUpButton.disabled = currentPercent >= limits.maxPercent;
+        assetRotateButton.disabled = false;
       }
 
-      function selectAssetBlock(block) {
-        const activeBlock = getSelectedAssetBlock();
-        if (activeBlock) {
-          activeBlock.classList.remove("is-selected");
-        }
-        if (!block) {
+      function updateSelectionUi() {
+        const selectedBlocks = getSelectedAssetBlocks();
+        if (selectedBlocks.length !== 1) {
           setScaleControlsVisible(false);
+          updateScaleControlButtons();
           return;
         }
-        block.classList.add("is-selected");
+        const block = selectedBlocks[0];
         updateScaleControlsValue();
         updateScaleControlButtons();
         positionScaleControls();
         setScaleControlsVisible(true);
+      }
+
+      function clearAssetSelection() {
+        const selectedBlocks = getSelectedAssetBlocks();
+        for (const selectedBlock of selectedBlocks) {
+          selectedBlock.classList.remove("is-selected");
+        }
+        updateSelectionUi();
+      }
+
+      function selectSingleAssetBlock(block) {
+        clearAssetSelection();
+        if (block) {
+          block.classList.add("is-selected");
+        }
+        updateSelectionUi();
+      }
+
+      function addAssetBlockToSelection(block) {
+        if (!block) {
+          return;
+        }
+        block.classList.add("is-selected");
+        updateSelectionUi();
       }
 
       function updateSelectedAssetScale(deltaPercent) {
@@ -815,16 +885,18 @@
       }
 
       function removeSelectedAsset() {
-        const selectedBlock = getSelectedAssetBlock();
-        if (!selectedBlock) {
-          return false;
+        const selectedBlocks = getSelectedAssetBlocks();
+        if (!selectedBlocks.length) {
+          return 0;
         }
-        const selectedAssetId = selectedBlock.dataset.assetId;
-        selectedBlock.remove();
-        editorState.assets = editorState.assets.filter((asset) => asset.id !== selectedAssetId);
-        selectAssetBlock(null);
+        const selectedIds = new Set(selectedBlocks.map((selectedBlock) => selectedBlock.dataset.assetId));
+        for (const selectedBlock of selectedBlocks) {
+          selectedBlock.remove();
+        }
+        editorState.assets = editorState.assets.filter((asset) => !selectedIds.has(asset.id));
+        clearAssetSelection();
         saveEditorState();
-        return true;
+        return selectedBlocks.length;
       }
 
       function setVerticalAlignment(alignKey, shouldPersist) {
@@ -914,10 +986,16 @@
       visualEditorBlock.addEventListener("click", (event) => {
         const block = getAssetBlockFromEventTarget(event.target);
         if (block) {
-          selectAssetBlock(block);
+          if (event.shiftKey) {
+            addAssetBlockToSelection(block);
+          } else {
+            selectSingleAssetBlock(block);
+          }
           return;
         }
-        selectAssetBlock(null);
+        if (!event.shiftKey) {
+          clearAssetSelection();
+        }
       });
 
       visualEditorBlock.addEventListener("dragstart", (event) => {
@@ -928,7 +1006,7 @@
         }
         draggingAssetId = block.dataset.assetId;
         block.classList.add("is-dragging");
-        selectAssetBlock(block);
+        selectSingleAssetBlock(block);
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", draggingAssetId);
@@ -1013,8 +1091,8 @@
         if (event.key !== "Backspace") {
           return;
         }
-        const didRemove = removeSelectedAsset();
-        if (didRemove) {
+        const removedCount = removeSelectedAsset();
+        if (removedCount > 0) {
           event.preventDefault();
         }
       });
