@@ -327,6 +327,15 @@
         -webkit-user-drag: none;
       }
 
+      .asset-preview-frame {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        overflow: hidden;
+        transform-origin: center;
+        pointer-events: none;
+      }
+
       .asset-crop-handle {
         position: absolute;
         top: 50%;
@@ -468,6 +477,14 @@
         object-fit: fill;
         user-select: none;
         pointer-events: none;
+      }
+
+      .flat-billboard-asset-frame {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        overflow: hidden;
+        transform-origin: center;
       }
 
       .flat-billboard-annotations {
@@ -919,7 +936,13 @@
         if (!block || !src) {
           return;
         }
-        const currentImage = block.querySelector(".asset-preview-image");
+        let frame = block.querySelector(".asset-preview-frame");
+        if (!(frame instanceof HTMLElement)) {
+          frame = document.createElement("div");
+          frame.className = "asset-preview-frame";
+          block.appendChild(frame);
+        }
+        const currentImage = frame.querySelector(".asset-preview-image");
         let image = currentImage;
         if (!(image instanceof HTMLImageElement)) {
           image = document.createElement("img");
@@ -929,9 +952,10 @@
           image.loading = "lazy";
           image.addEventListener("error", () => {
             image.remove();
+            frame.remove();
             block.classList.add("no-preview");
           });
-          block.appendChild(image);
+          frame.appendChild(image);
         }
         block.dataset.assetSrc = src;
         block.dataset.assetGroup = group || "";
@@ -1191,14 +1215,12 @@
         return { left, right };
       }
 
-      function getEffectiveDimensions(block) {
+      function getSourceDimensions(block) {
         const originalWidth = Number(block.dataset.originalWidth);
         const originalHeight = Number(block.dataset.originalHeight);
-        const rotationTurns = Number(block.dataset.rotationTurns) || 0;
-        const isQuarterTurn = Math.abs(rotationTurns % 2) === 1;
         return {
-          width: isQuarterTurn ? originalHeight : originalWidth,
-          height: isQuarterTurn ? originalWidth : originalHeight,
+          width: originalWidth,
+          height: originalHeight,
         };
       }
 
@@ -1215,20 +1237,23 @@
         block.style.width = metrics.scaledWidth + "px";
         block.style.height = metrics.scaledHeight + "px";
 
+        const previewFrame = block.querySelector(".asset-preview-frame");
         const previewImage = block.querySelector(".asset-preview-image");
-        if (previewImage instanceof HTMLElement) {
-          const rotationDegrees = ((Number(block.dataset.rotationTurns) || 0) % 4) * 90;
-          previewImage.style.width = metrics.fullScaledWidth + "px";
-          previewImage.style.height = metrics.scaledHeight + "px";
+        if (previewFrame instanceof HTMLElement && previewImage instanceof HTMLElement) {
+          previewFrame.style.width = metrics.croppedScaledWidth + "px";
+          previewFrame.style.height = metrics.croppedScaledHeight + "px";
+          previewFrame.style.transform = "translate(-50%, -50%) rotate(" + metrics.rotationDegrees + "deg)";
+          previewImage.style.width = metrics.sourceScaledWidth + "px";
+          previewImage.style.height = metrics.sourceScaledHeight + "px";
           previewImage.style.transformOrigin = "50% 50%";
-          previewImage.style.transform = "translateX(" + metrics.offsetX + "px) rotate(" + rotationDegrees + "deg)";
+          previewImage.style.transform = "translateX(" + metrics.offsetX + "px)";
         }
         syncBillboardPaddingFromEditorPreview();
       }
 
       function computeRenderedAssetMetrics(block) {
-        const effective = getEffectiveDimensions(block);
-        if (!Number.isFinite(effective.width) || !Number.isFinite(effective.height) || effective.width <= 0 || effective.height <= 0) {
+        const source = getSourceDimensions(block);
+        if (!Number.isFinite(source.width) || !Number.isFinite(source.height) || source.width <= 0 || source.height <= 0) {
           return null;
         }
         const crop = getCropValues(block);
@@ -1237,20 +1262,36 @@
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const fullTargetWidth = effective.width * userScale;
-        const targetWidth = fullTargetWidth * visibleWidthRatio;
-        const targetHeight = effective.height * userScale;
+        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const isQuarterTurn = rotationTurns % 2 === 1;
+        const rotationDegrees = rotationTurns * 90;
+
+        const baseSourceWidth = source.width * userScale;
+        const baseSourceHeight = source.height * userScale;
+        const baseCroppedWidth = baseSourceWidth * visibleWidthRatio;
+        const baseCroppedHeight = baseSourceHeight;
+        const baseFinalWidth = isQuarterTurn ? baseCroppedHeight : baseCroppedWidth;
+        const baseFinalHeight = isQuarterTurn ? baseCroppedWidth : baseCroppedHeight;
+
         const safeHeight = getSafeAssetHeight();
-        const fitScale = Math.min(1, safeHeight / targetHeight);
-        const scaledWidth = Math.max(1, Math.round(targetWidth * fitScale));
-        const scaledHeight = Math.max(1, Math.round(targetHeight * fitScale));
-        const fullScaledWidth = Math.max(1, Math.round(fullTargetWidth * fitScale));
-        const offsetX = Math.round(((crop.right - crop.left) * fullScaledWidth) / 2);
+        const fitScale = Math.min(1, safeHeight / Math.max(1, baseFinalHeight));
+
+        const sourceScaledWidth = Math.max(1, Math.round(baseSourceWidth * fitScale));
+        const sourceScaledHeight = Math.max(1, Math.round(baseSourceHeight * fitScale));
+        const croppedScaledWidth = Math.max(1, Math.round(baseCroppedWidth * fitScale));
+        const croppedScaledHeight = Math.max(1, Math.round(baseCroppedHeight * fitScale));
+        const scaledWidth = Math.max(1, Math.round(baseFinalWidth * fitScale));
+        const scaledHeight = Math.max(1, Math.round(baseFinalHeight * fitScale));
+        const offsetX = Math.round(((crop.right - crop.left) * sourceScaledWidth) / 2);
         return {
           scaledWidth,
           scaledHeight,
-          fullScaledWidth,
+          sourceScaledWidth,
+          sourceScaledHeight,
+          croppedScaledWidth,
+          croppedScaledHeight,
           offsetX,
+          rotationDegrees,
         };
       }
 
@@ -1306,9 +1347,14 @@
       }
 
       function getScaleLimits(block) {
-        const effective = getEffectiveDimensions(block);
+        const source = getSourceDimensions(block);
+        const crop = getCropValues(block);
+        const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
+        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const isQuarterTurn = rotationTurns % 2 === 1;
         const safeHeight = getSafeAssetHeight();
-        const maxByHeight = Math.floor((safeHeight / effective.height) * 100);
+        const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
+        const maxByHeight = Math.floor((safeHeight / Math.max(1, finalHeightAtHundred)) * 100);
         const maxPercent = Math.max(10, Math.min(400, maxByHeight));
         return {
           minPercent: 10,
@@ -1450,10 +1496,10 @@
         if (edge !== "left" && edge !== "right") {
           return;
         }
-        const effective = getEffectiveDimensions(block);
+        const source = getSourceDimensions(block);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const fullTargetWidth = Math.max(1, effective.width * userScale);
+        const fullTargetWidth = Math.max(1, source.width * userScale);
         const crop = getCropValues(block);
         cropDragState = {
           block,
@@ -1701,16 +1747,21 @@
           targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
 
           if (previewImage instanceof HTMLImageElement) {
+            const assetFrame = document.createElement("div");
+            assetFrame.className = "flat-billboard-asset-frame";
+            assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
+            assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
+            assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
+
             const assetImage = document.createElement("img");
             assetImage.className = "flat-billboard-asset-image";
             assetImage.alt = "";
             assetImage.decoding = "async";
             assetImage.loading = "lazy";
-            assetImage.style.width = Math.max(1, editorMetrics.fullScaledWidth * scaleFactor) + "px";
-            assetImage.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
-            const rotationDegrees = ((Number(sourceBlock.dataset.rotationTurns) || 0) % 4) * 90;
+            assetImage.style.width = Math.max(1, editorMetrics.sourceScaledWidth * scaleFactor) + "px";
+            assetImage.style.height = Math.max(1, editorMetrics.sourceScaledHeight * scaleFactor) + "px";
             assetImage.style.transformOrigin = "50% 50%";
-            assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px) rotate(" + rotationDegrees + "deg)";
+            assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
             const src = sourceBlock.dataset.assetSrc || "";
             const group = sourceBlock.dataset.assetGroup || "";
             resolvePreviewUrl(src, group)
@@ -1722,7 +1773,8 @@
               .catch(() => {
                 targetBlock.classList.add("no-preview");
               });
-            targetBlock.appendChild(assetImage);
+            assetFrame.appendChild(assetImage);
+            targetBlock.appendChild(assetFrame);
           } else {
             targetBlock.classList.add("no-preview");
           }
