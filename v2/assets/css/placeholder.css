@@ -661,9 +661,9 @@ body.sidebar-resizing {
 
 .asset-scale-controls {
   position: absolute;
-  left: 50%;
+  left: 0;
+  top: 0;
   transform: translateX(-50%);
-  top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 152px);
   display: none;
   align-items: center;
   gap: 6px;
