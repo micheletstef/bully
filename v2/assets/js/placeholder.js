@@ -5821,6 +5821,7 @@ function renderLoopPreview() {
     loopPreviewSortable.destroy();
   }
   loopPreviewSortable = null;
+  void initLoopSortable();
   syncVisualizationPaddingScaled();
   syncVisualizationGapScaled();
   syncVisualizationGeometry();
@@ -5955,16 +5956,6 @@ async function initPartitionSortable(partitionKey, trackEl) {
         updatePartitionActiveWindows();
       },
       onEnd: (evt) => {
-        const draggedId = evt && evt.item && evt.item.dataset ? evt.item.dataset.artworkId : "";
-        const pointer = pointerFromSortableEvent(evt);
-        if (draggedId && pointer) {
-          const dropTarget = document.elementFromPoint(pointer.x, pointer.y);
-          const droppedTrack = dropTarget ? dropTarget.closest(".partition-preview-track") : null;
-          if (!droppedTrack) {
-            removePartitionArtworkById(key, draggedId);
-            return;
-          }
-        }
         const idOrder = [...trackEl.querySelectorAll(".partition-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
@@ -6059,6 +6050,7 @@ function renderPartitionEditor(partitionKey) {
 
   syncPartitionEditorVisuals();
   updatePartitionActiveWindows();
+  void initPartitionSortable(key, trackEl);
 }
 
 function renderPartitionEditors() {
@@ -6206,16 +6198,6 @@ async function initLoopSortable() {
         updateActiveWindow();
       },
       onEnd: (evt) => {
-        const draggedId = evt && evt.item && evt.item.dataset ? evt.item.dataset.artworkId : "";
-        const pointer = pointerFromSortableEvent(evt);
-        if (draggedId && pointer) {
-          const dropTarget = document.elementFromPoint(pointer.x, pointer.y);
-          const droppedTrack = dropTarget ? dropTarget.closest(".loop-preview-track") : null;
-          if (!droppedTrack) {
-            removeArtworkById(draggedId);
-            return;
-          }
-        }
         const idOrder = [...loopPreviewTrack.querySelectorAll(".loop-preview-item")]
           .map((node) => node.dataset.artworkId)
           .filter((id) => !!id);
