@@ -5344,6 +5344,7 @@ function syncPartitionEditorVisuals() {
   if (!partitionEditors) {
     return;
   }
+  const scale = computeLinearEditorLayoutScale();
   const baseArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   partitionEditors.style.setProperty("--partition-preview-art-height", `${baseArtHeight}px`);
   partitionEditors.style.setProperty("--partition-preview-art-width", `${PREVIEW_TILE_FIXED_WIDTH_PX}px`);
@@ -5358,11 +5359,12 @@ function syncPartitionEditorVisuals() {
       return;
     }
     const settings = partitionSettingsForKey(partitionKey);
-    const scaledPadLR = 12;
+    const scaledPadTB = Math.max(0, Math.round(Math.max(0, settings.padTopBottom) * scale * 100) / 100);
+    const scaledPadLR = Math.max(0, Math.round(Math.max(0, settings.padLeftRight) * scale * 100) / 100);
     const scaledGap = 0;
-    const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + 20;
+    const trackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + scaledPadTB * 2;
     const trackArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
-    const safeTop = Math.max(0, Math.round((trackHeight - trackArtHeight) * 0.5 * 100) / 100);
+    const safeTop = Math.max(0, scaledPadTB);
     const trackPadTB = 0;
     const trackPadLR = 0;
     const spacerWidth = scaledPadLR;
@@ -5402,10 +5404,14 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scaledPadLR = 12;
-  const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + 20;
+  const scale = computeLinearEditorLayoutScale();
+  const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
+  const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
+  const scaledPadTB = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
+  const scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
+  const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX + scaledPadTB * 2;
   const scaledArtHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
-  const safeTop = Math.max(0, Math.round((scaledTrackHeight - scaledArtHeight) * 0.5 * 100) / 100);
+  const safeTop = Math.max(0, scaledPadTB);
   loopVisualization.style.setProperty("--preview-pad-tb", "0px");
   loopVisualization.style.setProperty("--preview-pad-lr", `${scaledPadLR}px`);
   loopVisualization.style.setProperty("--preview-track-height", `${scaledTrackHeight}px`);
