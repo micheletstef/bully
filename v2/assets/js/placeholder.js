@@ -104,6 +104,7 @@ const DIRECTION_DISPLAY_NAMES = {
 };
 const SIDEBAR_LABEL_MAX_CHARS = 32;
 const PREVIEW_TILE_FIXED_HEIGHT_PX = 96;
+const MAX_INLINE_ASSET_SOURCE_CHARS = 350000;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 680;
@@ -167,6 +168,9 @@ let loopDurationSeconds = 16;
 let loopTraverseSeconds = 16;
 let loopStageHeight = 3480;
 let loopAssetGap = 0;
+let loopPreviewScaledPadTopBottom = null;
+let loopPreviewScaledPadLeftRight = null;
+let loopPreviewScaledGap = null;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
 let loopDistanceSource = 5900;
@@ -406,6 +410,20 @@ function artworkFileName(path) {
   return parts[parts.length - 1] || clean;
 }
 
+function isAcceptableArtworkSource(src) {
+  const value = String(src || "").trim();
+  if (!value) {
+    return false;
+  }
+  if (value.startsWith("blob:")) {
+    return false;
+  }
+  if (value.startsWith("data:image/") && value.length > MAX_INLINE_ASSET_SOURCE_CHARS) {
+    return false;
+  }
+  return true;
+}
+
 function normalizeArtworkItem(item) {
   if (typeof item === "string") {
     return createArtworkItem(item, artworkFileName(item));
@@ -414,7 +432,7 @@ function normalizeArtworkItem(item) {
     return null;
   }
   const src = typeof item.src === "string" ? item.src.trim() : "";
-  if (!src) {
+  if (!isAcceptableArtworkSource(src)) {
     return null;
   }
   const name =
@@ -456,7 +474,7 @@ function normalizeAssetLibraryEntry(entry) {
     return null;
   }
   const src = typeof entry.src === "string" ? entry.src.trim() : "";
-  if (!src) {
+  if (!isAcceptableArtworkSource(src)) {
     return null;
   }
   const nameRaw = typeof entry.name === "string" ? entry.name.trim() : "";
@@ -483,15 +501,23 @@ function restoreAssetLibrary() {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed
+    const cleaned = parsed
       .map((entry) => normalizeAssetLibraryEntry(entry))
       .filter((entry) => entry !== null);
+    if (cleaned.length !== parsed.length) {
+      assetLibrary = [...cleaned];
+      saveAssetLibrary();
+    }
+    return cleaned;
   } catch (error) {
     return [];
   }
 }
 
 function addAssetToLibrary(src, name = "") {
+  if (!isAcceptableArtworkSource(src)) {
+    return;
+  }
   const normalized = normalizeAssetLibraryEntry({ src, name });
   if (!normalized) {
     return;
@@ -3935,6 +3961,9 @@ function buildSnapshotHtml(config) {
         // Keep editor transform coordinates in billboard design-space.
         const viewportLayoutScale = Math.max(0.001, stageHeight / 3480);
         const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * viewportLayoutScale));
+        state.scaledPadTopBottom = Math.max(0, Number(scaledPadding.padTopBottom) || 0);
+        state.scaledPadLeftRight = Math.max(0, Number(scaledPadding.padLeftRight) || 0);
+        state.scaledGap = Math.max(0, Number(scaledGap) || 0);
         const sources = state.artworks.length
           ? state.artworks.map(normalizeArtworkSource)
           : ["assets/linear-loop-strip.png"];
@@ -4110,6 +4139,9 @@ function buildSnapshotHtml(config) {
             durationSeconds: durationMs / 1000,
             stageHeight,
             assetGap: state.assetGap,
+            scaledPadTopBottom: Number(state.scaledPadTopBottom) || 0,
+            scaledPadLeftRight: Number(state.scaledPadLeftRight) || 0,
+            scaledGap: Number(state.scaledGap) || 0,
             loopDistance: state.loopDistance
           },
           "*"
@@ -5208,6 +5240,9 @@ function restoreArtworks() {
     const cleaned = parsed
       .map((item) => normalizeArtworkItem(item))
       .filter((item) => item !== null);
+    if (cleaned.length !== parsed.length) {
+      saveArtworks(cleaned.length ? cleaned : DEFAULT_ARTWORKS);
+    }
     return cleaned.length ? cleaned : [...DEFAULT_ARTWORKS];
   } catch (error) {
     return [...DEFAULT_ARTWORKS];
@@ -5228,10 +5263,18 @@ function restorePartitionArtworks() {
     }
 
     const restored = {};
+    let changed = false;
     PARTITION_KEYS.forEach((key) => {
+      const original = Array.isArray(parsed[key]) ? parsed[key] : [];
       const cleaned = cloneArtworkItems(parsed[key]);
+      if (cleaned.length !== original.length) {
+        changed = true;
+      }
       restored[key] = cleaned.length ? cleaned : cloneArtworkItems(defaults[key]);
     });
+    if (changed) {
+      savePartitionArtworks(restored);
+    }
     return restored;
   } catch (error) {
     return defaults;
@@ -5414,9 +5457,19 @@ function syncVisualizationGapScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = getPreviewScale();
-  const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
-  const scaledGap = Math.round(scaledGapRaw * 100) / 100;
+  let scaledGap = null;
+  if (
+    Number.isFinite(loopPreviewScaledGap) &&
+    Number.isFinite(loopStageHeight) &&
+    loopStageHeight > 0
+  ) {
+    const ratio = PREVIEW_TILE_FIXED_HEIGHT_PX / loopStageHeight;
+    scaledGap = Math.round(Math.max(0, Number(loopPreviewScaledGap) * ratio) * 100) / 100;
+  } else {
+    const scale = getPreviewScale();
+    const scaledGapRaw = Math.max(0, loopAssetGap) * scale;
+    scaledGap = Math.round(scaledGapRaw * 100) / 100;
+  }
   loopVisualization.style.setProperty("--preview-gap", `${scaledGap}px`);
   syncVisualizationGeometry();
 }
@@ -5425,11 +5478,24 @@ function syncVisualizationPaddingScaled() {
   if (!loopVisualization || !loopPreviewTrack) {
     return;
   }
-  const scale = getPreviewScale();
-  const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
-  const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
-  const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
-  const scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
+  let scaledPadTBRounded = null;
+  let scaledPadLR = null;
+  if (
+    Number.isFinite(loopPreviewScaledPadTopBottom) &&
+    Number.isFinite(loopPreviewScaledPadLeftRight) &&
+    Number.isFinite(loopStageHeight) &&
+    loopStageHeight > 0
+  ) {
+    const ratio = PREVIEW_TILE_FIXED_HEIGHT_PX / loopStageHeight;
+    scaledPadTBRounded = Math.round(Math.max(0, Number(loopPreviewScaledPadTopBottom) * ratio) * 100) / 100;
+    scaledPadLR = Math.round(Math.max(0, Number(loopPreviewScaledPadLeftRight) * ratio) * 100) / 100;
+  } else {
+    const scale = getPreviewScale();
+    const scaledPadTBRaw = Math.max(0, currentPadTopBottom()) * scale;
+    const scaledPadLRRaw = Math.max(0, currentPadLeftRight()) * scale;
+    scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
+    scaledPadLR = Math.round(Math.max(0, scaledPadLRRaw) * 100) / 100;
+  }
   const scaledTrackHeight = PREVIEW_TILE_FIXED_HEIGHT_PX;
   const maxPadTB = Math.max(0, (scaledTrackHeight - 8) * 0.5);
   const scaledPadTB = Math.min(maxPadTB, scaledPadTBRounded);
@@ -7008,6 +7074,9 @@ async function init() {
     const durationSeconds = Number(payload.durationSeconds);
     const stageHeight = Number(payload.stageHeight);
     const assetGap = Number(payload.assetGap);
+    const scaledPadTopBottom = Number(payload.scaledPadTopBottom);
+    const scaledPadLeftRight = Number(payload.scaledPadLeftRight);
+    const scaledGap = Number(payload.scaledGap);
     const loopDistance = Number(payload.loopDistance);
     const shouldUpdateViewportMetrics = previewViewMode !== "3d";
 
@@ -7055,6 +7124,15 @@ async function init() {
     if (Number.isFinite(assetGap) && assetGap >= 0 && assetGap !== loopAssetGap) {
       loopAssetGap = assetGap;
       shouldRerender3d = true;
+    }
+    if (Number.isFinite(scaledPadTopBottom) && scaledPadTopBottom >= 0) {
+      loopPreviewScaledPadTopBottom = scaledPadTopBottom;
+    }
+    if (Number.isFinite(scaledPadLeftRight) && scaledPadLeftRight >= 0) {
+      loopPreviewScaledPadLeftRight = scaledPadLeftRight;
+    }
+    if (Number.isFinite(scaledGap) && scaledGap >= 0) {
+      loopPreviewScaledGap = scaledGap;
     }
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
