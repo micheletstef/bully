@@ -15,17 +15,20 @@
 
       body {
         margin: 0;
-        min-height: 100vh;
+        min-height: 100%;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
-        padding: 24px;
-        background: #ffffff;
-        font-family: Arial, sans-serif;
+        padding: 18px;
+        background: #fff;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+        color: #1f1f1f;
       }
 
       .page-shell {
-        width: min(1240px, 100%);
+        width: 100%;
         display: grid;
         grid-template-columns: 260px 1fr;
         gap: 24px;
@@ -33,58 +36,73 @@
       }
 
       .assets-directory {
-        border: 1px solid #d8d8d8;
-        border-radius: 10px;
-        padding: 14px;
-        background: #fafafa;
+        position: sticky;
+        top: 18px;
+        padding: 0;
+        background: transparent;
       }
 
       .assets-title {
-        margin: 0 0 12px;
-        font-size: 14px;
-        font-weight: 700;
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-weight: 400;
         text-transform: lowercase;
       }
 
       .assets-list {
-        display: grid;
-        gap: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
 
       .asset-button {
         width: 100%;
         text-align: left;
-        border: 1px solid #cfcfcf;
-        border-radius: 8px;
-        background: #ffffff;
-        padding: 10px 12px;
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 2px 0;
         cursor: pointer;
-        font-size: 13px;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
-      .asset-button:hover {
-        background: #f2f7ff;
-        border-color: #9fc1ff;
+      .asset-button::before {
+        content: "[ ] ";
+      }
+
+      .asset-button.active::before {
+        content: "[•] ";
+      }
+
+      .asset-button:hover,
+      .asset-button:focus {
+        text-decoration: underline;
+        outline: none;
       }
 
       .editor-stage {
-        display: flex;
-        justify-content: center;
-      }
-
-      .visual-editor-block {
-        min-width: 800px;
-        height: 200px;
-        background: #ff00ff;
-        display: flex;
-        flex-wrap: wrap;
-        align-content: flex-start;
-        gap: 8px;
-        padding: 10px;
         overflow: auto;
       }
 
+      .visual-editor-block {
+        width: max-content;
+        min-width: 800px;
+        height: 200px;
+        background: #ff00ff;
+        display: inline-flex;
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px;
+      }
+
       .fake-asset-block {
+        flex: 0 0 auto;
         background: #1e6cff;
         border: 1px solid #0e4fc7;
       }
@@ -118,6 +136,12 @@
         button.className = "asset-button";
         button.textContent = asset.name + " (" + asset.width + "x" + asset.height + ")";
         button.addEventListener("click", () => {
+          const activeButton = assetsList.querySelector(".asset-button.active");
+          if (activeButton) {
+            activeButton.classList.remove("active");
+          }
+          button.classList.add("active");
+
           const block = document.createElement("div");
           block.className = "fake-asset-block";
           block.style.width = asset.width + "px";
