@@ -298,11 +298,40 @@
       .asset-preview-image {
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        max-width: none;
+        object-fit: fill;
         display: block;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
+      }
+
+      .asset-crop-handle {
+        position: absolute;
+        top: 50%;
+        width: 8px;
+        height: 20px;
+        margin-top: -10px;
+        border: 1px solid #1f1f1f;
+        background: #fff;
+        border-radius: 3px;
+        padding: 0;
+        display: none;
+        z-index: 5;
+        cursor: ew-resize;
+      }
+
+      .asset-crop-handle[data-edge="left"] {
+        left: 1px;
+      }
+
+      .asset-crop-handle[data-edge="right"] {
+        right: 1px;
+      }
+
+      .fake-asset-block.is-selected .asset-crop-handle,
+      .fake-asset-block.is-cropping .asset-crop-handle {
+        display: block;
       }
 
       .asset-scale-controls {
@@ -414,6 +443,7 @@
       const assetScaleValue = document.getElementById("assetScaleValue");
       const assetRotateButton = document.getElementById("assetRotateButton");
       let draggingAssetId = null;
+      let cropDragState = null;
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -448,19 +478,27 @@
             .map((asset) => ({
               id: typeof asset.id === "string" ? asset.id : "asset-" + assetIdCounter++,
               name: typeof asset.name === "string" ? asset.name : "asset",
+              src: typeof asset.src === "string" ? asset.src : "",
+              group: typeof asset.group === "string" ? asset.group : "graphics",
               width: Number.isFinite(asset.width) ? asset.width : 100,
               height: Number.isFinite(asset.height) ? asset.height : 60,
               scalePercent: Number.isFinite(asset.scalePercent) ? asset.scalePercent : 100,
               rotationTurns: Number.isFinite(asset.rotationTurns) ? asset.rotationTurns : 0,
+              cropLeft: Number.isFinite(asset.cropLeft) ? asset.cropLeft : 0,
+              cropRight: Number.isFinite(asset.cropRight) ? asset.cropRight : 0,
             }))
             .filter((asset) => asset.width > 0 && asset.height > 0)
             .map((asset) => ({
               id: asset.id,
               name: asset.name,
+              src: asset.src,
+              group: asset.group === "animations" ? "animations" : "graphics",
               width: asset.width,
               height: asset.height,
               scalePercent: Math.max(10, Math.min(400, asset.scalePercent)),
               rotationTurns: ((Math.trunc(asset.rotationTurns) % 4) + 4) % 4,
+              cropLeft: Math.max(0, Math.min(0.95, asset.cropLeft)),
+              cropRight: Math.max(0, Math.min(0.95, asset.cropRight)),
             }));
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
@@ -592,6 +630,8 @@
             height: dimensions.height,
             scalePercent: 100,
             rotationTurns: 0,
+            cropLeft: 0,
+            cropRight: 0,
           };
           editorState.assets.push(assetSnapshot);
           appendAssetBlock(assetSnapshot);
@@ -752,13 +792,43 @@
         block.dataset.originalHeight = String(asset.height);
         block.dataset.scalePercent = String(asset.scalePercent);
         block.dataset.rotationTurns = String(asset.rotationTurns || 0);
+        block.dataset.cropLeft = String(asset.cropLeft || 0);
+        block.dataset.cropRight = String(asset.cropRight || 0);
         if (typeof asset.src === "string" && asset.src) {
           attachPreviewImageToBlock(block, asset.src);
         } else {
           block.classList.add("no-preview");
         }
+        const leftHandle = document.createElement("button");
+        leftHandle.type = "button";
+        leftHandle.className = "asset-crop-handle";
+        leftHandle.dataset.edge = "left";
+        leftHandle.setAttribute("aria-label", "Crop left");
+        block.appendChild(leftHandle);
+
+        const rightHandle = document.createElement("button");
+        rightHandle.type = "button";
+        rightHandle.className = "asset-crop-handle";
+        rightHandle.dataset.edge = "right";
+        rightHandle.setAttribute("aria-label", "Crop right");
+        block.appendChild(rightHandle);
+
         updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
+      }
+
+      function getCropValues(block) {
+        const left = Math.max(0, Math.min(0.95, Number(block.dataset.cropLeft) || 0));
+        const right = Math.max(0, Math.min(0.95, Number(block.dataset.cropRight) || 0));
+        const total = left + right;
+        if (total >= 0.95) {
+          const scale = 0.95 / total;
+          return {
+            left: left * scale,
+            right: right * scale,
+          };
+        }
+        return { left, right };
       }
 
       function getEffectiveDimensions(block) {
@@ -782,9 +852,14 @@
         if (!Number.isFinite(effective.width) || !Number.isFinite(effective.height) || effective.width <= 0 || effective.height <= 0) {
           return;
         }
+        const crop = getCropValues(block);
+        block.dataset.cropLeft = String(crop.left);
+        block.dataset.cropRight = String(crop.right);
+        const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const targetWidth = effective.width * userScale;
+        const fullTargetWidth = effective.width * userScale;
+        const targetWidth = fullTargetWidth * visibleWidthRatio;
         const targetHeight = effective.height * userScale;
         const safeHeight = getSafeAssetHeight();
         const fitScale = Math.min(1, safeHeight / targetHeight);
@@ -792,6 +867,15 @@
         const scaledHeight = Math.max(1, Math.round(targetHeight * fitScale));
         block.style.width = scaledWidth + "px";
         block.style.height = scaledHeight + "px";
+
+        const previewImage = block.querySelector(".asset-preview-image");
+        if (previewImage instanceof HTMLElement) {
+          const fullScaledWidth = Math.max(1, Math.round(fullTargetWidth * fitScale));
+          const offsetX = -Math.round(crop.left * fullScaledWidth);
+          previewImage.style.width = fullScaledWidth + "px";
+          previewImage.style.height = scaledHeight + "px";
+          previewImage.style.transform = "translateX(" + offsetX + "px)";
+        }
       }
 
       function updateAllAssetBlockSizes() {
@@ -901,6 +985,21 @@
         updateSelectionUi();
       }
 
+      function syncAssetStateFromBlock(block) {
+        if (!block) {
+          return;
+        }
+        const assetId = block.dataset.assetId;
+        const assetState = editorState.assets.find((asset) => asset.id === assetId);
+        if (!assetState) {
+          return;
+        }
+        assetState.scalePercent = Number(block.dataset.scalePercent) || assetState.scalePercent;
+        assetState.rotationTurns = Number(block.dataset.rotationTurns) || assetState.rotationTurns;
+        assetState.cropLeft = Number(block.dataset.cropLeft) || 0;
+        assetState.cropRight = Number(block.dataset.cropRight) || 0;
+      }
+
       function updateSelectedAssetScale(deltaPercent) {
         const selectedBlock = getSelectedAssetBlock();
         if (!selectedBlock) {
@@ -920,9 +1019,8 @@
         positionScaleControls();
 
         const selectedAssetId = selectedBlock.dataset.assetId;
-        const selectedAssetState = editorState.assets.find((asset) => asset.id === selectedAssetId);
-        if (selectedAssetState) {
-          selectedAssetState.scalePercent = nextPercent;
+        if (selectedAssetId) {
+          syncAssetStateFromBlock(selectedBlock);
           saveEditorState();
         }
       }
@@ -941,9 +1039,8 @@
         positionScaleControls();
 
         const selectedAssetId = selectedBlock.dataset.assetId;
-        const selectedAssetState = editorState.assets.find((asset) => asset.id === selectedAssetId);
-        if (selectedAssetState) {
-          selectedAssetState.rotationTurns = nextTurns;
+        if (selectedAssetId) {
+          syncAssetStateFromBlock(selectedBlock);
           saveEditorState();
         }
       }
@@ -956,6 +1053,72 @@
           return target;
         }
         return target.closest(".fake-asset-block");
+      }
+
+      function beginCropDrag(event, handle) {
+        const block = handle.closest(".fake-asset-block");
+        if (!(block instanceof HTMLElement)) {
+          return;
+        }
+        const edge = handle.dataset.edge;
+        if (edge !== "left" && edge !== "right") {
+          return;
+        }
+        const effective = getEffectiveDimensions(block);
+        const scalePercent = Number(block.dataset.scalePercent) || 100;
+        const userScale = Math.max(0.1, scalePercent / 100);
+        const fullTargetWidth = Math.max(1, effective.width * userScale);
+        const crop = getCropValues(block);
+        cropDragState = {
+          block,
+          edge,
+          startX: event.clientX,
+          fullTargetWidth,
+          startLeft: crop.left,
+          startRight: crop.right,
+        };
+        block.classList.add("is-cropping");
+      }
+
+      function continueCropDrag(event) {
+        if (!cropDragState) {
+          return;
+        }
+        const { block, edge, startX, fullTargetWidth, startLeft, startRight } = cropDragState;
+        const deltaX = event.clientX - startX;
+        const deltaRatio = deltaX / fullTargetWidth;
+        let nextLeft = startLeft;
+        let nextRight = startRight;
+        if (edge === "left") {
+          nextLeft = startLeft + deltaRatio;
+        } else {
+          nextRight = startRight - deltaRatio;
+        }
+        nextLeft = Math.max(0, nextLeft);
+        nextRight = Math.max(0, nextRight);
+        const maxCombined = 0.95;
+        if (nextLeft + nextRight > maxCombined) {
+          if (edge === "left") {
+            nextLeft = maxCombined - nextRight;
+          } else {
+            nextRight = maxCombined - nextLeft;
+          }
+        }
+        block.dataset.cropLeft = String(Math.max(0, nextLeft));
+        block.dataset.cropRight = String(Math.max(0, nextRight));
+        updateAssetBlockSize(block);
+        updateSelectionUi();
+      }
+
+      function endCropDrag() {
+        if (!cropDragState) {
+          return;
+        }
+        const { block } = cropDragState;
+        block.classList.remove("is-cropping");
+        syncAssetStateFromBlock(block);
+        saveEditorState();
+        cropDragState = null;
       }
 
       function animateSwapWithFlip(blockA, blockB, swapAction) {
@@ -1132,7 +1295,34 @@
         }
       });
 
+      visualEditorBlock.addEventListener("mousedown", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.classList.contains("asset-crop-handle")) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        beginCropDrag(event, target);
+      });
+
+      window.addEventListener("mousemove", (event) => {
+        continueCropDrag(event);
+      });
+
+      window.addEventListener("mouseup", () => {
+        endCropDrag();
+      });
+
       visualEditorBlock.addEventListener("dragstart", (event) => {
+        if (cropDragState) {
+          event.preventDefault();
+          return;
+        }
+        const target = event.target;
+        if (target instanceof HTMLElement && target.classList.contains("asset-crop-handle")) {
+          event.preventDefault();
+          return;
+        }
         const block = getAssetBlockFromEventTarget(event.target);
         if (!block) {
           event.preventDefault();
