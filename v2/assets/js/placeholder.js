@@ -5695,16 +5695,14 @@ function applyArtworkTileScale(targetEl, scaleValue) {
   if (!targetEl) {
     return;
   }
-  const baseHeight = Number(targetEl.dataset.baseHeightPx);
   const scale = Math.max(0.1, Math.min(8, Number(scaleValue) || 1));
-  if (!Number.isFinite(baseHeight) || baseHeight <= 0) {
-    return;
-  }
-  const heightPx = Math.max(8, Math.round(baseHeight * scale));
-  targetEl.style.height = `${heightPx}px`;
+  // Keep tile layout dimensions fixed so editor geometry does not collapse.
+  targetEl.style.height = "";
   const image = targetEl.querySelector("img");
   if (image) {
-    image.style.height = `${heightPx}px`;
+    image.style.height = "100%";
+    image.style.transformOrigin = "center center";
+    image.style.transform = `scale(${scale})`;
   }
 }
 
