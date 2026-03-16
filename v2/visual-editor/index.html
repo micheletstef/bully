@@ -199,6 +199,7 @@
       }
 
       .visual-editor-block {
+        --editor-height: 200px;
         --editor-bg: #ff00ff;
         --asset-color: #1e6cff;
         --safe-guide-color: #00ffff;
@@ -207,8 +208,8 @@
         --safe-left: 0px;
         --safe-right: 0px;
         width: max-content;
-        min-width: 800px;
-        height: 200px;
+        min-width: calc(var(--editor-height) * 5900 / 3480);
+        height: var(--editor-height);
         background-color: var(--editor-bg);
         background-image:
           linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
