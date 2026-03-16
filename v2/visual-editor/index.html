@@ -92,6 +92,7 @@
         grid-template-columns: 72px 1fr;
         align-items: center;
         gap: 8px;
+        margin-bottom: 3px;
       }
 
       .settings-label {
@@ -126,15 +127,55 @@
         outline: none;
       }
 
+      .settings-input {
+        width: 100%;
+        border: 1px solid #b3b3b3;
+        padding: 1px 4px;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .settings-color-input {
+        width: 100%;
+        height: 18px;
+        border: 1px solid #b3b3b3;
+        padding: 0;
+        background: #fff;
+      }
+
       .editor-stage {
         overflow: auto;
       }
 
       .visual-editor-block {
+        --editor-bg: #ff00ff;
+        --asset-color: #1e6cff;
+        --safe-guide-color: #00ffff;
+        --safe-top: 0px;
+        --safe-bottom: 0px;
+        --safe-left: 0px;
+        --safe-right: 0px;
         width: max-content;
         min-width: 800px;
         height: 200px;
-        background: #ff00ff;
+        background-color: var(--editor-bg);
+        background-image:
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color)),
+          linear-gradient(var(--safe-guide-color), var(--safe-guide-color));
+        background-size:
+          1px 100%,
+          1px 100%,
+          100% 1px,
+          100% 1px;
+        background-repeat: no-repeat;
+        background-position:
+          var(--safe-left) 0,
+          calc(100% - var(--safe-right)) 0,
+          0 var(--safe-top),
+          0 calc(100% - var(--safe-bottom));
         display: inline-flex;
         flex-wrap: nowrap;
         align-items: flex-start;
@@ -144,8 +185,8 @@
 
       .fake-asset-block {
         flex: 0 0 auto;
-        background: #1e6cff;
-        border: 1px solid #0e4fc7;
+        background: var(--asset-color);
+        border: 1px solid rgba(0, 0, 0, 0.22);
       }
     </style>
   </head>
@@ -167,6 +208,22 @@
             <button type="button" class="alignment-button inactive" data-align="bottom" role="radio" aria-checked="false">bottom</button>
           </div>
         </div>
+        <div class="settings-row">
+          <label class="settings-label" for="paddingTBControl">padding tb</label>
+          <input id="paddingTBControl" class="settings-input" type="number" min="0" max="4000" step="1" value="0" />
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="paddingLRControl">padding lr</label>
+          <input id="paddingLRControl" class="settings-input" type="number" min="0" max="4000" step="1" value="0" />
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="backgroundColorControl">bg color</label>
+          <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="assetColorControl">asset color</label>
+          <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+        </div>
       </aside>
       <main class="editor-stage">
         <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
@@ -185,6 +242,10 @@
       const assetsList = document.getElementById("assetsList");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
+      const paddingTBControl = document.getElementById("paddingTBControl");
+      const paddingLRControl = document.getElementById("paddingLRControl");
+      const backgroundColorControl = document.getElementById("backgroundColorControl");
+      const assetColorControl = document.getElementById("assetColorControl");
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -196,6 +257,10 @@
           assets: [],
           settings: {
             verticalAlignment: "top",
+            paddingTB: 0,
+            paddingLR: 0,
+            backgroundColor: "#ff00ff",
+            assetColor: "#1e6cff",
           },
         };
         try {
@@ -215,10 +280,20 @@
             .filter((asset) => asset.width > 0 && asset.height > 0);
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
+          const savedPaddingTB = Number(parsed?.settings?.paddingTB);
+          const savedPaddingLR = Number(parsed?.settings?.paddingLR);
+          const paddingTB = Number.isFinite(savedPaddingTB) ? Math.max(0, savedPaddingTB) : 0;
+          const paddingLR = Number.isFinite(savedPaddingLR) ? Math.max(0, savedPaddingLR) : 0;
+          const savedBackgroundColor = typeof parsed?.settings?.backgroundColor === "string" ? parsed.settings.backgroundColor : "#ff00ff";
+          const savedAssetColor = typeof parsed?.settings?.assetColor === "string" ? parsed.settings.assetColor : "#1e6cff";
           return {
             assets: sanitizedAssets,
             settings: {
               verticalAlignment,
+              paddingTB,
+              paddingLR,
+              backgroundColor: savedBackgroundColor,
+              assetColor: savedAssetColor,
             },
           };
         } catch (error) {
@@ -250,6 +325,34 @@
         }
         visualEditorBlock.style.alignItems = alignmentMap[alignKey];
         editorState.settings.verticalAlignment = alignKey;
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
+      function applyPaddingGuides(paddingTB, paddingLR, shouldPersist) {
+        const normalizedTB = Math.max(0, Number(paddingTB) || 0);
+        const normalizedLR = Math.max(0, Number(paddingLR) || 0);
+        visualEditorBlock.style.setProperty("--safe-top", normalizedTB + "px");
+        visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
+        visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
+        visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
+        paddingTBControl.value = String(normalizedTB);
+        paddingLRControl.value = String(normalizedLR);
+        editorState.settings.paddingTB = normalizedTB;
+        editorState.settings.paddingLR = normalizedLR;
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
+      function applyColors(backgroundColor, assetColor, shouldPersist) {
+        visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
+        visualEditorBlock.style.setProperty("--asset-color", assetColor);
+        backgroundColorControl.value = backgroundColor;
+        assetColorControl.value = assetColor;
+        editorState.settings.backgroundColor = backgroundColor;
+        editorState.settings.assetColor = assetColor;
         if (shouldPersist) {
           saveEditorState();
         }
@@ -293,7 +396,25 @@
         setVerticalAlignment(alignKey, true);
       });
 
+      paddingTBControl.addEventListener("input", () => {
+        applyPaddingGuides(paddingTBControl.value, paddingLRControl.value, true);
+      });
+
+      paddingLRControl.addEventListener("input", () => {
+        applyPaddingGuides(paddingTBControl.value, paddingLRControl.value, true);
+      });
+
+      backgroundColorControl.addEventListener("input", () => {
+        applyColors(backgroundColorControl.value, assetColorControl.value, true);
+      });
+
+      assetColorControl.addEventListener("input", () => {
+        applyColors(backgroundColorControl.value, assetColorControl.value, true);
+      });
+
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
+      applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
+      applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
