@@ -5083,6 +5083,11 @@ function sendLoopConfigToPreview() {
       curve: (partitionArtworks.curve || []).map((item) => item.src),
       right: (partitionArtworks.right || []).map((item) => item.src)
     };
+    payload.partitionArtworkTransforms = {
+      left: (partitionArtworks.left || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      curve: (partitionArtworks.curve || []).map((item) => sanitizeArtworkLayout(item && item.layout)),
+      right: (partitionArtworks.right || []).map((item) => sanitizeArtworkLayout(item && item.layout))
+    };
     payload.artworkOrientations = currentPartitionArtworkOrientations();
     payload.partitionSettings = PARTITION_KEYS.reduce((acc, key) => {
       acc[key] = partitionSettingsForKey(key);
@@ -5090,6 +5095,7 @@ function sendLoopConfigToPreview() {
     }, {});
   } else {
     payload.artworks = loopArtworks.map((item) => item.src);
+    payload.artworkTransforms = loopArtworks.map((item) => sanitizeArtworkLayout(item && item.layout));
   }
   billboardPreview.contentWindow.postMessage(payload, "*");
   billboardPreview.contentWindow.postMessage({ type: "setLoopDuration", seconds }, "*");
@@ -5099,7 +5105,7 @@ function syncVisualizationBackground() {
   if (!loopVisualization) {
     return;
   }
-  loopVisualization.style.background = currentBackgroundColor();
+  loopVisualization.style.backgroundColor = currentBackgroundColor();
   if (previewViewMode === "3d") {
     update3dPreviewAnimation();
   }

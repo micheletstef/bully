@@ -130,7 +130,7 @@ body.dark-mode .partition-preview-track {
     linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
 }
 
-body.dark-mode .loop-preview-track {
+body.dark-mode .loop-visualization::before {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
@@ -448,11 +448,24 @@ body.dark-mode .orientation-choice.inactive {
   transform: translateX(-50%);
   width: max-content;
   top: calc(50% + (min(84vw, 1400px) * 3480 / 5900 / 2) + 44px);
-  height: 84px;
+  height: 116px;
   padding: 0;
   overflow: hidden;
   background: #f1f1f1;
   border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.loop-visualization::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.09) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 0 0;
+  z-index: 0;
 }
 
 .loop-visualization.drag-over {
@@ -473,11 +486,6 @@ body.dark-mode .orientation-choice.inactive {
   gap: var(--preview-gap, 0px);
   z-index: 1;
   overflow: visible;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.09) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.09) 1px, transparent 1px);
-  background-size: 16px 16px;
-  background-position: 0 0;
 }
 
 .loop-preview-track::after {
