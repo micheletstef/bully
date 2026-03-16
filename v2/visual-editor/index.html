@@ -180,7 +180,10 @@
         flex-wrap: nowrap;
         align-items: flex-start;
         gap: 8px;
-        padding: 10px;
+        padding-top: var(--safe-top);
+        padding-bottom: var(--safe-bottom);
+        padding-left: var(--safe-left);
+        padding-right: var(--safe-right);
       }
 
       .fake-asset-block {
@@ -308,9 +311,34 @@
       function appendAssetBlock(asset) {
         const block = document.createElement("div");
         block.className = "fake-asset-block";
-        block.style.width = asset.width + "px";
-        block.style.height = asset.height + "px";
+        block.dataset.originalWidth = String(asset.width);
+        block.dataset.originalHeight = String(asset.height);
+        updateAssetBlockSize(block);
         visualEditorBlock.appendChild(block);
+      }
+
+      function getSafeAssetHeight() {
+        const safeHeight = 200 - editorState.settings.paddingTB * 2;
+        return Math.max(1, safeHeight);
+      }
+
+      function updateAssetBlockSize(block) {
+        const originalWidth = Number(block.dataset.originalWidth);
+        const originalHeight = Number(block.dataset.originalHeight);
+        if (!Number.isFinite(originalWidth) || !Number.isFinite(originalHeight) || originalWidth <= 0 || originalHeight <= 0) {
+          return;
+        }
+        const safeHeight = getSafeAssetHeight();
+        const scaledWidth = Math.max(1, Math.round((originalWidth / originalHeight) * safeHeight));
+        block.style.width = scaledWidth + "px";
+        block.style.height = safeHeight + "px";
+      }
+
+      function updateAllAssetBlockSizes() {
+        const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
+        for (const block of blocks) {
+          updateAssetBlockSize(block);
+        }
       }
 
       function setVerticalAlignment(alignKey, shouldPersist) {
@@ -341,6 +369,7 @@
         paddingLRControl.value = String(normalizedLR);
         editorState.settings.paddingTB = normalizedTB;
         editorState.settings.paddingLR = normalizedLR;
+        updateAllAssetBlockSizes();
         if (shouldPersist) {
           saveEditorState();
         }
