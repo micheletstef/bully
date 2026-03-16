@@ -688,6 +688,72 @@ function applyPartitionSettingsToControls(partitionKey) {
   syncVisualizationBackground();
 }
 
+function applyLinearSettingsToControls() {
+  const speedStored = readStoredNumber(STORAGE_KEYS.speed, currentSpeedSeconds());
+  const padTBStored = readStoredNumber(STORAGE_KEYS.padTB, currentPadTopBottom());
+  const padLRStored = readStoredNumber(STORAGE_KEYS.padLR, currentPadLeftRight());
+  const assetGapStored = readStoredNumber(STORAGE_KEYS.assetGap, currentAssetGap());
+  const rowCountStored = readStoredNumber(STORAGE_KEYS.rowCount, currentRowCount());
+  const rowOffsetStored = readStoredNumber(STORAGE_KEYS.rowOffset, currentRowOffset());
+  const rowGapStored = readStoredNumber(STORAGE_KEYS.rowGap, currentRowGap());
+  const bgColorStored = readStorage(STORAGE_KEYS.bgColor);
+  const assetColorStored = readStorage(STORAGE_KEYS.assetColor);
+  const orientationStored = readStorage(STORAGE_KEYS.artworkOrientation);
+
+  if (speedControl) {
+    const min = Number(speedControl.min || 0);
+    const max = Number(speedControl.max || 999);
+    speedControl.value = String(Math.min(max, Math.max(min, Number(speedStored) || 16)));
+  }
+  if (padTBControl) {
+    const min = Number(padTBControl.min || 0);
+    const max = Number(padTBControl.max || 9999);
+    padTBControl.value = String(Math.min(max, Math.max(min, Number(padTBStored) || 0)));
+  }
+  if (padLRControl) {
+    const min = Number(padLRControl.min || 0);
+    const max = Number(padLRControl.max || 9999);
+    padLRControl.value = String(Math.min(max, Math.max(min, Number(padLRStored) || 0)));
+  }
+  if (bgColorControl && bgColorStored && /^#[0-9a-f]{6}$/i.test(bgColorStored)) {
+    bgColorControl.value = bgColorStored;
+  }
+  if (assetColorControl && assetColorStored && /^#[0-9a-f]{6}$/i.test(assetColorStored)) {
+    assetColorControl.value = assetColorStored;
+  }
+  if (assetGapControl) {
+    const min = Number(assetGapControl.min || 0);
+    const max = Number(assetGapControl.max || 9999);
+    assetGapControl.value = String(Math.min(max, Math.max(min, Number(assetGapStored) || 0)));
+  }
+  if (artworkOrientationControl) {
+    artworkOrientationControl.value = normalizeArtworkOrientation(orientationStored);
+  }
+  if (rowCountControl) {
+    const min = Number(rowCountControl.min || 1);
+    const max = Number(rowCountControl.max || 12);
+    rowCountControl.value = String(Math.min(max, Math.max(min, Math.round(Number(rowCountStored) || 1))));
+  }
+  if (rowOffsetControl) {
+    const min = Number(rowOffsetControl.min || 0);
+    const max = Number(rowOffsetControl.max || 6000);
+    rowOffsetControl.value = String(Math.min(max, Math.max(min, Number(rowOffsetStored) || 0)));
+  }
+  if (rowGapControl) {
+    const min = Number(rowGapControl.min || 0);
+    const max = Number(rowGapControl.max || 1200);
+    rowGapControl.value = String(Math.min(max, Math.max(min, Number(rowGapStored) || 0)));
+  }
+
+  loopDurationSeconds = currentSpeedSeconds();
+  loopTraverseSeconds = loopDurationSeconds;
+  loopAssetGap = currentAssetGap();
+  loopRowGap = currentRowGap();
+  syncOrientationToggleStates();
+  syncSpeedReadout();
+  syncVisualizationBackground();
+}
+
 function writeCurrentControlsToPartitionSettings(partitionKey) {
   const key = normalizePartitionKey(partitionKey) || activePartitionSettingsKeyValue();
   partitionSettingsByKey[key] = sanitizePartitionSettingsEntry({
@@ -1208,6 +1274,7 @@ function syncDirectionModeUI() {
     renderPartitionEditors();
     syncPartitionEditorVisuals();
   } else {
+    applyLinearSettingsToControls();
     renderLoopPreview();
   }
   render3dPreview();
