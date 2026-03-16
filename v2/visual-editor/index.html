@@ -1629,6 +1629,13 @@
           for (const original of originals) {
             const clone = original.cloneNode(true);
             clone.classList.add("marquee-copy");
+            const previewSrc = original.dataset.previewSrc || "";
+            if (previewSrc) {
+              const cloneImage = clone.querySelector(".flat-billboard-asset-image");
+              if (cloneImage instanceof HTMLImageElement) {
+                cloneImage.src = previewSrc;
+              }
+            }
             flatBillboardTrack.appendChild(clone);
           }
         }
@@ -2056,6 +2063,15 @@
               .then((previewUrl) => {
                 if (assetImage.isConnected) {
                   assetImage.src = previewUrl;
+                  targetBlock.dataset.previewSrc = previewUrl;
+                  const copyImages = flatBillboardTrack.querySelectorAll(
+                    '.flat-billboard-asset.marquee-copy[data-asset-id="' + (targetBlock.dataset.assetId || "") + '"] .flat-billboard-asset-image'
+                  );
+                  for (const copyImage of copyImages) {
+                    if (copyImage instanceof HTMLImageElement) {
+                      copyImage.src = previewUrl;
+                    }
+                  }
                 }
               })
               .catch(() => {
