@@ -30,19 +30,21 @@
       .page-shell {
         width: 100%;
         display: grid;
-        grid-template-columns: 260px 1fr;
+        grid-template-columns: 260px 220px 1fr;
         gap: 24px;
         align-items: start;
       }
 
-      .assets-directory {
+      .assets-directory,
+      .settings-panel {
         position: sticky;
         top: 18px;
         padding: 0;
         background: transparent;
       }
 
-      .assets-title {
+      .assets-title,
+      .settings-title {
         margin: 0 0 6px;
         font-size: 12px;
         font-weight: 400;
@@ -85,6 +87,39 @@
         outline: none;
       }
 
+      .settings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .setting-button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 2px 0;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .setting-button::before {
+        content: "[ ] ";
+      }
+
+      .setting-button.active::before {
+        content: "[•] ";
+      }
+
+      .setting-button:hover,
+      .setting-button:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
       .editor-stage {
         overflow: auto;
       }
@@ -114,6 +149,14 @@
         <h2 class="assets-title">assets directory</h2>
         <div id="assetsList" class="assets-list"></div>
       </aside>
+      <aside class="settings-panel" aria-label="Visual editor settings">
+        <h2 class="settings-title">settings</h2>
+        <div id="alignmentSettings" class="settings-list" role="radiogroup" aria-label="Asset vertical alignment">
+          <button type="button" class="setting-button active" data-align="top" role="radio" aria-checked="true">assets vertical alignment: top</button>
+          <button type="button" class="setting-button" data-align="center" role="radio" aria-checked="false">assets vertical alignment: center</button>
+          <button type="button" class="setting-button" data-align="bottom" role="radio" aria-checked="false">assets vertical alignment: bottom</button>
+        </div>
+      </aside>
       <main class="editor-stage">
         <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder"></div>
       </main>
@@ -128,7 +171,13 @@
       ];
 
       const assetsList = document.getElementById("assetsList");
+      const alignmentSettings = document.getElementById("alignmentSettings");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
+      const alignmentMap = {
+        top: "flex-start",
+        center: "center",
+        bottom: "flex-end",
+      };
 
       for (const asset of fakeAssets) {
         const button = document.createElement("button");
@@ -150,6 +199,27 @@
         });
         assetsList.appendChild(button);
       }
+
+      alignmentSettings.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) {
+          return;
+        }
+        const alignKey = target.dataset.align;
+        if (!alignKey || !alignmentMap[alignKey]) {
+          return;
+        }
+
+        const activeButton = alignmentSettings.querySelector(".setting-button.active");
+        if (activeButton) {
+          activeButton.classList.remove("active");
+          activeButton.setAttribute("aria-checked", "false");
+        }
+
+        target.classList.add("active");
+        target.setAttribute("aria-checked", "true");
+        visualEditorBlock.style.alignItems = alignmentMap[alignKey];
+      });
     </script>
   </body>
 </html>
