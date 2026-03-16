@@ -199,11 +199,17 @@
         background: var(--asset-color);
         border: 1px solid rgba(0, 0, 0, 0.22);
         cursor: pointer;
+        transition: transform 180ms ease;
       }
 
       .fake-asset-block.is-selected {
         outline: 2px solid rgba(0, 255, 255, 0.95);
         outline-offset: -2px;
+      }
+
+      .fake-asset-block.is-dragging {
+        opacity: 0.45;
+        cursor: grabbing;
       }
 
       .asset-scale-controls {
@@ -228,6 +234,11 @@
         line-height: 1;
         padding: 0;
         cursor: pointer;
+      }
+
+      .asset-scale-button:disabled {
+        opacity: 0.35;
+        cursor: default;
       }
 
       .asset-scale-value {
@@ -308,6 +319,7 @@
       const assetScaleDownButton = document.getElementById("assetScaleDownButton");
       const assetScaleUpButton = document.getElementById("assetScaleUpButton");
       const assetScaleValue = document.getElementById("assetScaleValue");
+      let draggingAssetId = null;
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -379,6 +391,7 @@
       function appendAssetBlock(asset) {
         const block = document.createElement("div");
         block.className = "fake-asset-block";
+        block.draggable = true;
         block.dataset.assetId = asset.id;
         block.dataset.originalWidth = String(asset.width);
         block.dataset.originalHeight = String(asset.height);
@@ -415,6 +428,7 @@
         for (const block of blocks) {
           updateAssetBlockSize(block);
         }
+        updateScaleControlButtons();
         positionScaleControls();
       }
 
@@ -444,6 +458,30 @@
         assetScaleValue.textContent = Math.round(scalePercent) + "%";
       }
 
+      function getScaleLimits(block) {
+        const originalHeight = Number(block.dataset.originalHeight);
+        const safeHeight = getSafeAssetHeight();
+        const maxByHeight = Math.floor((safeHeight / originalHeight) * 100);
+        const maxPercent = Math.max(10, Math.min(400, maxByHeight));
+        return {
+          minPercent: 10,
+          maxPercent,
+        };
+      }
+
+      function updateScaleControlButtons() {
+        const selectedBlock = getSelectedAssetBlock();
+        if (!selectedBlock) {
+          assetScaleDownButton.disabled = true;
+          assetScaleUpButton.disabled = true;
+          return;
+        }
+        const currentPercent = Number(selectedBlock.dataset.scalePercent) || 100;
+        const limits = getScaleLimits(selectedBlock);
+        assetScaleDownButton.disabled = currentPercent <= limits.minPercent;
+        assetScaleUpButton.disabled = currentPercent >= limits.maxPercent;
+      }
+
       function selectAssetBlock(block) {
         const activeBlock = getSelectedAssetBlock();
         if (activeBlock) {
@@ -455,6 +493,7 @@
         }
         block.classList.add("is-selected");
         updateScaleControlsValue();
+        updateScaleControlButtons();
         positionScaleControls();
         setScaleControlsVisible(true);
       }
@@ -465,10 +504,16 @@
           return;
         }
         const currentPercent = Number(selectedBlock.dataset.scalePercent) || 100;
-        const nextPercent = Math.max(10, Math.min(400, currentPercent + deltaPercent));
+        const limits = getScaleLimits(selectedBlock);
+        const nextPercent = Math.max(limits.minPercent, Math.min(limits.maxPercent, currentPercent + deltaPercent));
+        if (nextPercent === currentPercent) {
+          updateScaleControlButtons();
+          return;
+        }
         selectedBlock.dataset.scalePercent = String(nextPercent);
         updateAssetBlockSize(selectedBlock);
         updateScaleControlsValue();
+        updateScaleControlButtons();
         positionScaleControls();
 
         const selectedAssetId = selectedBlock.dataset.assetId;
@@ -477,6 +522,76 @@
           selectedAssetState.scalePercent = nextPercent;
           saveEditorState();
         }
+      }
+
+      function getAssetBlockFromEventTarget(target) {
+        if (!(target instanceof HTMLElement)) {
+          return null;
+        }
+        if (target.classList.contains("fake-asset-block")) {
+          return target;
+        }
+        return target.closest(".fake-asset-block");
+      }
+
+      function animateSwapWithFlip(blockA, blockB, swapAction) {
+        const firstRectA = blockA.getBoundingClientRect();
+        const firstRectB = blockB.getBoundingClientRect();
+        swapAction();
+        const lastRectA = blockA.getBoundingClientRect();
+        const lastRectB = blockB.getBoundingClientRect();
+
+        const deltaAX = firstRectA.left - lastRectA.left;
+        const deltaAY = firstRectA.top - lastRectA.top;
+        const deltaBX = firstRectB.left - lastRectB.left;
+        const deltaBY = firstRectB.top - lastRectB.top;
+
+        blockA.style.transition = "none";
+        blockB.style.transition = "none";
+        blockA.style.transform = "translate(" + deltaAX + "px, " + deltaAY + "px)";
+        blockB.style.transform = "translate(" + deltaBX + "px, " + deltaBY + "px)";
+
+        requestAnimationFrame(() => {
+          blockA.style.transition = "transform 180ms ease";
+          blockB.style.transition = "transform 180ms ease";
+          blockA.style.transform = "";
+          blockB.style.transform = "";
+        });
+      }
+
+      function swapAssetBlocks(blockA, blockB) {
+        if (!blockA || !blockB || blockA === blockB || blockA.parentNode !== visualEditorBlock || blockB.parentNode !== visualEditorBlock) {
+          return false;
+        }
+        const nextA = blockA.nextSibling;
+        const nextB = blockB.nextSibling;
+
+        animateSwapWithFlip(blockA, blockB, () => {
+          if (nextA === blockB) {
+            visualEditorBlock.insertBefore(blockB, blockA);
+            return;
+          }
+          if (nextB === blockA) {
+            visualEditorBlock.insertBefore(blockA, blockB);
+            return;
+          }
+          visualEditorBlock.insertBefore(blockA, nextB);
+          visualEditorBlock.insertBefore(blockB, nextA);
+        });
+        return true;
+      }
+
+      function syncAssetOrderFromDom() {
+        const orderedIds = Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block")).map((block) => block.dataset.assetId);
+        const rankById = new Map();
+        for (let index = 0; index < orderedIds.length; index += 1) {
+          rankById.set(orderedIds[index], index);
+        }
+        editorState.assets.sort((a, b) => {
+          const rankA = rankById.has(a.id) ? rankById.get(a.id) : Number.MAX_SAFE_INTEGER;
+          const rankB = rankById.has(b.id) ? rankById.get(b.id) : Number.MAX_SAFE_INTEGER;
+          return rankA - rankB;
+        });
       }
 
       function setVerticalAlignment(alignKey, shouldPersist) {
@@ -591,12 +706,73 @@
       });
 
       visualEditorBlock.addEventListener("click", (event) => {
-        const target = event.target;
-        if (target instanceof HTMLElement && target.classList.contains("fake-asset-block")) {
-          selectAssetBlock(target);
+        const block = getAssetBlockFromEventTarget(event.target);
+        if (block) {
+          selectAssetBlock(block);
           return;
         }
         selectAssetBlock(null);
+      });
+
+      visualEditorBlock.addEventListener("dragstart", (event) => {
+        const block = getAssetBlockFromEventTarget(event.target);
+        if (!block) {
+          event.preventDefault();
+          return;
+        }
+        draggingAssetId = block.dataset.assetId;
+        block.classList.add("is-dragging");
+        selectAssetBlock(block);
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", draggingAssetId);
+        }
+      });
+
+      visualEditorBlock.addEventListener("dragover", (event) => {
+        if (!draggingAssetId) {
+          return;
+        }
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "move";
+        }
+      });
+
+      visualEditorBlock.addEventListener("dragenter", (event) => {
+        if (!draggingAssetId) {
+          return;
+        }
+        const hoveredBlock = getAssetBlockFromEventTarget(event.target);
+        if (!hoveredBlock || hoveredBlock.dataset.assetId === draggingAssetId) {
+          return;
+        }
+        const draggingBlock = visualEditorBlock.querySelector('[data-asset-id="' + draggingAssetId + '"]');
+        if (!(draggingBlock instanceof HTMLElement)) {
+          return;
+        }
+        const didSwap = swapAssetBlocks(draggingBlock, hoveredBlock);
+        if (!didSwap) {
+          return;
+        }
+        syncAssetOrderFromDom();
+        saveEditorState();
+        positionScaleControls();
+      });
+
+      visualEditorBlock.addEventListener("drop", (event) => {
+        if (!draggingAssetId) {
+          return;
+        }
+        event.preventDefault();
+      });
+
+      visualEditorBlock.addEventListener("dragend", () => {
+        const draggingBlock = visualEditorBlock.querySelector(".fake-asset-block.is-dragging");
+        if (draggingBlock) {
+          draggingBlock.classList.remove("is-dragging");
+        }
+        draggingAssetId = null;
       });
 
       assetScaleDownButton.addEventListener("click", () => {
@@ -622,6 +798,7 @@
         appendAssetBlock(savedAsset);
       }
       setScaleControlsVisible(false);
+      updateScaleControlButtons();
     </script>
   </body>
 </html>
