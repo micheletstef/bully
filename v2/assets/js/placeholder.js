@@ -170,6 +170,8 @@ let loopStageHeight = 3480;
 let loopAssetGap = 0;
 let loopPadTopBottom = 0;
 let loopPadLeftRight = 0;
+let loopRendererPadTopBottomPx = null;
+let loopRendererPadLeftRightPx = null;
 let loopDistanceSource = 5900;
 let partitionViewportRatios = {
   left: 0.25,
@@ -5497,14 +5499,20 @@ function syncVisualizationPaddingScaled() {
     return;
   }
   const stageHeight = Math.max(1, Number(loopStageHeight) || BILLBOARD_DESIGN_HEIGHT);
-  const targetHeight = compute3dLikeTargetHeightFromStage(stageHeight);
-  const scaledPaddingRender = computeScaledPaddingFromRendererMath(
-    currentPadTopBottom(),
-    currentPadLeftRight(),
-    targetHeight,
-    stageHeight
-  );
   const editorScaleFromViewport = PREVIEW_TILE_FIXED_HEIGHT_PX / stageHeight;
+  const hasRendererPad =
+    Number.isFinite(loopRendererPadTopBottomPx) &&
+    loopRendererPadTopBottomPx >= 0 &&
+    Number.isFinite(loopRendererPadLeftRightPx) &&
+    loopRendererPadLeftRightPx >= 0;
+  const scaledPaddingRender = hasRendererPad
+    ? { padTopBottom: loopRendererPadTopBottomPx, padLeftRight: loopRendererPadLeftRightPx }
+    : computeScaledPaddingFromRendererMath(
+        currentPadTopBottom(),
+        currentPadLeftRight(),
+        compute3dLikeTargetHeightFromStage(stageHeight),
+        stageHeight
+      );
   const scaledPadTBRaw = Math.max(0, scaledPaddingRender.padTopBottom * editorScaleFromViewport);
   const scaledPadLRRaw = Math.max(0, scaledPaddingRender.padLeftRight * editorScaleFromViewport);
   const scaledPadTBRounded = Math.round(Math.max(0, scaledPadTBRaw) * 100) / 100;
@@ -7088,6 +7096,8 @@ async function init() {
     const stageHeight = Number(payload.stageHeight);
     const assetGap = Number(payload.assetGap);
     const loopDistance = Number(payload.loopDistance);
+    const padTopBottomPx = Number(payload.padTopBottomPx);
+    const padLeftRightPx = Number(payload.padLeftRightPx);
     const shouldUpdateViewportMetrics = previewViewMode !== "3d";
 
     if (Number.isFinite(progress)) {
@@ -7137,6 +7147,12 @@ async function init() {
     }
     if (Number.isFinite(loopDistance) && loopDistance > 0) {
       loopDistanceSource = loopDistance;
+    }
+    if (Number.isFinite(padTopBottomPx) && padTopBottomPx >= 0) {
+      loopRendererPadTopBottomPx = padTopBottomPx;
+    }
+    if (Number.isFinite(padLeftRightPx) && padLeftRightPx >= 0) {
+      loopRendererPadLeftRightPx = padLeftRightPx;
     }
     if (shouldUpdateViewportMetrics && payload.partitions && typeof payload.partitions === "object") {
       PARTITION_KEYS.forEach((key) => {

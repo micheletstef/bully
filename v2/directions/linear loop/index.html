@@ -134,6 +134,7 @@
         rowOffset: 0,
         rowGap: 0
       };
+      let latestScaledPadding = { padTopBottom: 0, padLeftRight: 0 };
       let playbackTimer = null;
       let primaryTrack = null;
 
@@ -199,6 +200,10 @@
           paddingTargetHeight,
           viewportHeight
         );
+        latestScaledPadding = {
+          padTopBottom: Math.max(0, Number(scaledPadding.padTopBottom) || 0),
+          padLeftRight: Math.max(0, Number(scaledPadding.padLeftRight) || 0)
+        };
         // Keep editor transform coordinates in billboard design-space.
         const viewportLayoutScale = Math.max(0.001, stageHeight / BILLBOARD_DESIGN_HEIGHT);
         const scaledGap = Math.max(0, Math.round((Number(state.assetGap) || 0) * viewportLayoutScale));
@@ -383,7 +388,9 @@
             durationSeconds: durationMs / 1000,
             stageHeight,
             assetGap: state.assetGap,
-            loopDistance: state.loopDistance
+            loopDistance: state.loopDistance,
+            padTopBottomPx: latestScaledPadding.padTopBottom,
+            padLeftRightPx: latestScaledPadding.padLeftRight
           },
           "*"
         );
