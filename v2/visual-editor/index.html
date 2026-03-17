@@ -2423,7 +2423,7 @@
           // In rotated billboard mode, mirror the editor-frame phase so the
           // projected billboard slice matches the red frame selection.
           billboardMarqueeOffsetX = 0;
-          billboardMarqueeOffsetY = rawDirection === "ltr" ? -editorMarqueeOffsetX : editorMarqueeOffsetX;
+          billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
           const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
           const mappedBillboardTravelPx = maxBillboardTravelPx * progressRatio;
