@@ -389,8 +389,9 @@
       }
 
       .partition-visual-editor-block {
-        min-width: calc(var(--editor-height) * 5900 / 3480);
-        width: calc(var(--editor-height) * 5900 / 3480);
+        --partition-width: 5900;
+        min-width: calc(var(--editor-height) * var(--partition-width) / 3480);
+        width: calc(var(--editor-height) * var(--partition-width) / 3480);
       }
 
       .marquee-copy {
@@ -1212,6 +1213,24 @@
 
       function partitionEditorForSettingsKey(key) {
         return partitionEditorForKey(key);
+      }
+
+      function partitionArtboardWidth(partitionKey) {
+        const layout = PARTITION_LAYOUT[partitionKey];
+        if (!layout) {
+          return ARTBOARD_WIDTH;
+        }
+        return Math.max(1, Math.round(layout.widthRatio * ARTBOARD_WIDTH));
+      }
+
+      function applyPartitionEditorRatios() {
+        for (const key of PARTITION_KEYS) {
+          const editor = partitionEditorForSettingsKey(key);
+          if (!(editor instanceof HTMLElement)) {
+            continue;
+          }
+          editor.style.setProperty("--partition-width", String(partitionArtboardWidth(key)));
+        }
       }
 
       function ensurePartitionSettingsState() {
@@ -2419,6 +2438,7 @@
         const normalizedEnabled = !!enabled;
         editorState.settings.partitionsEnabled = normalizedEnabled;
         ensurePartitionSettingsState();
+        applyPartitionEditorRatios();
         const toggleButtons = partitionsToggle.querySelectorAll(".marquee-choice");
         for (const button of toggleButtons) {
           const isOn = button.dataset.value === "on";
@@ -2750,7 +2770,8 @@
             : 200)
         );
         const topRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingTB) || 0) / editorHeight));
-        const referenceWidthFromHeight = Math.max(1, (editorHeight * ARTBOARD_WIDTH) / ARTBOARD_HEIGHT);
+        const targetArtboardWidth = target.partitioned ? partitionArtboardWidth(target.key) : ARTBOARD_WIDTH;
+        const referenceWidthFromHeight = Math.max(1, (editorHeight * targetArtboardWidth) / ARTBOARD_HEIGHT);
         const leftRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingLR) || 0) / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
@@ -3410,6 +3431,7 @@
       });
 
       applyOrientationSetting(editorState.settings.orientation, false);
+      applyPartitionEditorRatios();
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
       applyAssetGap(editorState.settings.assetGap, false);
