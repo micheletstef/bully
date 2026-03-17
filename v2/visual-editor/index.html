@@ -1594,9 +1594,10 @@
           return 1;
         }
         const styles = window.getComputedStyle(parent);
+        const configuredEditorHeight = parseFloat(styles.getPropertyValue("--editor-height")) || 200;
         const safeTop = parseFloat(styles.getPropertyValue("--safe-top")) || 0;
         const safeBottom = parseFloat(styles.getPropertyValue("--safe-bottom")) || 0;
-        const safeHeight = (parent.clientHeight || 200) - safeTop - safeBottom;
+        const safeHeight = configuredEditorHeight - safeTop - safeBottom;
         return Math.max(1, safeHeight);
       }
 
