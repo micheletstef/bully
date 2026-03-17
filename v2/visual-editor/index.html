@@ -696,6 +696,14 @@
             <button type="button" class="marquee-choice" data-value="on" role="radio" aria-checked="true">on</button>
           </div>
         </div>
+        <div class="settings-row">
+          <span class="settings-label">partitions</span>
+          <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
+            <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
+            <span>/</span>
+            <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
+          </div>
+        </div>
         <div id="marqueeSpeedRow" class="settings-row marquee-advanced">
           <label class="settings-label" for="marqueeSpeedControl">speed</label>
           <input id="marqueeSpeedControl" class="settings-input settings-input-compact" type="number" min="5" max="600" step="1" value="80" />
@@ -783,6 +791,7 @@
       const assetsList = document.getElementById("assetsList");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
+      const partitionsToggle = document.getElementById("partitionsToggle");
       const marqueeSpeedRow = document.getElementById("marqueeSpeedRow");
       const marqueeDirectionRow = document.getElementById("marqueeDirectionRow");
       const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
@@ -831,6 +840,7 @@
           assets: [],
           settings: {
             verticalAlignment: "top",
+            partitionsEnabled: false,
             marqueeEnabled: false,
             marqueeSpeed: 80,
             marqueeDirection: "rtl",
@@ -877,6 +887,7 @@
             }));
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
+          const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
           const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
           const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
           const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
@@ -894,6 +905,7 @@
             assets: sanitizedAssets,
             settings: {
               verticalAlignment,
+              partitionsEnabled,
               marqueeEnabled: savedMarqueeEnabled,
               marqueeSpeed,
               marqueeDirection,
@@ -1849,6 +1861,21 @@
         }
       }
 
+      function applyPartitionsSetting(enabled, shouldPersist) {
+        const normalizedEnabled = !!enabled;
+        editorState.settings.partitionsEnabled = normalizedEnabled;
+        const toggleButtons = partitionsToggle.querySelectorAll(".marquee-choice");
+        for (const button of toggleButtons) {
+          const isOn = button.dataset.value === "on";
+          const isSelected = normalizedEnabled ? isOn : !isOn;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-checked", isSelected ? "true" : "false");
+        }
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
       function beginCropDrag(event, handle) {
         const block = handle.closest(".fake-asset-block");
         if (!(block instanceof HTMLElement)) {
@@ -2239,6 +2266,18 @@
         applyMarqueeSettings(value === "on", marqueeSpeedControl.value, marqueeDirectionControl.value, true);
       });
 
+      partitionsToggle.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) {
+          return;
+        }
+        const value = target.dataset.value;
+        if (value !== "on" && value !== "off") {
+          return;
+        }
+        applyPartitionsSetting(value === "on", true);
+      });
+
       marqueeSpeedControl.addEventListener("input", () => {
         const raw = marqueeSpeedControl.value.trim();
         if (!raw) {
@@ -2436,6 +2475,7 @@
         appendAssetBlock(savedAsset);
       }
       applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
+      applyPartitionsSetting(editorState.settings.partitionsEnabled, false);
       updateScaleControlsAnchorTop();
       setScaleControlsVisible(false);
       updateScaleControlButtons();
