@@ -2425,14 +2425,13 @@
           billboardMarqueeOffsetX = 0;
           billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
-          const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
-          const mappedBillboardTravelPx = maxBillboardTravelPx * progressRatio;
-          billboardMarqueeOffsetX = -(maxBillboardTravelPx - mappedBillboardTravelPx);
+          const startOffsetX = -(Math.max(0, cycle - billboardSpan));
+          // Travel one full run so wrap lands on an equivalent duplicate slice.
+          billboardMarqueeOffsetX = startOffsetX + marqueeProgressPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
-          const mappedBillboardTravelPx = maxBillboardTravelPx * progressRatio;
-          billboardMarqueeOffsetX = -mappedBillboardTravelPx;
+          // Full-run travel keeps the loop visually seamless at wrap.
+          billboardMarqueeOffsetX = -marqueeProgressPx;
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
