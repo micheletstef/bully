@@ -516,7 +516,8 @@
         width: 0;
         height: 0;
         border: 1px solid #d30000;
-        pointer-events: none;
+        pointer-events: auto;
+        cursor: ew-resize;
         z-index: 6;
       }
 
@@ -2366,6 +2367,9 @@
         billboardViewportFrame.style.top = frameTop + "px";
         billboardViewportFrame.style.width = frameWidth + "px";
         billboardViewportFrame.style.height = frameHeight + "px";
+        const canDragFrame = !editorState.settings.marqueeEnabled && !editorState.settings.partitionsEnabled;
+        billboardViewportFrame.style.pointerEvents = canDragFrame ? "auto" : "none";
+        billboardViewportFrame.style.cursor = canDragFrame ? "ew-resize" : "default";
 
         if (billboardViewportTimer instanceof HTMLElement) {
           const timerLeft = frameLeft - editorStage.scrollLeft + frameWidth / 2;
@@ -3458,6 +3462,10 @@
       window.addEventListener("mouseup", () => {
         endViewportFrameDrag();
         endCropDrag();
+      });
+
+      billboardViewportFrame.addEventListener("mousedown", (event) => {
+        beginViewportFrameDrag(event);
       });
 
       visualEditorBlock.addEventListener("dragstart", (event) => {
