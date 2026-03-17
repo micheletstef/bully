@@ -394,14 +394,6 @@
         width: max-content;
       }
 
-      .visual-editor-block.is-vertical {
-        min-width: calc(var(--editor-height) * 3480 / 5900);
-      }
-
-      .partition-visual-editor-block.is-vertical {
-        min-width: calc(var(--editor-height) * 3480 / var(--partition-width));
-      }
-
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -1842,7 +1834,7 @@
         syncBillboardPaddingFromEditorPreview();
       }
 
-      function computeRenderedAssetMetrics(block, options = {}) {
+      function computeRenderedAssetMetrics(block) {
         const source = resolveSourceDimensions(block);
         const crop = getCropValues(block);
         block.dataset.cropLeft = String(crop.left);
@@ -1850,10 +1842,7 @@
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const userTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
-        const includeParentOrientation = options.includeParentOrientation !== false;
-        const parentOrientation = includeParentOrientation && block?.parentElement?.dataset?.orientation === "vertical" ? 1 : 0;
-        const rotationTurns = (userTurns + parentOrientation) % 4;
+        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const rotationDegrees = rotationTurns * 90;
 
@@ -1962,9 +1951,7 @@
         const source = getSourceDimensions(block);
         const crop = getCropValues(block);
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
-        const userTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
-        const parentOrientation = block?.parentElement?.dataset?.orientation === "vertical" ? 1 : 0;
-        const rotationTurns = (userTurns + parentOrientation) % 4;
+        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const safeHeight = getSafeAssetHeight(block);
         const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
@@ -2505,10 +2492,6 @@
         target.settings.orientation = normalized;
         if (!target.partitioned) {
           editorState.settings.orientation = normalized;
-          applySettingsToEditorElement(visualEditorBlock, editorState.settings);
-        } else {
-          const editor = partitionEditorForSettingsKey(target.key);
-          applySettingsToEditorElement(editor, target.settings);
         }
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = normalized;
@@ -2698,9 +2681,6 @@
         if (!(editorEl instanceof HTMLElement) || !settingsObj) {
           return;
         }
-        const orientation = settingsObj.orientation === "vertical" ? "vertical" : "horizontal";
-        editorEl.dataset.orientation = orientation;
-        editorEl.classList.toggle("is-vertical", orientation === "vertical");
         const align = alignmentMap[settingsObj.verticalAlignment] || "flex-start";
         editorEl.style.alignItems = align;
         editorEl.style.setProperty("--safe-top", (Number(settingsObj.paddingTB) || 0) + "px");
@@ -2846,6 +2826,7 @@
         flatBillboardPartitionLayers.innerHTML = "";
 
         ensurePartitionSettingsState();
+        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
 
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
@@ -2874,8 +2855,14 @@
           artboard.style.position = "absolute";
           artboard.style.left = "0";
           artboard.style.top = "0";
-          artboard.style.transform = "none";
-          artboard.style.transformOrigin = "center center";
+          if (partitionSettings.orientation === "vertical") {
+            const orientationScale = Math.max(0.1, ARTBOARD_HEIGHT / Math.max(1, partitionWidthUnits));
+            artboard.style.transformOrigin = "top left";
+            artboard.style.transform = "translateY(" + billboardHeight + "px) rotate(-90deg) scale(" + orientationScale + ")";
+          } else {
+            artboard.style.transformOrigin = "top left";
+            artboard.style.transform = "none";
+          }
           artboard.style.overflow = "hidden";
           artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
           artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
