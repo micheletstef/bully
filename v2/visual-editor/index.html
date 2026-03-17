@@ -2430,7 +2430,7 @@
             const remappedVertical =
               rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr");
             billboardMarqueeOffsetY = remappedVertical
-              ? (cycle - marqueeProgressPx)
+              ? marqueeProgressPx
               : -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetX = 0;
           }
