@@ -32,13 +32,14 @@
         display: grid;
         grid-template-columns: 260px 260px 1fr;
         gap: 24px;
-        align-items: start;
+        align-items: stretch;
+        min-height: calc(100vh - 36px);
       }
 
       .assets-directory,
       .settings-panel {
-        position: sticky;
-        top: 18px;
+        position: relative;
+        height: 100%;
         padding: 0;
         background: transparent;
         border-right: 1px solid rgba(31, 31, 31, 0.16);
@@ -451,6 +452,18 @@
         z-index: 6;
       }
 
+      .billboard-viewport-timer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translateX(-50%);
+        color: #d30000;
+        font-size: 10px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 6;
+      }
+
       .flat-billboard-wrap {
         margin-top: 78px;
       }
@@ -733,6 +746,7 @@
           <div class="editor-canvas">
             <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder">
               <div id="billboardViewportFrame" class="billboard-viewport-frame" aria-hidden="true"></div>
+              <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
             </div>
           </div>
         </div>
@@ -777,6 +791,7 @@
       const editorStage = document.getElementById("editorStage");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const billboardViewportFrame = document.getElementById("billboardViewportFrame");
+      const billboardViewportTimer = document.getElementById("billboardViewportTimer");
       const flatBillboard = document.getElementById("flatBillboard");
       const flatBillboardTrack = document.getElementById("flatBillboardTrack");
       const paddingTBControl = document.getElementById("paddingTBControl");
@@ -1722,6 +1737,21 @@
         billboardViewportFrame.style.top = frameTop + "px";
         billboardViewportFrame.style.width = frameWidth + "px";
         billboardViewportFrame.style.height = frameHeight + "px";
+
+        if (billboardViewportTimer instanceof HTMLElement) {
+          billboardViewportTimer.style.left = frameLeft + frameWidth / 2 + "px";
+          billboardViewportTimer.style.top = frameTop + frameHeight + 4 + "px";
+          const artworkCount = Math.max(1, getPrimaryAssetBlocks().length);
+          const oneArtworkPx = artworkCount > 0 ? Math.max(1, marqueeCyclePx / artworkCount) : 1;
+          const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
+          const totalSeconds = oneArtworkPx / speed;
+          const currentSeconds = ((marqueeProgressPx % oneArtworkPx) + oneArtworkPx) % oneArtworkPx / speed;
+          const shouldShowTimer = editorState.settings.marqueeEnabled && artworkCount > 0 && totalSeconds > 0;
+          billboardViewportTimer.style.display = shouldShowTimer ? "block" : "none";
+          if (shouldShowTimer) {
+            billboardViewportTimer.textContent = currentSeconds.toFixed(1) + "s / " + totalSeconds.toFixed(1) + "s";
+          }
+        }
       }
 
       function stepMarquee(now) {
