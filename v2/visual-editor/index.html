@@ -2425,10 +2425,10 @@
             editorMarqueeOffsetX = 0;
           }
           if (direction === "rtl") {
-            billboardMarqueeOffsetX = -marqueeProgressPx;
+            billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
           } else if (direction === "ltr") {
-            billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
+            billboardMarqueeOffsetX = -marqueeProgressPx;
             billboardMarqueeOffsetY = 0;
           } else if (direction === "btt") {
             billboardMarqueeOffsetY = -marqueeProgressPx;
