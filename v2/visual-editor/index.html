@@ -2425,12 +2425,10 @@
             editorMarqueeOffsetX = 0;
           }
           if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
-            // Use the visible equivalent cycle phase for rotated billboard mode so
-            // the projected slice matches what the frame indicates immediately.
+            // In rotated billboard mode, mirror the editor-frame phase so the
+            // projected billboard slice matches the red frame selection.
             billboardMarqueeOffsetX = 0;
-            billboardMarqueeOffsetY = rawDirection === "rtl"
-              ? marqueeProgressPx
-              : -(cycle - marqueeProgressPx);
+            billboardMarqueeOffsetY = editorMarqueeOffsetX;
           } else if (direction === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
