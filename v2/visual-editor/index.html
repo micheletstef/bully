@@ -1128,6 +1128,33 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(editorState));
       }
 
+      function recoverLikelyScaleRegression() {
+        const allAssets = [
+          ...(Array.isArray(editorState.assets) ? editorState.assets : []),
+          ...(Array.isArray(editorState.partitionAssets?.left) ? editorState.partitionAssets.left : []),
+          ...(Array.isArray(editorState.partitionAssets?.curve) ? editorState.partitionAssets.curve : []),
+          ...(Array.isArray(editorState.partitionAssets?.right) ? editorState.partitionAssets.right : []),
+        ].filter((asset) => asset && typeof asset === "object");
+        if (!allAssets.length) {
+          return;
+        }
+        let tinyCount = 0;
+        for (const asset of allAssets) {
+          const scale = Number(asset.scalePercent);
+          if (Number.isFinite(scale) && scale <= 10) {
+            tinyCount += 1;
+          }
+        }
+        // Repair persisted state from the partition-settings regression where scale limits collapsed.
+        if (tinyCount / allAssets.length < 0.8) {
+          return;
+        }
+        for (const asset of allAssets) {
+          asset.scalePercent = 100;
+        }
+        saveEditorState();
+      }
+
       function truncateLabel(text, maxLength) {
         const value = String(text || "");
         if (value.length <= maxLength) {
@@ -1745,7 +1772,7 @@
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
-        const safeHeight = getSafeAssetHeight();
+        const safeHeight = getSafeAssetHeight(block);
         const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
         const maxByHeight = Math.floor((safeHeight / Math.max(1, finalHeightAtHundred)) * 100);
         const maxPercent = Math.max(10, Math.min(400, maxByHeight));
@@ -2798,6 +2825,7 @@
         return Math.max(maxId, numericPart);
       }, 0);
       assetIdCounter = existingMaxAssetId + 1;
+      recoverLikelyScaleRegression();
 
       alignmentSettings.addEventListener("click", (event) => {
         const target = event.target;
