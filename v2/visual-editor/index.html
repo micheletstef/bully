@@ -746,7 +746,6 @@
           <div class="editor-canvas">
             <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder">
               <div id="billboardViewportFrame" class="billboard-viewport-frame" aria-hidden="true"></div>
-              <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
             </div>
           </div>
         </div>
@@ -756,6 +755,7 @@
           <button id="assetScaleUpButton" type="button" class="asset-scale-button" aria-label="Increase selected asset scale">+</button>
           <button id="assetRotateButton" type="button" class="asset-scale-button" aria-label="Rotate selected asset" title="Rotate selected asset">↻</button>
         </div>
+        <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
         <section class="flat-billboard-wrap" aria-label="Original flat billboard">
           <div class="flat-billboard-shell">
             <div id="flatBillboard" class="flat-billboard">
@@ -1739,8 +1739,10 @@
         billboardViewportFrame.style.height = frameHeight + "px";
 
         if (billboardViewportTimer instanceof HTMLElement) {
-          billboardViewportTimer.style.left = frameLeft + frameWidth / 2 + "px";
-          billboardViewportTimer.style.top = frameTop + frameHeight + 4 + "px";
+          const timerLeft = frameLeft - editorStage.scrollLeft + frameWidth / 2;
+          const timerTop = editorStage.offsetTop + frameTop - editorStage.scrollTop + frameHeight + 4;
+          billboardViewportTimer.style.left = timerLeft + "px";
+          billboardViewportTimer.style.top = timerTop + "px";
           const artworkCount = Math.max(1, getPrimaryAssetBlocks().length);
           const oneArtworkPx = artworkCount > 0 ? Math.max(1, marqueeCyclePx / artworkCount) : 1;
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
