@@ -2425,10 +2425,10 @@
             editorMarqueeOffsetX = 0;
           }
           if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
-            // Rotated billboard uses the same horizontal cycle phase as the
-            // editor frame; rotation handles the visual vertical movement.
-            billboardMarqueeOffsetX = editorMarqueeOffsetX;
-            billboardMarqueeOffsetY = 0;
+            // In rotated billboard mode, mirror the editor-frame phase so the
+            // projected billboard slice matches the red frame selection.
+            billboardMarqueeOffsetX = 0;
+            billboardMarqueeOffsetY = editorMarqueeOffsetX;
           } else if (direction === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
