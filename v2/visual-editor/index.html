@@ -573,10 +573,6 @@
         overflow: hidden;
       }
 
-      .flat-billboard.is-vertical {
-        aspect-ratio: 3480 / 5900;
-      }
-
       .flat-billboard-track {
         position: absolute;
         left: 0;
@@ -2513,8 +2509,7 @@
         if (!(flatBillboard instanceof HTMLElement)) {
           return;
         }
-        const shouldBeVertical = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
-        flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
+        flatBillboard.classList.remove("is-vertical");
       }
 
       function applyOrientationSetting(orientationValue, shouldPersist) {
