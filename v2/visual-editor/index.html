@@ -394,6 +394,14 @@
         width: max-content;
       }
 
+      .visual-editor-block.is-vertical {
+        min-width: calc(var(--editor-height) * 3480 / 5900);
+      }
+
+      .partition-visual-editor-block.is-vertical {
+        min-width: calc(var(--editor-height) * 3480 / var(--partition-width));
+      }
+
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -1842,7 +1850,9 @@
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const userTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const parentOrientation = block?.parentElement?.dataset?.orientation === "vertical" ? 1 : 0;
+        const rotationTurns = (userTurns + parentOrientation) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const rotationDegrees = rotationTurns * 90;
 
@@ -1951,7 +1961,9 @@
         const source = getSourceDimensions(block);
         const crop = getCropValues(block);
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
-        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const userTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const parentOrientation = block?.parentElement?.dataset?.orientation === "vertical" ? 1 : 0;
+        const rotationTurns = (userTurns + parentOrientation) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const safeHeight = getSafeAssetHeight(block);
         const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
@@ -2492,6 +2504,10 @@
         target.settings.orientation = normalized;
         if (!target.partitioned) {
           editorState.settings.orientation = normalized;
+          applySettingsToEditorElement(visualEditorBlock, editorState.settings);
+        } else {
+          const editor = partitionEditorForSettingsKey(target.key);
+          applySettingsToEditorElement(editor, target.settings);
         }
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = normalized;
@@ -2681,6 +2697,9 @@
         if (!(editorEl instanceof HTMLElement) || !settingsObj) {
           return;
         }
+        const orientation = settingsObj.orientation === "vertical" ? "vertical" : "horizontal";
+        editorEl.dataset.orientation = orientation;
+        editorEl.classList.toggle("is-vertical", orientation === "vertical");
         const align = alignmentMap[settingsObj.verticalAlignment] || "flex-start";
         editorEl.style.alignItems = align;
         editorEl.style.setProperty("--safe-top", (Number(settingsObj.paddingTB) || 0) + "px");
@@ -2856,7 +2875,6 @@
           track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
-          const orientationTurns = partitionSettings.orientation === "vertical" ? 1 : 0;
           for (const sourceBlock of blocks) {
             const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
             if (!editorMetrics) {
@@ -2866,20 +2884,15 @@
             const targetBlock = document.createElement("div");
             targetBlock.className = "flat-billboard-asset";
             targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
-            const orientedWidth = orientationTurns ? editorMetrics.scaledHeight : editorMetrics.scaledWidth;
-            const orientedHeight = orientationTurns ? editorMetrics.scaledWidth : editorMetrics.scaledHeight;
-            targetBlock.style.width = Math.max(1, orientedWidth * scaleFactor) + "px";
-            targetBlock.style.height = Math.max(1, orientedHeight * scaleFactor) + "px";
+            targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
+            targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
 
             if (previewImage instanceof HTMLImageElement) {
               const assetFrame = document.createElement("div");
               assetFrame.className = "flat-billboard-asset-frame";
-              const orientedFrameWidth = orientationTurns ? editorMetrics.croppedScaledHeight : editorMetrics.croppedScaledWidth;
-              const orientedFrameHeight = orientationTurns ? editorMetrics.croppedScaledWidth : editorMetrics.croppedScaledHeight;
-              assetFrame.style.width = Math.max(1, orientedFrameWidth * scaleFactor) + "px";
-              assetFrame.style.height = Math.max(1, orientedFrameHeight * scaleFactor) + "px";
-              const totalRotation = editorMetrics.rotationDegrees + (orientationTurns * 90);
-              assetFrame.style.transform = "translate(-50%, -50%) rotate(" + totalRotation + "deg)";
+              assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
+              assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
+              assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
 
               const assetImage = document.createElement("img");
               assetImage.className = "flat-billboard-asset-image";
@@ -2936,7 +2949,6 @@
         const direction = editorState.settings.marqueeDirection;
         const horizontalMarquee = editorState.settings.marqueeEnabled && (direction === "rtl" || direction === "ltr");
         const verticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
-        const orientationTurns = editorState.settings.orientation === "vertical" ? 1 : 0;
 
         // For seamless wrapping, remove padding on the scrolling axis so
         // original and duplicate runs are truly back-to-back.
@@ -2966,20 +2978,15 @@
           const targetBlock = document.createElement("div");
           targetBlock.className = "flat-billboard-asset";
           targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
-          const orientedWidth = orientationTurns ? editorMetrics.scaledHeight : editorMetrics.scaledWidth;
-          const orientedHeight = orientationTurns ? editorMetrics.scaledWidth : editorMetrics.scaledHeight;
-          targetBlock.style.width = Math.max(1, orientedWidth * scaleFactor) + "px";
-          targetBlock.style.height = Math.max(1, orientedHeight * scaleFactor) + "px";
+          targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
+          targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
 
           if (previewImage instanceof HTMLImageElement) {
             const assetFrame = document.createElement("div");
             assetFrame.className = "flat-billboard-asset-frame";
-            const orientedFrameWidth = orientationTurns ? editorMetrics.croppedScaledHeight : editorMetrics.croppedScaledWidth;
-            const orientedFrameHeight = orientationTurns ? editorMetrics.croppedScaledWidth : editorMetrics.croppedScaledHeight;
-            assetFrame.style.width = Math.max(1, orientedFrameWidth * scaleFactor) + "px";
-            assetFrame.style.height = Math.max(1, orientedFrameHeight * scaleFactor) + "px";
-            const totalRotation = editorMetrics.rotationDegrees + (orientationTurns * 90);
-            assetFrame.style.transform = "translate(-50%, -50%) rotate(" + totalRotation + "deg)";
+            assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
+            assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
+            assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
 
             const assetImage = document.createElement("img");
             assetImage.className = "flat-billboard-asset-image";
