@@ -968,6 +968,8 @@
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
       let billboardMarqueeOffsetY = 0;
+      let editorMarqueeOffsetX = 0;
+      let editorMarqueeOffsetY = 0;
       let pendingPartitionAsset = null;
       const PARTITION_KEYS = ["left", "curve", "right"];
       const ARTBOARD_WIDTH = 5900;
@@ -2348,8 +2350,8 @@
           billboardViewportFrame.style.display = "none";
           return;
         }
-        const trackX = billboardViewportOffsetX + billboardMarqueeOffsetX;
-        const trackY = billboardViewportOffsetY + billboardMarqueeOffsetY;
+        const trackX = billboardViewportOffsetX + editorMarqueeOffsetX;
+        const trackY = billboardViewportOffsetY + editorMarqueeOffsetY;
         const frameLeft = -trackX / scale;
         const frameTop = -trackY / scale;
         const frameWidth = billboardWidth / scale;
@@ -2402,6 +2404,19 @@
             }
           }
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
+          if (rawDirection === "rtl") {
+            editorMarqueeOffsetX = -marqueeProgressPx;
+            editorMarqueeOffsetY = 0;
+          } else if (rawDirection === "ltr") {
+            editorMarqueeOffsetX = -(cycle - marqueeProgressPx);
+            editorMarqueeOffsetY = 0;
+          } else if (rawDirection === "btt") {
+            editorMarqueeOffsetY = -marqueeProgressPx;
+            editorMarqueeOffsetX = 0;
+          } else if (rawDirection === "ttb") {
+            editorMarqueeOffsetY = -(cycle - marqueeProgressPx);
+            editorMarqueeOffsetX = 0;
+          }
           if (direction === "rtl") {
             billboardMarqueeOffsetX = -marqueeProgressPx;
             billboardMarqueeOffsetY = 0;
@@ -2466,6 +2481,8 @@
         configureMarqueeLayout();
         billboardMarqueeOffsetX = 0;
         billboardMarqueeOffsetY = 0;
+        editorMarqueeOffsetX = 0;
+        editorMarqueeOffsetY = 0;
         marqueeProgressPx = 0;
 
         if (!normalizedEnabled) {
