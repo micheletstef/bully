@@ -781,6 +781,14 @@
           </select>
         </div>
         <div class="settings-row">
+          <span class="settings-label">partitions</span>
+          <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
+            <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
+            <span>/</span>
+            <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
+          </div>
+        </div>
+        <div class="settings-row">
           <span class="settings-label">alignment</span>
           <div id="alignmentSettings" class="alignment-toggle" role="radiogroup" aria-label="Asset vertical alignment">
             <button type="button" class="alignment-button" data-align="top" role="radio" aria-checked="true">top</button>
@@ -788,14 +796,6 @@
             <button type="button" class="alignment-button inactive" data-align="center" role="radio" aria-checked="false">center</button>
             <span>/</span>
             <button type="button" class="alignment-button inactive" data-align="bottom" role="radio" aria-checked="false">bottom</button>
-          </div>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">partitions</span>
-          <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
-            <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
-            <span>/</span>
-            <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
           </div>
         </div>
         <div id="partitionTabsRow" class="settings-row partition-tabs-row" hidden>
@@ -2318,10 +2318,18 @@
         const y = billboardViewportOffsetY + billboardMarqueeOffsetY;
         const rotateArtwork = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
         if (rotateArtwork) {
+          const billboardWidth = Math.max(1, flatBillboard?.clientWidth || 1);
           const billboardHeight = Math.max(1, flatBillboard?.clientHeight || 1);
+          const rotatedArtworkWidth = Math.max(1, flatBillboardTrack.offsetHeight || 1);
+          let alignmentShiftX = 0;
+          if (editorState.settings.verticalAlignment === "center") {
+            alignmentShiftX = (billboardWidth - rotatedArtworkWidth) / 2;
+          } else if (editorState.settings.verticalAlignment === "bottom") {
+            alignmentShiftX = billboardWidth - rotatedArtworkWidth;
+          }
           flatBillboardTrack.style.transformOrigin = "top left";
           flatBillboardTrack.style.transform =
-            "translate(" + x + "px, " + y + "px) translateY(" + billboardHeight + "px) rotate(-90deg)";
+            "translate(" + (x + alignmentShiftX) + "px, " + y + "px) translateY(" + billboardHeight + "px) rotate(-90deg)";
         } else {
           flatBillboardTrack.style.transformOrigin = "";
           flatBillboardTrack.style.transform = "translate(" + x + "px, " + y + "px)";
