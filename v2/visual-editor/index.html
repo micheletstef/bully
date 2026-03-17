@@ -2875,14 +2875,8 @@
           artboard.style.position = "absolute";
           artboard.style.left = "50%";
           artboard.style.top = "50%";
-          if (isVertical) {
-            const orientationScale = Math.max(0.1, ARTBOARD_HEIGHT / Math.max(1, partitionWidthUnits));
-            artboard.style.transform = "translate(-50%, -50%) rotate(-90deg) scale(" + orientationScale + ")";
-            artboard.style.transformOrigin = "center center";
-          } else {
-            artboard.style.transform = "translate(-50%, -50%)";
-            artboard.style.transformOrigin = "center center";
-          }
+          artboard.style.transform = "translate(-50%, -50%)";
+          artboard.style.transformOrigin = "center center";
           artboard.style.overflow = "hidden";
           artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
           artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
@@ -2900,7 +2894,7 @@
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
           for (const sourceBlock of blocks) {
-            const editorMetrics = computeRenderedAssetMetrics(sourceBlock, { includeParentOrientation: false });
+            const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
             if (!editorMetrics) {
               continue;
             }
