@@ -41,6 +41,9 @@
         top: 18px;
         padding: 0;
         background: transparent;
+        border-right: 1px solid rgba(31, 31, 31, 0.16);
+        padding-right: 12px;
+        margin-right: 12px;
       }
 
       .assets-title,
@@ -2268,10 +2271,6 @@
       });
 
       visualEditorBlock.addEventListener("dragstart", (event) => {
-        if (editorState.settings.marqueeEnabled) {
-          event.preventDefault();
-          return;
-        }
         if (cropDragState) {
           event.preventDefault();
           return;
