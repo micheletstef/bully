@@ -1020,6 +1020,11 @@
             verticalAlignment: "top",
             partitionsEnabled: false,
             activePartitionKey: "left",
+            partitionOrientations: {
+              left: "horizontal",
+              curve: "horizontal",
+              right: "horizontal",
+            },
             partitionSettings: {
               left: defaultPartitionSettings(),
               curve: defaultPartitionSettings(),
@@ -1109,14 +1114,20 @@
           const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
           const activePartitionKeyRaw = String(parsed?.settings?.activePartitionKey || "left");
           const activePartitionKey = PARTITION_KEYS.includes(activePartitionKeyRaw) ? activePartitionKeyRaw : "left";
+          const savedPartitionOrientations = parsed?.settings?.partitionOrientations && typeof parsed.settings.partitionOrientations === "object"
+            ? parsed.settings.partitionOrientations
+            : {};
           const savedPartitionSettings = parsed?.settings?.partitionSettings && typeof parsed.settings.partitionSettings === "object"
             ? parsed.settings.partitionSettings
             : {};
-          const sanitizePartitionSettingsEntry = (entry) => {
+          const sanitizePartitionSettingsEntry = (entry, partitionKey) => {
             const fallback = defaultPartitionSettings();
             const src = entry && typeof entry === "object" ? entry : {};
             const alignment = alignmentMap[src.verticalAlignment] ? src.verticalAlignment : fallback.verticalAlignment;
-            const orientation = src.orientation === "vertical" ? "vertical" : "horizontal";
+            const savedOrientation = savedPartitionOrientations[partitionKey] === "vertical" ? "vertical" : "horizontal";
+            const orientation = src.orientation === "vertical" || src.orientation === "horizontal"
+              ? src.orientation
+              : savedOrientation;
             const paddingTBValue = Number(src.paddingTB);
             const paddingLRValue = Number(src.paddingLR);
             const gapValue = Number(src.assetGap);
@@ -1137,9 +1148,14 @@
             };
           };
           const partitionSettings = {
-            left: sanitizePartitionSettingsEntry(savedPartitionSettings.left),
-            curve: sanitizePartitionSettingsEntry(savedPartitionSettings.curve),
-            right: sanitizePartitionSettingsEntry(savedPartitionSettings.right),
+            left: sanitizePartitionSettingsEntry(savedPartitionSettings.left, "left"),
+            curve: sanitizePartitionSettingsEntry(savedPartitionSettings.curve, "curve"),
+            right: sanitizePartitionSettingsEntry(savedPartitionSettings.right, "right"),
+          };
+          const partitionOrientations = {
+            left: partitionSettings.left.orientation,
+            curve: partitionSettings.curve.orientation,
+            right: partitionSettings.right.orientation,
           };
           const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
           const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
@@ -1163,6 +1179,7 @@
               verticalAlignment,
               partitionsEnabled,
               activePartitionKey,
+              partitionOrientations,
               partitionSettings,
               marqueeEnabled: savedMarqueeEnabled,
               marqueeSpeed,
@@ -1241,14 +1258,23 @@
             right: defaultPartitionSettings(),
           };
         }
+        if (!editorState.settings.partitionOrientations || typeof editorState.settings.partitionOrientations !== "object") {
+          editorState.settings.partitionOrientations = { left: "horizontal", curve: "horizontal", right: "horizontal" };
+        }
         for (const key of PARTITION_KEYS) {
           const current = editorState.settings.partitionSettings[key];
           if (!current || typeof current !== "object") {
             editorState.settings.partitionSettings[key] = defaultPartitionSettings();
-            continue;
           }
-          if (current.orientation !== "vertical" && current.orientation !== "horizontal") {
-            current.orientation = "horizontal";
+          const orientation = editorState.settings.partitionSettings[key].orientation;
+          if (orientation !== "vertical" && orientation !== "horizontal") {
+            editorState.settings.partitionSettings[key].orientation = "horizontal";
+          }
+          const explicit = editorState.settings.partitionOrientations[key];
+          if (explicit === "vertical" || explicit === "horizontal") {
+            editorState.settings.partitionSettings[key].orientation = explicit;
+          } else {
+            editorState.settings.partitionOrientations[key] = editorState.settings.partitionSettings[key].orientation;
           }
         }
         if (!PARTITION_KEYS.includes(editorState.settings.activePartitionKey)) {
@@ -2497,6 +2523,9 @@
         target.settings.orientation = normalized;
         if (!target.partitioned) {
           editorState.settings.orientation = normalized;
+        } else {
+          ensurePartitionSettingsState();
+          editorState.settings.partitionOrientations[target.key] = normalized;
         }
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = normalized;
