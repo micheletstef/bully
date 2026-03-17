@@ -988,6 +988,7 @@
       function defaultPartitionSettings() {
         return {
           verticalAlignment: "top",
+          orientation: "horizontal",
           paddingTB: 0,
           paddingLR: 0,
           assetGap: 8,
@@ -1114,6 +1115,7 @@
             const fallback = defaultPartitionSettings();
             const src = entry && typeof entry === "object" ? entry : {};
             const alignment = alignmentMap[src.verticalAlignment] ? src.verticalAlignment : fallback.verticalAlignment;
+            const orientation = src.orientation === "vertical" ? "vertical" : "horizontal";
             const paddingTBValue = Number(src.paddingTB);
             const paddingLRValue = Number(src.paddingLR);
             const gapValue = Number(src.assetGap);
@@ -1125,6 +1127,7 @@
               : fallback.assetColor;
             return {
               verticalAlignment: alignment,
+              orientation,
               paddingTB: Number.isFinite(paddingTBValue) ? Math.max(0, paddingTBValue) : fallback.paddingTB,
               paddingLR: Number.isFinite(paddingLRValue) ? Math.max(0, paddingLRValue) : fallback.paddingLR,
               assetGap: Number.isFinite(gapValue) ? Math.max(0, gapValue) : fallback.assetGap,
@@ -1223,6 +1226,10 @@
           const current = editorState.settings.partitionSettings[key];
           if (!current || typeof current !== "object") {
             editorState.settings.partitionSettings[key] = defaultPartitionSettings();
+            continue;
+          }
+          if (current.orientation !== "vertical" && current.orientation !== "horizontal") {
+            current.orientation = "horizontal";
           }
         }
         if (!PARTITION_KEYS.includes(editorState.settings.activePartitionKey)) {
@@ -1254,7 +1261,7 @@
         backgroundColorControl.value = source.backgroundColor || "#ff00ff";
         assetColorControl.value = source.assetColor || "#1e6cff";
         if (orientationControl instanceof HTMLSelectElement) {
-          orientationControl.value = editorState.settings.orientation === "vertical" ? "vertical" : "horizontal";
+          orientationControl.value = source.orientation === "vertical" ? "vertical" : "horizontal";
         }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.value = target.partitioned ? target.key : "left";
@@ -2423,6 +2430,10 @@
           singleEditorCanvas.style.display = normalizedEnabled ? "none" : "";
           partitionEditorGrid.classList.toggle("is-visible", normalizedEnabled);
         }
+        if (flatBillboard instanceof HTMLElement) {
+          const shouldBeVertical = !normalizedEnabled && editorState.settings.orientation === "vertical";
+          flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
+        }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.hidden = !normalizedEnabled;
           partitionSettingsSelect.value = editorState.settings.activePartitionKey || "left";
@@ -2457,13 +2468,17 @@
 
       function applyOrientationSetting(orientationValue, shouldPersist) {
         const normalized = orientationValue === "vertical" ? "vertical" : "horizontal";
-        editorState.settings.orientation = normalized;
+        const target = currentSettingsTarget();
+        target.settings.orientation = normalized;
+        if (!target.partitioned) {
+          editorState.settings.orientation = normalized;
+        }
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = normalized;
         }
-        const isVertical = normalized === "vertical";
         if (flatBillboard instanceof HTMLElement) {
-          flatBillboard.classList.toggle("is-vertical", isVertical);
+          const shouldBeVertical = !editorState.settings.partitionsEnabled && normalized === "vertical";
+          flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
         }
         syncBillboardPaddingFromEditorPreview();
         syncFlatBillboardArtworks();
@@ -2791,7 +2806,6 @@
 
         ensurePartitionSettingsState();
 
-        const verticalOrientation = isVerticalOrientation();
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
@@ -2803,19 +2817,11 @@
           const gap = (Number(partitionSettings.assetGap) || 0) * scaleFactor;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
-          if (verticalOrientation) {
-            layer.style.left = "0";
-            layer.style.width = "100%";
-            layer.style.top = layout.offsetRatio * 100 + "%";
-            layer.style.height = layout.widthRatio * 100 + "%";
-            layer.style.bottom = "auto";
-          } else {
-            layer.style.left = layout.offsetRatio * 100 + "%";
-            layer.style.width = layout.widthRatio * 100 + "%";
-            layer.style.top = "0";
-            layer.style.bottom = "0";
-            layer.style.height = "auto";
-          }
+          layer.style.left = layout.offsetRatio * 100 + "%";
+          layer.style.width = layout.widthRatio * 100 + "%";
+          layer.style.top = "0";
+          layer.style.bottom = "0";
+          layer.style.height = "auto";
           layer.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
@@ -2829,6 +2835,7 @@
           track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
+          const orientationTurns = partitionSettings.orientation === "vertical" ? 1 : 0;
           for (const sourceBlock of blocks) {
             const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
             if (!editorMetrics) {
@@ -2838,15 +2845,20 @@
             const targetBlock = document.createElement("div");
             targetBlock.className = "flat-billboard-asset";
             targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
-            targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
-            targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
+            const orientedWidth = orientationTurns ? editorMetrics.scaledHeight : editorMetrics.scaledWidth;
+            const orientedHeight = orientationTurns ? editorMetrics.scaledWidth : editorMetrics.scaledHeight;
+            targetBlock.style.width = Math.max(1, orientedWidth * scaleFactor) + "px";
+            targetBlock.style.height = Math.max(1, orientedHeight * scaleFactor) + "px";
 
             if (previewImage instanceof HTMLImageElement) {
               const assetFrame = document.createElement("div");
               assetFrame.className = "flat-billboard-asset-frame";
-              assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
-              assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
-              assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
+              const orientedFrameWidth = orientationTurns ? editorMetrics.croppedScaledHeight : editorMetrics.croppedScaledWidth;
+              const orientedFrameHeight = orientationTurns ? editorMetrics.croppedScaledWidth : editorMetrics.croppedScaledHeight;
+              assetFrame.style.width = Math.max(1, orientedFrameWidth * scaleFactor) + "px";
+              assetFrame.style.height = Math.max(1, orientedFrameHeight * scaleFactor) + "px";
+              const totalRotation = editorMetrics.rotationDegrees + (orientationTurns * 90);
+              assetFrame.style.transform = "translate(-50%, -50%) rotate(" + totalRotation + "deg)";
 
               const assetImage = document.createElement("img");
               assetImage.className = "flat-billboard-asset-image";
@@ -2903,6 +2915,7 @@
         const direction = editorState.settings.marqueeDirection;
         const horizontalMarquee = editorState.settings.marqueeEnabled && (direction === "rtl" || direction === "ltr");
         const verticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
+        const orientationTurns = editorState.settings.orientation === "vertical" ? 1 : 0;
 
         // For seamless wrapping, remove padding on the scrolling axis so
         // original and duplicate runs are truly back-to-back.
@@ -2932,15 +2945,20 @@
           const targetBlock = document.createElement("div");
           targetBlock.className = "flat-billboard-asset";
           targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
-          targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
-          targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
+          const orientedWidth = orientationTurns ? editorMetrics.scaledHeight : editorMetrics.scaledWidth;
+          const orientedHeight = orientationTurns ? editorMetrics.scaledWidth : editorMetrics.scaledHeight;
+          targetBlock.style.width = Math.max(1, orientedWidth * scaleFactor) + "px";
+          targetBlock.style.height = Math.max(1, orientedHeight * scaleFactor) + "px";
 
           if (previewImage instanceof HTMLImageElement) {
             const assetFrame = document.createElement("div");
             assetFrame.className = "flat-billboard-asset-frame";
-            assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
-            assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
-            assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
+            const orientedFrameWidth = orientationTurns ? editorMetrics.croppedScaledHeight : editorMetrics.croppedScaledWidth;
+            const orientedFrameHeight = orientationTurns ? editorMetrics.croppedScaledWidth : editorMetrics.croppedScaledHeight;
+            assetFrame.style.width = Math.max(1, orientedFrameWidth * scaleFactor) + "px";
+            assetFrame.style.height = Math.max(1, orientedFrameHeight * scaleFactor) + "px";
+            const totalRotation = editorMetrics.rotationDegrees + (orientationTurns * 90);
+            assetFrame.style.transform = "translate(-50%, -50%) rotate(" + totalRotation + "deg)";
 
             const assetImage = document.createElement("img");
             assetImage.className = "flat-billboard-asset-image";
