@@ -2429,7 +2429,7 @@
             // but project it on the vertical axis for rotated billboard mode.
             billboardMarqueeOffsetX = 0;
             billboardMarqueeOffsetY = rawDirection === "rtl"
-              ? -marqueeProgressPx
+              ? -(cycle - marqueeProgressPx)
               : marqueeProgressPx;
           } else if (direction === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
