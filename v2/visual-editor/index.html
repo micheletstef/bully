@@ -2846,9 +2846,6 @@
 
         ensurePartitionSettingsState();
 
-        const billboardWidth = Math.max(1, flatBillboard.clientWidth || 1);
-        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
-
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
@@ -2859,10 +2856,7 @@
           const isVertical = partitionSettings.orientation === "vertical";
           const logicalArtboardWidth = (isVertical ? ARTBOARD_HEIGHT : partitionWidthUnits) * baseScaleFactor;
           const logicalArtboardHeight = (isVertical ? partitionWidthUnits : ARTBOARD_HEIGHT) * baseScaleFactor;
-          const layerWidthPx = billboardWidth * layout.widthRatio;
-          const layerHeightPx = billboardHeight;
-          const fitScale = Math.max(0.0001, Math.min(layerWidthPx / Math.max(1, logicalArtboardWidth), layerHeightPx / Math.max(1, logicalArtboardHeight), 1));
-          const renderScale = baseScaleFactor * fitScale;
+          const renderScale = baseScaleFactor;
           const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
           const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
           const gap = (Number(partitionSettings.assetGap) || 0) * renderScale;
@@ -2882,8 +2876,8 @@
           artboard.style.top = "50%";
           artboard.style.transform = "translate(-50%, -50%)";
           artboard.style.overflow = "hidden";
-          artboard.style.width = Math.max(1, logicalArtboardWidth * fitScale) + "px";
-          artboard.style.height = Math.max(1, logicalArtboardHeight * fitScale) + "px";
+          artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
+          artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
           artboard.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
