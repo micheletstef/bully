@@ -2438,13 +2438,18 @@
           billboardMarqueeOffsetX = 0;
           billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
-          const startOffsetX = -maxBillboardTravelPx;
-          // Travel across duplicated content so wrap lands on an equivalent slice.
-          billboardMarqueeOffsetX = startOffsetX - cycleProgressPx;
+          const wrappedTravelPx = maxBillboardTravelPx > 0
+            ? (cycleProgressPx % maxBillboardTravelPx)
+            : 0;
+          // RTL should move content leftward across the visible run.
+          billboardMarqueeOffsetX = -wrappedTravelPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          // Full-run travel keeps the loop visually seamless at wrap.
-          billboardMarqueeOffsetX = -cycleProgressPx;
+          const wrappedTravelPx = maxBillboardTravelPx > 0
+            ? (cycleProgressPx % maxBillboardTravelPx)
+            : 0;
+          // LTR is the mirrored travel range so content moves rightward.
+          billboardMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
