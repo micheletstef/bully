@@ -86,6 +86,7 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
+        padding-left: 10px;
       }
 
       .asset-group + .asset-group {
@@ -769,7 +770,7 @@
   <body>
     <div class="page-shell">
       <aside class="assets-directory" aria-label="Placeholder assets directory">
-        <h2 class="assets-title">assets directory</h2>
+        <h2 class="assets-title">assets</h2>
         <div id="assetsList" class="assets-list"></div>
       </aside>
       <aside class="settings-panel" aria-label="Visual editor settings">
@@ -2438,8 +2439,8 @@
           billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
           const startOffsetX = -maxBillboardTravelPx;
-          // Travel one full run so wrap lands on an equivalent duplicate slice.
-          billboardMarqueeOffsetX = startOffsetX + cycleProgressPx;
+          // Travel across duplicated content so wrap lands on an equivalent slice.
+          billboardMarqueeOffsetX = startOffsetX - cycleProgressPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           // Full-run travel keeps the loop visually seamless at wrap.
