@@ -2417,9 +2417,9 @@
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
           if (rawDirection === "rtl") {
-            editorMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
-          } else {
             editorMarqueeOffsetX = -wrappedTravelPx;
+          } else {
+            editorMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
           }
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "rtl") {
@@ -2441,15 +2441,15 @@
           const wrappedTravelPx = maxBillboardTravelPx > 0
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
-          // RTL starts right-aligned, then travels left across duplicated runs.
-          billboardMarqueeOffsetX = -(maxBillboardTravelPx + wrappedTravelPx);
+          // RTL now uses the prior LTR offset behavior.
+          billboardMarqueeOffsetX = wrappedTravelPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           const wrappedTravelPx = maxBillboardTravelPx > 0
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
-          // LTR starts left-aligned, then travels rightward.
-          billboardMarqueeOffsetX = wrappedTravelPx;
+          // LTR now uses the prior RTL offset behavior.
+          billboardMarqueeOffsetX = -(maxBillboardTravelPx + wrappedTravelPx);
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
