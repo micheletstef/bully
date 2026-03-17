@@ -1615,6 +1615,46 @@
         };
       }
 
+      function resolveSourceDimensions(block) {
+        const direct = getSourceDimensions(block);
+        if (Number.isFinite(direct.width) && Number.isFinite(direct.height) && direct.width > 0 && direct.height > 0) {
+          return direct;
+        }
+
+        const assetId = block?.dataset?.assetId;
+        if (assetId) {
+          const allAssets = [
+            ...(Array.isArray(editorState.assets) ? editorState.assets : []),
+            ...(Array.isArray(editorState.partitionAssets?.left) ? editorState.partitionAssets.left : []),
+            ...(Array.isArray(editorState.partitionAssets?.curve) ? editorState.partitionAssets.curve : []),
+            ...(Array.isArray(editorState.partitionAssets?.right) ? editorState.partitionAssets.right : []),
+          ];
+          const assetState = allAssets.find((asset) => asset && asset.id === assetId);
+          if (assetState && Number.isFinite(assetState.width) && Number.isFinite(assetState.height) && assetState.width > 0 && assetState.height > 0) {
+            block.dataset.originalWidth = String(assetState.width);
+            block.dataset.originalHeight = String(assetState.height);
+            return { width: assetState.width, height: assetState.height };
+          }
+        }
+
+        const previewImage = block?.querySelector?.(".asset-preview-image");
+        if (previewImage instanceof HTMLImageElement) {
+          const naturalWidth = Number(previewImage.naturalWidth) || 0;
+          const naturalHeight = Number(previewImage.naturalHeight) || 0;
+          if (naturalWidth > 0 && naturalHeight > 0) {
+            block.dataset.originalWidth = String(naturalWidth);
+            block.dataset.originalHeight = String(naturalHeight);
+            return { width: naturalWidth, height: naturalHeight };
+          }
+        }
+
+        const fallbackWidth = Math.max(100, Number(block?.offsetWidth) || 0);
+        const fallbackHeight = Math.max(60, Number(block?.offsetHeight) || 0);
+        block.dataset.originalWidth = String(fallbackWidth);
+        block.dataset.originalHeight = String(fallbackHeight);
+        return { width: fallbackWidth, height: fallbackHeight };
+      }
+
       function getSafeAssetHeight(block) {
         const parent = block?.parentElement;
         if (!(parent instanceof HTMLElement)) {
@@ -1651,10 +1691,7 @@
       }
 
       function computeRenderedAssetMetrics(block) {
-        const source = getSourceDimensions(block);
-        if (!Number.isFinite(source.width) || !Number.isFinite(source.height) || source.width <= 0 || source.height <= 0) {
-          return null;
-        }
+        const source = resolveSourceDimensions(block);
         const crop = getCropValues(block);
         block.dataset.cropLeft = String(crop.left);
         block.dataset.cropRight = String(crop.right);
@@ -2265,9 +2302,6 @@
         if (partitionTabsRow instanceof HTMLElement) {
           partitionTabsRow.hidden = true;
         }
-        if (assetScaleControls instanceof HTMLElement && normalizedEnabled) {
-          assetScaleControls.style.display = "none";
-        }
         if (billboardViewportFrame instanceof HTMLElement && normalizedEnabled) {
           billboardViewportFrame.style.display = "none";
         }
@@ -2280,6 +2314,7 @@
           endPartitionPlacement();
         } else {
           renderPartitionEditorsFromState();
+          updateAllAssetBlockSizes();
         }
         syncFlatBillboardArtworks();
         if (shouldPersist) {
@@ -2674,6 +2709,7 @@
           layer.appendChild(track);
           flatBillboardPartitionLayers.appendChild(layer);
         }
+        syncFlatBillboardSelectionState();
       }
 
       function syncFlatBillboardArtworks() {
