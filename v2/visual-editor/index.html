@@ -2316,7 +2316,16 @@
         }
         const x = billboardViewportOffsetX + billboardMarqueeOffsetX;
         const y = billboardViewportOffsetY + billboardMarqueeOffsetY;
-        flatBillboardTrack.style.transform = "translate(" + x + "px, " + y + "px)";
+        const rotateArtwork = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        if (rotateArtwork) {
+          const billboardHeight = Math.max(1, flatBillboard?.clientHeight || 1);
+          flatBillboardTrack.style.transformOrigin = "top left";
+          flatBillboardTrack.style.transform =
+            "translate(" + x + "px, " + y + "px) translateY(" + billboardHeight + "px) rotate(-90deg)";
+        } else {
+          flatBillboardTrack.style.transformOrigin = "";
+          flatBillboardTrack.style.transform = "translate(" + x + "px, " + y + "px)";
+        }
         updateEditorViewportFrame();
       }
 
