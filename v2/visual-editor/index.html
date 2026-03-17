@@ -2266,6 +2266,21 @@
         const runLength = marqueeCycleLength();
         const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
         for (let setIndex = 0; setIndex < duplicateSets; setIndex += 1) {
+          for (let i = originals.length - 1; i >= 0; i -= 1) {
+            const original = originals[i];
+            const clone = original.cloneNode(true);
+            clone.classList.add("marquee-copy");
+            const previewSrc = original.dataset.previewSrc || "";
+            if (previewSrc) {
+              const cloneImage = clone.querySelector(".flat-billboard-asset-image");
+              if (cloneImage instanceof HTMLImageElement) {
+                cloneImage.src = previewSrc;
+              }
+            }
+            flatBillboardTrack.insertBefore(clone, flatBillboardTrack.firstChild);
+          }
+        }
+        for (let setIndex = 0; setIndex < duplicateSets; setIndex += 1) {
           for (const original of originals) {
             const clone = original.cloneNode(true);
             clone.classList.add("marquee-copy");
@@ -2288,14 +2303,6 @@
         }
         const direction = editorState.settings.marqueeDirection;
         const horizontal = direction === "rtl" || direction === "ltr";
-        const firstOriginal = originals[0];
-        const firstCopy = flatBillboardTrack.querySelector(".flat-billboard-asset.marquee-copy");
-        if (firstCopy instanceof HTMLElement) {
-          if (horizontal) {
-            return Math.max(1, firstCopy.offsetLeft - firstOriginal.offsetLeft);
-          }
-          return Math.max(1, firstCopy.offsetTop - firstOriginal.offsetTop);
-        }
         const gap = Math.max(0, parseFloat(flatBillboardTrack.style.gap || "0") || 0);
         let run = 0;
         for (let index = 0; index < originals.length; index += 1) {
@@ -2438,18 +2445,12 @@
           billboardMarqueeOffsetX = 0;
           billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
-          const wrappedTravelPx = maxBillboardTravelPx > 0
-            ? (cycleProgressPx % maxBillboardTravelPx)
-            : 0;
-          // Keep current start anchor, but move content right-to-left.
-          billboardMarqueeOffsetX = -wrappedTravelPx;
+          // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
+          billboardMarqueeOffsetX = -cycleProgressPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          const wrappedTravelPx = maxBillboardTravelPx > 0
-            ? (cycleProgressPx % maxBillboardTravelPx)
-            : 0;
-          // Keep current start anchor, but move content left-to-right.
-          billboardMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
+          // Keep current LTR start anchor (right-aligned) and wrap by full cycle.
+          billboardMarqueeOffsetX = -(maxBillboardTravelPx - cycleProgressPx);
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
