@@ -2449,8 +2449,9 @@
           billboardMarqueeOffsetX = -cycleProgressPx;
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          // Keep current LTR start anchor (right-aligned) and wrap by full cycle.
-          billboardMarqueeOffsetX = -(maxBillboardTravelPx - cycleProgressPx);
+          // Keep current LTR behavior, but shift by one full run so wrapping
+          // lands on an equivalent duplicate instead of jumping to the edge.
+          billboardMarqueeOffsetX = -((maxBillboardTravelPx + cycle) - cycleProgressPx);
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
