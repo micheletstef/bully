@@ -2672,16 +2672,6 @@
         if (!insideFrame) {
           return false;
         }
-        const edgeThreshold = 8;
-        const nearFrameEdge =
-          Math.abs(x - frameRect.left) <= edgeThreshold
-          || Math.abs(frameRect.right - x) <= edgeThreshold
-          || Math.abs(y - frameRect.top) <= edgeThreshold
-          || Math.abs(frameRect.bottom - y) <= edgeThreshold;
-        if (!nearFrameEdge) {
-          return false;
-        }
-
         viewportFrameDragState = {
           startClientX: x,
           startScrollLeft: editorStage.scrollLeft,
