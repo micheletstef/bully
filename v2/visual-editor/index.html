@@ -284,6 +284,32 @@
         width: max-content;
       }
 
+      .partition-editor-grid {
+        display: none;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        width: max-content;
+      }
+
+      .partition-editor-grid.is-visible {
+        display: grid;
+      }
+
+      .partition-editor-card {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        align-items: start;
+        gap: 8px;
+      }
+
+      .partition-editor-title {
+        font-size: 11px;
+        text-transform: lowercase;
+        color: #1f1f1f;
+        white-space: nowrap;
+        padding-top: 2px;
+      }
+
       .visual-editor-block {
         --editor-height: 200px;
         --asset-gap: 8px;
@@ -323,6 +349,11 @@
         padding-left: var(--safe-left);
         padding-right: var(--safe-right);
         position: relative;
+      }
+
+      .partition-visual-editor-block {
+        min-width: calc(var(--editor-height) * 5900 / 3480);
+        width: calc(var(--editor-height) * 5900 / 3480);
       }
 
       .marquee-copy {
@@ -750,9 +781,23 @@
       </aside>
       <main class="editor-shell">
         <div id="editorStage" class="editor-stage">
-          <div class="editor-canvas">
+          <div id="singleEditorCanvas" class="editor-canvas">
             <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder">
               <div id="billboardViewportFrame" class="billboard-viewport-frame" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div id="partitionEditorGrid" class="partition-editor-grid" aria-label="Partition visual editors">
+            <div class="partition-editor-card">
+              <div class="partition-editor-title">facing 7th</div>
+              <div id="partitionEditorLeft" class="visual-editor-block partition-visual-editor-block"></div>
+            </div>
+            <div class="partition-editor-card">
+              <div class="partition-editor-title">curve</div>
+              <div id="partitionEditorCurve" class="visual-editor-block partition-visual-editor-block"></div>
+            </div>
+            <div class="partition-editor-card">
+              <div class="partition-editor-title">facing 47th</div>
+              <div id="partitionEditorRight" class="visual-editor-block partition-visual-editor-block"></div>
             </div>
           </div>
         </div>
@@ -797,6 +842,11 @@
       const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
       const marqueeDirectionControl = document.getElementById("marqueeDirectionControl");
       const editorStage = document.getElementById("editorStage");
+      const singleEditorCanvas = document.getElementById("singleEditorCanvas");
+      const partitionEditorGrid = document.getElementById("partitionEditorGrid");
+      const partitionEditorLeft = document.getElementById("partitionEditorLeft");
+      const partitionEditorCurve = document.getElementById("partitionEditorCurve");
+      const partitionEditorRight = document.getElementById("partitionEditorRight");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const billboardViewportFrame = document.getElementById("billboardViewportFrame");
       const billboardViewportTimer = document.getElementById("billboardViewportTimer");
@@ -1871,6 +1921,35 @@
           button.classList.toggle("inactive", !isSelected);
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
+        if (singleEditorCanvas instanceof HTMLElement && partitionEditorGrid instanceof HTMLElement) {
+          singleEditorCanvas.style.display = normalizedEnabled ? "none" : "";
+          partitionEditorGrid.classList.toggle("is-visible", normalizedEnabled);
+        }
+        if (assetScaleControls instanceof HTMLElement && normalizedEnabled) {
+          assetScaleControls.style.display = "none";
+        }
+        if (billboardViewportFrame instanceof HTMLElement && normalizedEnabled) {
+          billboardViewportFrame.style.display = "none";
+        }
+        if (billboardViewportTimer instanceof HTMLElement && normalizedEnabled) {
+          billboardViewportTimer.style.display = "none";
+        }
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        const sourceStyles = window.getComputedStyle(visualEditorBlock);
+        for (const partitionEditor of partitionEditors) {
+          if (!(partitionEditor instanceof HTMLElement)) {
+            continue;
+          }
+          partitionEditor.style.setProperty("--editor-bg", sourceStyles.getPropertyValue("--editor-bg") || "#ff00ff");
+          partitionEditor.style.setProperty("--safe-top", sourceStyles.getPropertyValue("--safe-top") || "0px");
+          partitionEditor.style.setProperty("--safe-bottom", sourceStyles.getPropertyValue("--safe-bottom") || "0px");
+          partitionEditor.style.setProperty("--safe-left", sourceStyles.getPropertyValue("--safe-left") || "0px");
+          partitionEditor.style.setProperty("--safe-right", sourceStyles.getPropertyValue("--safe-right") || "0px");
+        }
+        if (!normalizedEnabled) {
+          updateSelectionUi();
+          updateEditorViewportFrame();
+        }
         if (shouldPersist) {
           saveEditorState();
         }
@@ -2029,6 +2108,12 @@
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
         visualEditorBlock.style.alignItems = alignmentMap[alignKey];
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (partitionEditor instanceof HTMLElement) {
+            partitionEditor.style.alignItems = alignmentMap[alignKey];
+          }
+        }
         editorState.settings.verticalAlignment = alignKey;
         syncFlatBillboardArtworks();
         if (shouldPersist) {
@@ -2043,6 +2128,16 @@
         visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
         visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
         visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (!(partitionEditor instanceof HTMLElement)) {
+            continue;
+          }
+          partitionEditor.style.setProperty("--safe-top", normalizedTB + "px");
+          partitionEditor.style.setProperty("--safe-bottom", normalizedTB + "px");
+          partitionEditor.style.setProperty("--safe-left", normalizedLR + "px");
+          partitionEditor.style.setProperty("--safe-right", normalizedLR + "px");
+        }
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
         editorState.settings.paddingTB = normalizedTB;
@@ -2057,6 +2152,12 @@
       function applyAssetGap(assetGapValue, shouldPersist) {
         const normalizedGap = Math.max(0, Number(assetGapValue) || 0);
         visualEditorBlock.style.setProperty("--asset-gap", normalizedGap + "px");
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (partitionEditor instanceof HTMLElement) {
+            partitionEditor.style.setProperty("--asset-gap", normalizedGap + "px");
+          }
+        }
         assetGapControl.value = String(normalizedGap);
         editorState.settings.assetGap = normalizedGap;
         syncFlatBillboardArtworks();
@@ -2209,6 +2310,14 @@
         const previousAssetColor = editorState.settings.assetColor;
         visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
         visualEditorBlock.style.setProperty("--asset-color", assetColor);
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (!(partitionEditor instanceof HTMLElement)) {
+            continue;
+          }
+          partitionEditor.style.setProperty("--editor-bg", backgroundColor);
+          partitionEditor.style.setProperty("--asset-color", assetColor);
+        }
         flatBillboard.style.setProperty("--editor-bg", backgroundColor);
         backgroundColorControl.value = backgroundColor;
         assetColorControl.value = assetColor;
