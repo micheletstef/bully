@@ -393,6 +393,14 @@
         width: calc(var(--editor-height) * 5900 / 3480);
       }
 
+      .visual-editor-block.is-vertical {
+        min-width: calc(var(--editor-height) * 3480 / 5900);
+      }
+
+      .partition-visual-editor-block.is-vertical {
+        width: calc(var(--editor-height) * 3480 / 5900);
+      }
+
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -570,6 +578,10 @@
           0 calc(var(--safe-top-ratio) * 100%),
           0 calc(100% - (var(--safe-bottom-ratio) * 100%));
         overflow: hidden;
+      }
+
+      .flat-billboard.is-vertical {
+        aspect-ratio: 3480 / 5900;
       }
 
       .flat-billboard-track {
@@ -829,6 +841,13 @@
           </select>
         </div>
         <div class="settings-row">
+          <label class="settings-label" for="orientationControl">orientation</label>
+          <select id="orientationControl" class="settings-input">
+            <option value="horizontal">horizontal</option>
+            <option value="vertical">vertical</option>
+          </select>
+        </div>
+        <div class="settings-row">
           <span class="settings-label">padding</span>
           <div class="padding-inline-controls">
             <label class="padding-inline-field" for="paddingTBControl">
@@ -925,6 +944,7 @@
       const marqueeDirectionRow = document.getElementById("marqueeDirectionRow");
       const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
       const marqueeDirectionControl = document.getElementById("marqueeDirectionControl");
+      const orientationControl = document.getElementById("orientationControl");
       const editorStage = document.getElementById("editorStage");
       const singleEditorCanvas = document.getElementById("singleEditorCanvas");
       const partitionEditorGrid = document.getElementById("partitionEditorGrid");
@@ -961,11 +981,21 @@
       let billboardMarqueeOffsetY = 0;
       let pendingPartitionAsset = null;
       const PARTITION_KEYS = ["left", "curve", "right"];
+      const ARTBOARD_WIDTH = 5900;
+      const ARTBOARD_HEIGHT = 3480;
       const PARTITION_LAYOUT = {
-        left: { offsetRatio: 0, widthRatio: 1820 / 5900 },
-        curve: { offsetRatio: 1820 / 5900, widthRatio: 1020 / 5900 },
-        right: { offsetRatio: 2840 / 5900, widthRatio: 3060 / 5900 },
+        left: { offsetRatio: 0, widthRatio: 1820 / ARTBOARD_WIDTH },
+        curve: { offsetRatio: 1820 / ARTBOARD_WIDTH, widthRatio: 1020 / ARTBOARD_WIDTH },
+        right: { offsetRatio: 2840 / ARTBOARD_WIDTH, widthRatio: 3060 / ARTBOARD_WIDTH },
       };
+
+      function isVerticalOrientation() {
+        return editorState?.settings?.orientation === "vertical";
+      }
+
+      function artboardAspectRatio() {
+        return isVerticalOrientation() ? (ARTBOARD_HEIGHT / ARTBOARD_WIDTH) : (ARTBOARD_WIDTH / ARTBOARD_HEIGHT);
+      }
 
       function defaultPartitionSettings() {
         return {
@@ -1008,6 +1038,7 @@
             marqueeEnabled: false,
             marqueeSpeed: 80,
             marqueeDirection: "rtl",
+            orientation: "horizontal",
             paddingTB: 0,
             paddingLR: 0,
             assetGap: 8,
@@ -1122,6 +1153,8 @@
           const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
           const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
           const marqueeDirection = ["rtl", "ltr", "btt", "ttb"].includes(savedMarqueeDirection) ? savedMarqueeDirection : "rtl";
+          const savedOrientation = String(parsed?.settings?.orientation || "horizontal").toLowerCase();
+          const orientation = savedOrientation === "vertical" ? "vertical" : "horizontal";
           const marqueeSpeed = Number.isFinite(savedMarqueeSpeed) ? Math.max(5, Math.min(600, savedMarqueeSpeed)) : 80;
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
           const savedPaddingLR = Number(parsed?.settings?.paddingLR);
@@ -1142,6 +1175,7 @@
               marqueeEnabled: savedMarqueeEnabled,
               marqueeSpeed,
               marqueeDirection,
+              orientation,
               paddingTB,
               paddingLR,
               assetGap,
@@ -1231,6 +1265,9 @@
         assetGapControl.value = String(Number(source.assetGap) || 0);
         backgroundColorControl.value = source.backgroundColor || "#ff00ff";
         assetColorControl.value = source.assetColor || "#1e6cff";
+        if (orientationControl instanceof HTMLSelectElement) {
+          orientationControl.value = editorState.settings.orientation === "vertical" ? "vertical" : "horizontal";
+        }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.value = target.partitioned ? target.key : "left";
         }
@@ -2430,6 +2467,31 @@
         }
       }
 
+      function applyOrientationSetting(orientationValue, shouldPersist) {
+        const normalized = orientationValue === "vertical" ? "vertical" : "horizontal";
+        editorState.settings.orientation = normalized;
+        if (orientationControl instanceof HTMLSelectElement) {
+          orientationControl.value = normalized;
+        }
+        const isVertical = normalized === "vertical";
+        const editors = [visualEditorBlock, partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const editor of editors) {
+          if (editor instanceof HTMLElement) {
+            editor.classList.toggle("is-vertical", isVertical);
+          }
+        }
+        if (flatBillboard instanceof HTMLElement) {
+          flatBillboard.classList.toggle("is-vertical", isVertical);
+        }
+        updateAllAssetBlockSizes();
+        syncBillboardPaddingFromEditorPreview();
+        syncFlatBillboardArtworks();
+        updateEditorViewportFrame();
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
       function beginCropDrag(event, handle) {
         const block = handle.closest(".fake-asset-block");
         if (!(block instanceof HTMLElement)) {
@@ -2692,7 +2754,7 @@
             : 200)
         );
         const topRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingTB) || 0) / editorHeight));
-        const referenceWidthFromHeight = Math.max(1, (editorHeight * 5900) / 3480);
+        const referenceWidthFromHeight = Math.max(1, editorHeight * artboardAspectRatio());
         const leftRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingLR) || 0) / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
@@ -2748,6 +2810,7 @@
 
         ensurePartitionSettingsState();
 
+        const verticalOrientation = isVerticalOrientation();
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
@@ -2759,8 +2822,19 @@
           const gap = (Number(partitionSettings.assetGap) || 0) * scaleFactor;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
-          layer.style.left = layout.offsetRatio * 100 + "%";
-          layer.style.width = layout.widthRatio * 100 + "%";
+          if (verticalOrientation) {
+            layer.style.left = "0";
+            layer.style.width = "100%";
+            layer.style.top = layout.offsetRatio * 100 + "%";
+            layer.style.height = layout.widthRatio * 100 + "%";
+            layer.style.bottom = "auto";
+          } else {
+            layer.style.left = layout.offsetRatio * 100 + "%";
+            layer.style.width = layout.widthRatio * 100 + "%";
+            layer.style.top = "0";
+            layer.style.bottom = "0";
+            layer.style.height = "auto";
+          }
           layer.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
@@ -3044,6 +3118,10 @@
 
       marqueeDirectionControl.addEventListener("change", () => {
         applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+      });
+
+      orientationControl.addEventListener("change", () => {
+        applyOrientationSetting(orientationControl.value, true);
       });
 
       paddingTBControl.addEventListener("input", () => {
@@ -3332,6 +3410,7 @@
         stopMarqueeAnimation();
       });
 
+      applyOrientationSetting(editorState.settings.orientation, false);
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
       applyAssetGap(editorState.settings.assetGap, false);
