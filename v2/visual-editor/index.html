@@ -2411,11 +2411,22 @@
             }
           }
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
+          const frameScale = Math.max(0.0001, billboardScaleFactor());
+          const rotateFrame = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+          const billboardSpan = rotateFrame
+            ? Math.max(1, flatBillboard?.clientHeight || 1)
+            : Math.max(1, flatBillboard?.clientWidth || 1);
+          const editorSpan = Math.max(1, visualEditorBlock?.clientWidth || 1);
+          const frameSpanInEditor = billboardSpan / frameScale;
+          const maxEditorTravel = Math.max(0, editorSpan - frameSpanInEditor);
+          const maxEditorTravelPx = maxEditorTravel * frameScale;
+          const progressRatio = cycle > 0 ? (marqueeProgressPx / cycle) : 0;
+          const mappedTravelPx = maxEditorTravelPx * progressRatio;
           if (rawDirection === "rtl") {
-            editorMarqueeOffsetX = -(cycle - marqueeProgressPx);
+            editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
             editorMarqueeOffsetY = 0;
           } else if (rawDirection === "ltr") {
-            editorMarqueeOffsetX = -marqueeProgressPx;
+            editorMarqueeOffsetX = -mappedTravelPx;
             editorMarqueeOffsetY = 0;
           } else if (rawDirection === "btt") {
             editorMarqueeOffsetY = -marqueeProgressPx;
