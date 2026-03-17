@@ -2450,10 +2450,7 @@
           singleEditorCanvas.style.display = normalizedEnabled ? "none" : "";
           partitionEditorGrid.classList.toggle("is-visible", normalizedEnabled);
         }
-        if (flatBillboard instanceof HTMLElement) {
-          const shouldBeVertical = !normalizedEnabled && editorState.settings.orientation === "vertical";
-          flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
-        }
+        updateFlatBillboardOrientationClass();
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.hidden = !normalizedEnabled;
           partitionSettingsSelect.value = editorState.settings.activePartitionKey || "left";
@@ -2486,6 +2483,14 @@
         }
       }
 
+      function updateFlatBillboardOrientationClass() {
+        if (!(flatBillboard instanceof HTMLElement)) {
+          return;
+        }
+        const shouldBeVertical = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
+      }
+
       function applyOrientationSetting(orientationValue, shouldPersist) {
         const normalized = orientationValue === "vertical" ? "vertical" : "horizontal";
         const target = currentSettingsTarget();
@@ -2496,10 +2501,7 @@
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = normalized;
         }
-        if (flatBillboard instanceof HTMLElement) {
-          const shouldBeVertical = !editorState.settings.partitionsEnabled && normalized === "vertical";
-          flatBillboard.classList.toggle("is-vertical", shouldBeVertical);
-        }
+        updateFlatBillboardOrientationClass();
         syncBillboardPaddingFromEditorPreview();
         syncFlatBillboardArtworks();
         updateEditorViewportFrame();
@@ -3442,7 +3444,9 @@
         stopMarqueeAnimation();
       });
 
-      applyOrientationSetting(editorState.settings.orientation, false);
+      const initialPartitionsEnabled = !!editorState.settings.partitionsEnabled;
+      editorState.settings.partitionsEnabled = false;
+      updateFlatBillboardOrientationClass();
       applyPartitionEditorRatios();
       setVerticalAlignment(editorState.settings.verticalAlignment, false);
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
@@ -3452,7 +3456,7 @@
         appendAssetBlock(savedAsset);
       }
       applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
-      applyPartitionsSetting(editorState.settings.partitionsEnabled, false);
+      applyPartitionsSetting(initialPartitionsEnabled, false);
       updateAllAssetBlockSizes();
       updateScaleControlsAnchorTop();
       setScaleControlsVisible(false);
