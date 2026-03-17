@@ -2854,9 +2854,8 @@
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
-          const isVertical = partitionSettings.orientation === "vertical";
-          const logicalArtboardWidth = (isVertical ? ARTBOARD_HEIGHT : partitionWidthUnits) * baseScaleFactor;
-          const logicalArtboardHeight = (isVertical ? partitionWidthUnits : ARTBOARD_HEIGHT) * baseScaleFactor;
+          const logicalArtboardWidth = partitionWidthUnits * baseScaleFactor;
+          const logicalArtboardHeight = ARTBOARD_HEIGHT * baseScaleFactor;
           const renderScale = baseScaleFactor;
           const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
           const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
