@@ -2090,9 +2090,21 @@
         }
         const scaleFactor = billboardScaleFactor();
         const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
-        const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
-        const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
+        let paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
+        let paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
         const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
+        const direction = editorState.settings.marqueeDirection;
+        const horizontalMarquee = editorState.settings.marqueeEnabled && (direction === "rtl" || direction === "ltr");
+        const verticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
+
+        // For seamless wrapping, remove padding on the scrolling axis so
+        // original and duplicate runs are truly back-to-back.
+        if (horizontalMarquee) {
+          paddingLR = 0;
+        }
+        if (verticalMarquee) {
+          paddingTB = 0;
+        }
 
         flatBillboardTrack.style.paddingTop = paddingTB + "px";
         flatBillboardTrack.style.paddingBottom = paddingTB + "px";
