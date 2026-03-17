@@ -2678,9 +2678,18 @@
         }
         viewportFrameDragState = {
           startClientX: x,
-          startScrollLeft: editorStage.scrollLeft,
-          maxScrollLeft: Math.max(0, editorStage.scrollWidth - editorStage.clientWidth),
+          startTrackX: billboardViewportOffsetX + editorMarqueeOffsetX,
+          scale: Math.max(0.0001, billboardScaleFactor()),
+          maxTrackTravelPx: 0,
         };
+        const rotateFrame = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        const billboardSpan = rotateFrame
+          ? Math.max(1, flatBillboard?.clientHeight || 1)
+          : Math.max(1, flatBillboard?.clientWidth || 1);
+        const editorSpan = Math.max(1, visualEditorBlock?.clientWidth || 1);
+        const frameSpanInEditor = billboardSpan / viewportFrameDragState.scale;
+        const maxEditorTravel = Math.max(0, editorSpan - frameSpanInEditor);
+        viewportFrameDragState.maxTrackTravelPx = maxEditorTravel * viewportFrameDragState.scale;
         document.body.style.userSelect = "none";
         document.body.style.cursor = "ew-resize";
         event.preventDefault();
@@ -2693,12 +2702,23 @@
           return;
         }
         const deltaX = event.clientX - viewportFrameDragState.startClientX;
-        const nextScrollLeft = Math.max(
-          0,
-          Math.min(viewportFrameDragState.maxScrollLeft, viewportFrameDragState.startScrollLeft + deltaX)
+        const unclampedTrackX = viewportFrameDragState.startTrackX - (deltaX * viewportFrameDragState.scale);
+        const nextTrackX = Math.max(
+          -viewportFrameDragState.maxTrackTravelPx,
+          Math.min(0, unclampedTrackX)
         );
-        editorStage.scrollLeft = nextScrollLeft;
-        syncFlatBillboardViewportOffset();
+        const nextEditorOffsetX = nextTrackX - billboardViewportOffsetX;
+        editorMarqueeOffsetX = nextEditorOffsetX;
+        editorMarqueeOffsetY = 0;
+        const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        if (rotatedBillboard) {
+          billboardMarqueeOffsetX = 0;
+          billboardMarqueeOffsetY = nextEditorOffsetX;
+        } else {
+          billboardMarqueeOffsetX = nextEditorOffsetX;
+          billboardMarqueeOffsetY = 0;
+        }
+        applyFlatBillboardTrackTransform();
         positionScaleControls();
       }
 
