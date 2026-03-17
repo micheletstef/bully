@@ -2398,9 +2398,9 @@
           let direction = rawDirection;
           if (rotatedBillboard) {
             if (rawDirection === "rtl") {
-              direction = "btt";
-            } else if (rawDirection === "ltr") {
               direction = "ttb";
+            } else if (rawDirection === "ltr") {
+              direction = "btt";
             }
           }
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
