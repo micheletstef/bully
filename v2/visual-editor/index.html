@@ -2405,10 +2405,10 @@
           }
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
           if (rawDirection === "rtl") {
-            editorMarqueeOffsetX = -marqueeProgressPx;
+            editorMarqueeOffsetX = -(cycle - marqueeProgressPx);
             editorMarqueeOffsetY = 0;
           } else if (rawDirection === "ltr") {
-            editorMarqueeOffsetX = -(cycle - marqueeProgressPx);
+            editorMarqueeOffsetX = -marqueeProgressPx;
             editorMarqueeOffsetY = 0;
           } else if (rawDirection === "btt") {
             editorMarqueeOffsetY = -marqueeProgressPx;
