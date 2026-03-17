@@ -1538,10 +1538,7 @@
           if (typeof options.partitionKey === "string" && PARTITION_KEYS.includes(options.partitionKey)) {
             block.dataset.partitionKey = options.partitionKey;
           }
-          const partitionColor = block.dataset.partitionKey
-            ? (editorState.settings.partitionSettings?.[block.dataset.partitionKey]?.assetColor || "")
-            : "";
-          attachPreviewImageToBlock(block, asset.src, asset.group, partitionColor || undefined);
+          attachPreviewImageToBlock(block, asset.src, asset.group);
         } else {
           block.classList.add("no-preview");
         }
@@ -1971,9 +1968,6 @@
         if (!template || !PARTITION_KEYS.includes(partitionKey)) {
           return;
         }
-        editorState.settings.activePartitionKey = partitionKey;
-        refreshPartitionTabsUi();
-        refreshControlsFromCurrentTarget();
         const dimensions = await resolveAssetDimensions(template);
         const assetSnapshot = {
           id: "asset-" + assetIdCounter++,
@@ -2241,7 +2235,7 @@
           partitionEditorGrid.classList.toggle("is-visible", normalizedEnabled);
         }
         if (partitionTabsRow instanceof HTMLElement) {
-          partitionTabsRow.hidden = !normalizedEnabled;
+          partitionTabsRow.hidden = true;
         }
         if (assetScaleControls instanceof HTMLElement && normalizedEnabled) {
           assetScaleControls.style.display = "none";
@@ -2253,16 +2247,12 @@
           billboardViewportTimer.style.display = "none";
         }
         if (!normalizedEnabled) {
-          applySettingsToEditorElement(visualEditorBlock, editorState.settings);
           updateSelectionUi();
           updateEditorViewportFrame();
           endPartitionPlacement();
         } else {
-          applyPartitionSettingsToEditors();
           renderPartitionEditorsFromState();
         }
-        refreshPartitionTabsUi();
-        refreshControlsFromCurrentTarget();
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2438,24 +2428,6 @@
         return selectedBlocks.length;
       }
 
-      function currentPartitionKey() {
-        const key = String(editorState.settings.activePartitionKey || "left");
-        return PARTITION_KEYS.includes(key) ? key : "left";
-      }
-
-      function currentSettingsTarget() {
-        if (editorState.settings.partitionsEnabled) {
-          const key = currentPartitionKey();
-          const partitionSettings = editorState.settings.partitionSettings || {};
-          if (!partitionSettings[key]) {
-            partitionSettings[key] = defaultPartitionSettings();
-          }
-          editorState.settings.partitionSettings = partitionSettings;
-          return { partitioned: true, key, settings: partitionSettings[key] };
-        }
-        return { partitioned: false, key: null, settings: editorState.settings };
-      }
-
       function applySettingsToEditorElement(editorEl, settingsObj) {
         if (!(editorEl instanceof HTMLElement) || !settingsObj) {
           return;
@@ -2475,44 +2447,6 @@
         }
       }
 
-      function applyPartitionSettingsToEditors() {
-        for (const partitionKey of PARTITION_KEYS) {
-          const editor = partitionEditorForKey(partitionKey);
-          const settingsObj = editorState.settings.partitionSettings?.[partitionKey] || defaultPartitionSettings();
-          applySettingsToEditorElement(editor, settingsObj);
-        }
-      }
-
-      function refreshPartitionTabsUi() {
-        if (!(partitionTabs instanceof HTMLElement)) {
-          return;
-        }
-        const activeKey = currentPartitionKey();
-        const buttons = partitionTabs.querySelectorAll(".marquee-choice[data-partition-key]");
-        for (const button of buttons) {
-          const key = button.dataset.partitionKey || "";
-          const isSelected = key === activeKey;
-          button.classList.toggle("inactive", !isSelected);
-          button.setAttribute("aria-selected", isSelected ? "true" : "false");
-        }
-      }
-
-      function refreshControlsFromCurrentTarget() {
-        const target = currentSettingsTarget();
-        const source = target.settings;
-        const buttons = alignmentSettings.querySelectorAll(".alignment-button");
-        for (const button of buttons) {
-          const isSelected = button.dataset.align === source.verticalAlignment;
-          button.classList.toggle("inactive", !isSelected);
-          button.setAttribute("aria-checked", isSelected ? "true" : "false");
-        }
-        paddingTBControl.value = String(Number(source.paddingTB) || 0);
-        paddingLRControl.value = String(Number(source.paddingLR) || 0);
-        assetGapControl.value = String(Number(source.assetGap) || 0);
-        backgroundColorControl.value = source.backgroundColor || "#ff00ff";
-        assetColorControl.value = source.assetColor || "#1e6cff";
-      }
-
       function setVerticalAlignment(alignKey, shouldPersist) {
         if (!alignmentMap[alignKey]) {
           return;
@@ -2523,14 +2457,14 @@
           button.classList.toggle("inactive", !isSelected);
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
-        const target = currentSettingsTarget();
-        target.settings.verticalAlignment = alignKey;
-        if (target.partitioned) {
-          const editor = partitionEditorForKey(target.key);
-          applySettingsToEditorElement(editor, target.settings);
-        } else {
-          applySettingsToEditorElement(visualEditorBlock, target.settings);
+        visualEditorBlock.style.alignItems = alignmentMap[alignKey];
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (partitionEditor instanceof HTMLElement) {
+            partitionEditor.style.alignItems = alignmentMap[alignKey];
+          }
         }
+        editorState.settings.verticalAlignment = alignKey;
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2540,17 +2474,24 @@
       function applyPaddingGuides(paddingTB, paddingLR, shouldPersist) {
         const normalizedTB = Math.max(0, Number(paddingTB) || 0);
         const normalizedLR = Math.max(0, Number(paddingLR) || 0);
-        const target = currentSettingsTarget();
-        target.settings.paddingTB = normalizedTB;
-        target.settings.paddingLR = normalizedLR;
-        if (target.partitioned) {
-          const editor = partitionEditorForKey(target.key);
-          applySettingsToEditorElement(editor, target.settings);
-        } else {
-          applySettingsToEditorElement(visualEditorBlock, target.settings);
+        visualEditorBlock.style.setProperty("--safe-top", normalizedTB + "px");
+        visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
+        visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
+        visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (!(partitionEditor instanceof HTMLElement)) {
+            continue;
+          }
+          partitionEditor.style.setProperty("--safe-top", normalizedTB + "px");
+          partitionEditor.style.setProperty("--safe-bottom", normalizedTB + "px");
+          partitionEditor.style.setProperty("--safe-left", normalizedLR + "px");
+          partitionEditor.style.setProperty("--safe-right", normalizedLR + "px");
         }
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
+        editorState.settings.paddingTB = normalizedTB;
+        editorState.settings.paddingLR = normalizedLR;
         syncBillboardPaddingFromEditorPreview();
         updateAllAssetBlockSizes();
         if (shouldPersist) {
@@ -2560,15 +2501,15 @@
 
       function applyAssetGap(assetGapValue, shouldPersist) {
         const normalizedGap = Math.max(0, Number(assetGapValue) || 0);
-        const target = currentSettingsTarget();
-        target.settings.assetGap = normalizedGap;
-        if (target.partitioned) {
-          const editor = partitionEditorForKey(target.key);
-          applySettingsToEditorElement(editor, target.settings);
-        } else {
-          applySettingsToEditorElement(visualEditorBlock, target.settings);
+        visualEditorBlock.style.setProperty("--asset-gap", normalizedGap + "px");
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (partitionEditor instanceof HTMLElement) {
+            partitionEditor.style.setProperty("--asset-gap", normalizedGap + "px");
+          }
         }
         assetGapControl.value = String(normalizedGap);
+        editorState.settings.assetGap = normalizedGap;
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2576,15 +2517,10 @@
       }
 
       function syncBillboardPaddingFromEditorPreview() {
-        const target = currentSettingsTarget();
-        const sourceSettings = target.settings || editorState.settings;
-        const referenceEditor = target.partitioned
-          ? (partitionEditorForKey(target.key) || visualEditorBlock)
-          : visualEditorBlock;
-        const editorHeight = Math.max(1, referenceEditor.clientHeight || 1);
-        const topRatio = Math.max(0, Math.min(0.49, (Number(sourceSettings.paddingTB) || 0) / editorHeight));
+        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
+        const topRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingTB / editorHeight));
         const referenceWidthFromHeight = Math.max(1, (editorHeight * 5900) / 3480);
-        const leftRatio = Math.max(0, Math.min(0.49, (Number(sourceSettings.paddingLR) || 0) / referenceWidthFromHeight));
+        const leftRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingLR / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-left-ratio", String(leftRatio));
@@ -2635,19 +2571,18 @@
         flatBillboardPartitionLayers.innerHTML = "";
 
         const scaleFactor = billboardScaleFactor();
+        const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
+        const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
+        const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
+        const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
 
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
-          const partitionSettings = editorState.settings.partitionSettings?.[partitionKey] || defaultPartitionSettings();
-          const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
-          const paddingTB = (Number(partitionSettings.paddingTB) || 0) * scaleFactor;
-          const paddingLR = (Number(partitionSettings.paddingLR) || 0) * scaleFactor;
-          const gap = (Number(partitionSettings.assetGap) || 0) * scaleFactor;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
           layer.style.left = layout.offsetRatio * 100 + "%";
           layer.style.width = layout.widthRatio * 100 + "%";
-          layer.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
+          layer.style.backgroundColor = editorState.settings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
           track.className = "flat-billboard-partition-track";
@@ -2657,7 +2592,7 @@
           track.style.paddingRight = paddingLR + "px";
           track.style.gap = gap + "px";
           track.style.alignItems = align;
-          track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
+          track.style.setProperty("--asset-color", editorState.settings.assetColor || "#1e6cff");
 
           const editor = partitionEditorForKey(partitionKey);
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
@@ -2691,7 +2626,7 @@
               assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
               const src = sourceBlock.dataset.assetSrc || "";
               const group = sourceBlock.dataset.assetGroup || "";
-              resolvePreviewUrl(src, group, partitionSettings.assetColor)
+              resolvePreviewUrl(src, group)
                 .then((previewUrl) => {
                   if (assetImage.isConnected) {
                     assetImage.src = previewUrl;
@@ -2817,32 +2752,34 @@
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
-        const target = currentSettingsTarget();
-        const previousAssetColor = target.settings.assetColor;
-        target.settings.backgroundColor = backgroundColor;
-        target.settings.assetColor = assetColor;
-        if (target.partitioned) {
-          const editor = partitionEditorForKey(target.key);
-          applySettingsToEditorElement(editor, target.settings);
-        } else {
-          applySettingsToEditorElement(visualEditorBlock, target.settings);
+        const previousAssetColor = editorState.settings.assetColor;
+        visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
+        visualEditorBlock.style.setProperty("--asset-color", assetColor);
+        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const partitionEditor of partitionEditors) {
+          if (!(partitionEditor instanceof HTMLElement)) {
+            continue;
+          }
+          partitionEditor.style.setProperty("--editor-bg", backgroundColor);
+          partitionEditor.style.setProperty("--asset-color", assetColor);
         }
         flatBillboard.style.setProperty("--editor-bg", backgroundColor);
         backgroundColorControl.value = backgroundColor;
         assetColorControl.value = assetColor;
+        editorState.settings.backgroundColor = backgroundColor;
+        editorState.settings.assetColor = assetColor;
         if (previousAssetColor !== assetColor) {
           clearSvgColorUrlCache();
-          const blocks = target.partitioned
-            ? (partitionEditorForKey(target.key)?.querySelectorAll(".fake-asset-block") || [])
-            : visualEditorBlock.querySelectorAll(".fake-asset-block");
+          const blocks = document.querySelectorAll(
+            "#visualEditorBlock .fake-asset-block, #partitionEditorLeft .fake-asset-block, #partitionEditorCurve .fake-asset-block, #partitionEditorRight .fake-asset-block"
+          );
           for (const block of blocks) {
             const src = block.dataset.assetSrc;
             const group = block.dataset.assetGroup;
             if (!src || !isGraphicsSvgAsset(src, group)) {
               continue;
             }
-            const colorOverride = target.partitioned ? target.settings.assetColor : undefined;
-            attachPreviewImageToBlock(block, src, group, colorOverride);
+            attachPreviewImageToBlock(block, src, group);
           }
         }
         syncFlatBillboardArtworks();
@@ -2896,25 +2833,6 @@
         }
         applyPartitionsSetting(value === "on", true);
       });
-
-      if (partitionTabs instanceof HTMLElement) {
-        partitionTabs.addEventListener("click", (event) => {
-          const target = event.target;
-          if (!(target instanceof HTMLButtonElement)) {
-            return;
-          }
-          const key = target.dataset.partitionKey || "";
-          if (!PARTITION_KEYS.includes(key)) {
-            return;
-          }
-          editorState.settings.activePartitionKey = key;
-          refreshPartitionTabsUi();
-          refreshControlsFromCurrentTarget();
-          syncBillboardPaddingFromEditorPreview();
-          syncFlatBillboardArtworks();
-          saveEditorState();
-        });
-      }
 
       marqueeSpeedControl.addEventListener("input", () => {
         const raw = marqueeSpeedControl.value.trim();
@@ -2978,12 +2896,6 @@
         }
         partitionEditor.addEventListener("click", async (event) => {
           const key = partitionEditor.dataset.partitionKey || "";
-          if (PARTITION_KEYS.includes(key) && editorState.settings.activePartitionKey !== key) {
-            editorState.settings.activePartitionKey = key;
-            refreshPartitionTabsUi();
-            refreshControlsFromCurrentTarget();
-            syncBillboardPaddingFromEditorPreview();
-          }
           if (pendingPartitionAsset) {
             await placePendingAssetInPartition(key);
             return;
@@ -3221,14 +3133,13 @@
         stopMarqueeAnimation();
       });
 
-      applySettingsToEditorElement(visualEditorBlock, editorState.settings);
+      setVerticalAlignment(editorState.settings.verticalAlignment, false);
+      applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
+      applyAssetGap(editorState.settings.assetGap, false);
+      applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
-      applyPartitionSettingsToEditors();
-      renderPartitionEditorsFromState();
-      refreshPartitionTabsUi();
-      refreshControlsFromCurrentTarget();
       applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
       applyPartitionsSetting(editorState.settings.partitionsEnabled, false);
       updateScaleControlsAnchorTop();
