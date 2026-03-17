@@ -2355,8 +2355,14 @@
         const frameLeft = -trackX / scale;
         const frameTop = -trackY / scale;
         const rotateArtwork = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
-        const frameWidth = (rotateArtwork ? billboardHeight : billboardWidth) / scale;
-        const frameHeight = (rotateArtwork ? billboardWidth : billboardHeight) / scale;
+        let frameWidth = (rotateArtwork ? billboardHeight : billboardWidth) / scale;
+        let frameHeight = (rotateArtwork ? billboardWidth : billboardHeight) / scale;
+        const editorHeight = Math.max(1, visualEditorBlock?.clientHeight || 1);
+        if (frameHeight > editorHeight) {
+          const ratio = editorHeight / frameHeight;
+          frameHeight = editorHeight;
+          frameWidth = frameWidth * ratio;
+        }
 
         billboardViewportFrame.style.display = "block";
         billboardViewportFrame.style.left = frameLeft + "px";
