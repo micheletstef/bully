@@ -144,6 +144,10 @@
         display: none;
       }
 
+      .settings-row.partition-tabs-row[hidden] {
+        display: none;
+      }
+
       .settings-label {
         text-transform: lowercase;
       }
@@ -202,6 +206,12 @@
       .marquee-choice:focus {
         text-decoration: underline;
         outline: none;
+      }
+
+      .partition-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .settings-input {
@@ -758,6 +768,16 @@
             <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
           </div>
         </div>
+        <div id="partitionTabsRow" class="settings-row partition-tabs-row" hidden>
+          <span class="settings-label">partition</span>
+          <div id="partitionTabs" class="partition-tabs" role="tablist" aria-label="Partition settings tabs">
+            <button type="button" class="marquee-choice" data-partition-key="left" role="tab" aria-selected="true">7th</button>
+            <span>/</span>
+            <button type="button" class="marquee-choice inactive" data-partition-key="curve" role="tab" aria-selected="false">curve</button>
+            <span>/</span>
+            <button type="button" class="marquee-choice inactive" data-partition-key="right" role="tab" aria-selected="false">47th</button>
+          </div>
+        </div>
         <div class="settings-row">
           <span class="settings-label">marquee</span>
           <div id="marqueeToggle" class="marquee-toggle" role="radiogroup" aria-label="Marquee mode">
@@ -869,6 +889,8 @@
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
       const partitionsToggle = document.getElementById("partitionsToggle");
+      const partitionTabsRow = document.getElementById("partitionTabsRow");
+      const partitionTabs = document.getElementById("partitionTabs");
       const marqueeSpeedRow = document.getElementById("marqueeSpeedRow");
       const marqueeDirectionRow = document.getElementById("marqueeDirectionRow");
       const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
@@ -914,6 +936,17 @@
         curve: { offsetRatio: 1820 / 5900, widthRatio: 1020 / 5900 },
         right: { offsetRatio: 2840 / 5900, widthRatio: 3060 / 5900 },
       };
+
+      function defaultPartitionSettings() {
+        return {
+          verticalAlignment: "top",
+          paddingTB: 0,
+          paddingLR: 0,
+          assetGap: 8,
+          backgroundColor: "#ff00ff",
+          assetColor: "#1e6cff",
+        };
+      }
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -936,6 +969,12 @@
           settings: {
             verticalAlignment: "top",
             partitionsEnabled: false,
+            activePartitionKey: "left",
+            partitionSettings: {
+              left: defaultPartitionSettings(),
+              curve: defaultPartitionSettings(),
+              right: defaultPartitionSettings(),
+            },
             marqueeEnabled: false,
             marqueeSpeed: 80,
             marqueeDirection: "rtl",
@@ -1017,6 +1056,38 @@
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
           const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
+          const activePartitionKeyRaw = String(parsed?.settings?.activePartitionKey || "left");
+          const activePartitionKey = PARTITION_KEYS.includes(activePartitionKeyRaw) ? activePartitionKeyRaw : "left";
+          const savedPartitionSettings = parsed?.settings?.partitionSettings && typeof parsed.settings.partitionSettings === "object"
+            ? parsed.settings.partitionSettings
+            : {};
+          const sanitizePartitionSettingsEntry = (entry) => {
+            const fallback = defaultPartitionSettings();
+            const src = entry && typeof entry === "object" ? entry : {};
+            const alignment = alignmentMap[src.verticalAlignment] ? src.verticalAlignment : fallback.verticalAlignment;
+            const paddingTBValue = Number(src.paddingTB);
+            const paddingLRValue = Number(src.paddingLR);
+            const gapValue = Number(src.assetGap);
+            const bg = typeof src.backgroundColor === "string" && /^#[0-9a-f]{6}$/i.test(src.backgroundColor)
+              ? src.backgroundColor
+              : fallback.backgroundColor;
+            const assetColor = typeof src.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(src.assetColor)
+              ? src.assetColor
+              : fallback.assetColor;
+            return {
+              verticalAlignment: alignment,
+              paddingTB: Number.isFinite(paddingTBValue) ? Math.max(0, paddingTBValue) : fallback.paddingTB,
+              paddingLR: Number.isFinite(paddingLRValue) ? Math.max(0, paddingLRValue) : fallback.paddingLR,
+              assetGap: Number.isFinite(gapValue) ? Math.max(0, gapValue) : fallback.assetGap,
+              backgroundColor: bg,
+              assetColor,
+            };
+          };
+          const partitionSettings = {
+            left: sanitizePartitionSettingsEntry(savedPartitionSettings.left),
+            curve: sanitizePartitionSettingsEntry(savedPartitionSettings.curve),
+            right: sanitizePartitionSettingsEntry(savedPartitionSettings.right),
+          };
           const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
           const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
           const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
@@ -1036,6 +1107,8 @@
             settings: {
               verticalAlignment,
               partitionsEnabled,
+              activePartitionKey,
+              partitionSettings,
               marqueeEnabled: savedMarqueeEnabled,
               marqueeSpeed,
               marqueeDirection,
@@ -1177,11 +1250,11 @@
         }
       }
 
-      async function resolvePreviewUrl(src, group) {
+      async function resolvePreviewUrl(src, group, colorOverride) {
         if (!isGraphicsSvgAsset(src, group)) {
           return resolveAssetUrlFromSrc(src);
         }
-        const color = editorState.settings.assetColor;
+        const color = colorOverride || editorState.settings.assetColor;
         const cacheKey = src + "|" + color;
         if (svgColorUrlCache.has(cacheKey)) {
           return svgColorUrlCache.get(cacheKey);
@@ -1193,7 +1266,7 @@
         return objectUrl;
       }
 
-      function attachPreviewImageToBlock(block, src, group) {
+      function attachPreviewImageToBlock(block, src, group, colorOverride) {
         if (!block || !src) {
           return;
         }
@@ -1223,7 +1296,7 @@
         block.classList.remove("no-preview");
         const token = String(Date.now()) + Math.random().toString(16).slice(2);
         image.dataset.previewToken = token;
-        resolvePreviewUrl(src, group)
+        resolvePreviewUrl(src, group, colorOverride)
           .then((previewUrl) => {
             if (!image.isConnected || image.dataset.previewToken !== token) {
               return;
@@ -1462,7 +1535,13 @@
         block.dataset.cropLeft = String(asset.cropLeft || 0);
         block.dataset.cropRight = String(asset.cropRight || 0);
         if (typeof asset.src === "string" && asset.src) {
-          attachPreviewImageToBlock(block, asset.src, asset.group);
+          if (typeof options.partitionKey === "string" && PARTITION_KEYS.includes(options.partitionKey)) {
+            block.dataset.partitionKey = options.partitionKey;
+          }
+          const partitionColor = block.dataset.partitionKey
+            ? (editorState.settings.partitionSettings?.[block.dataset.partitionKey]?.assetColor || "")
+            : "";
+          attachPreviewImageToBlock(block, asset.src, asset.group, partitionColor || undefined);
         } else {
           block.classList.add("no-preview");
         }
@@ -1512,8 +1591,15 @@
         };
       }
 
-      function getSafeAssetHeight() {
-        const safeHeight = 200 - editorState.settings.paddingTB * 2;
+      function getSafeAssetHeight(block) {
+        const parent = block?.parentElement;
+        if (!(parent instanceof HTMLElement)) {
+          return 1;
+        }
+        const styles = window.getComputedStyle(parent);
+        const safeTop = parseFloat(styles.getPropertyValue("--safe-top")) || 0;
+        const safeBottom = parseFloat(styles.getPropertyValue("--safe-bottom")) || 0;
+        const safeHeight = (parent.clientHeight || 200) - safeTop - safeBottom;
         return Math.max(1, safeHeight);
       }
 
@@ -1561,7 +1647,7 @@
         const baseFinalWidth = isQuarterTurn ? baseCroppedHeight : baseCroppedWidth;
         const baseFinalHeight = isQuarterTurn ? baseCroppedWidth : baseCroppedHeight;
 
-        const safeHeight = getSafeAssetHeight();
+        const safeHeight = getSafeAssetHeight(block);
         const fitScale = Math.min(1, safeHeight / Math.max(1, baseFinalHeight));
 
         const sourceScaledWidth = Math.max(1, Math.round(baseSourceWidth * fitScale));
@@ -1584,7 +1670,17 @@
       }
 
       function updateAllAssetBlockSizes() {
-        const blocks = getPrimaryAssetBlocks();
+        let blocks = [];
+        if (!editorState.settings.partitionsEnabled) {
+          blocks = getPrimaryAssetBlocks();
+        } else {
+          const editors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+          for (const editor of editors) {
+            if (editor instanceof HTMLElement) {
+              blocks.push(...Array.from(editor.querySelectorAll(".fake-asset-block")));
+            }
+          }
+        }
         for (const block of blocks) {
           updateAssetBlockSize(block);
         }
@@ -1849,7 +1945,7 @@
             ? editorState.partitionAssets[partitionKey]
             : [];
           for (const asset of list) {
-            appendAssetBlock(asset, editor);
+            appendAssetBlock(asset, editor, { partitionKey });
           }
         }
       }
@@ -1875,6 +1971,9 @@
         if (!template || !PARTITION_KEYS.includes(partitionKey)) {
           return;
         }
+        editorState.settings.activePartitionKey = partitionKey;
+        refreshPartitionTabsUi();
+        refreshControlsFromCurrentTarget();
         const dimensions = await resolveAssetDimensions(template);
         const assetSnapshot = {
           id: "asset-" + assetIdCounter++,
@@ -1897,7 +1996,7 @@
         editorState.partitionAssets[partitionKey].push(assetSnapshot);
         const editor = partitionEditorForKey(partitionKey);
         if (editor instanceof HTMLElement) {
-          appendAssetBlock(assetSnapshot, editor);
+          appendAssetBlock(assetSnapshot, editor, { partitionKey });
         }
         endPartitionPlacement();
         syncFlatBillboardArtworks();
@@ -2141,6 +2240,9 @@
           singleEditorCanvas.style.display = normalizedEnabled ? "none" : "";
           partitionEditorGrid.classList.toggle("is-visible", normalizedEnabled);
         }
+        if (partitionTabsRow instanceof HTMLElement) {
+          partitionTabsRow.hidden = !normalizedEnabled;
+        }
         if (assetScaleControls instanceof HTMLElement && normalizedEnabled) {
           assetScaleControls.style.display = "none";
         }
@@ -2150,25 +2252,17 @@
         if (billboardViewportTimer instanceof HTMLElement && normalizedEnabled) {
           billboardViewportTimer.style.display = "none";
         }
-        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        const sourceStyles = window.getComputedStyle(visualEditorBlock);
-        for (const partitionEditor of partitionEditors) {
-          if (!(partitionEditor instanceof HTMLElement)) {
-            continue;
-          }
-          partitionEditor.style.setProperty("--editor-bg", sourceStyles.getPropertyValue("--editor-bg") || "#ff00ff");
-          partitionEditor.style.setProperty("--safe-top", sourceStyles.getPropertyValue("--safe-top") || "0px");
-          partitionEditor.style.setProperty("--safe-bottom", sourceStyles.getPropertyValue("--safe-bottom") || "0px");
-          partitionEditor.style.setProperty("--safe-left", sourceStyles.getPropertyValue("--safe-left") || "0px");
-          partitionEditor.style.setProperty("--safe-right", sourceStyles.getPropertyValue("--safe-right") || "0px");
-        }
         if (!normalizedEnabled) {
+          applySettingsToEditorElement(visualEditorBlock, editorState.settings);
           updateSelectionUi();
           updateEditorViewportFrame();
           endPartitionPlacement();
         } else {
+          applyPartitionSettingsToEditors();
           renderPartitionEditorsFromState();
         }
+        refreshPartitionTabsUi();
+        refreshControlsFromCurrentTarget();
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2267,23 +2361,24 @@
       }
 
       function swapAssetBlocks(blockA, blockB) {
-        if (!blockA || !blockB || blockA === blockB || blockA.parentNode !== visualEditorBlock || blockB.parentNode !== visualEditorBlock) {
+        if (!blockA || !blockB || blockA === blockB || !blockA.parentNode || blockA.parentNode !== blockB.parentNode) {
           return false;
         }
+        const parent = blockA.parentNode;
         const nextA = blockA.nextSibling;
         const nextB = blockB.nextSibling;
 
         animateSwapWithFlip(blockA, blockB, () => {
           if (nextA === blockB) {
-            visualEditorBlock.insertBefore(blockB, blockA);
+            parent.insertBefore(blockB, blockA);
             return;
           }
           if (nextB === blockA) {
-            visualEditorBlock.insertBefore(blockA, blockB);
+            parent.insertBefore(blockA, blockB);
             return;
           }
-          visualEditorBlock.insertBefore(blockA, nextB);
-          visualEditorBlock.insertBefore(blockB, nextA);
+          parent.insertBefore(blockA, nextB);
+          parent.insertBefore(blockB, nextA);
         });
         return true;
       }
@@ -2343,6 +2438,81 @@
         return selectedBlocks.length;
       }
 
+      function currentPartitionKey() {
+        const key = String(editorState.settings.activePartitionKey || "left");
+        return PARTITION_KEYS.includes(key) ? key : "left";
+      }
+
+      function currentSettingsTarget() {
+        if (editorState.settings.partitionsEnabled) {
+          const key = currentPartitionKey();
+          const partitionSettings = editorState.settings.partitionSettings || {};
+          if (!partitionSettings[key]) {
+            partitionSettings[key] = defaultPartitionSettings();
+          }
+          editorState.settings.partitionSettings = partitionSettings;
+          return { partitioned: true, key, settings: partitionSettings[key] };
+        }
+        return { partitioned: false, key: null, settings: editorState.settings };
+      }
+
+      function applySettingsToEditorElement(editorEl, settingsObj) {
+        if (!(editorEl instanceof HTMLElement) || !settingsObj) {
+          return;
+        }
+        const align = alignmentMap[settingsObj.verticalAlignment] || "flex-start";
+        editorEl.style.alignItems = align;
+        editorEl.style.setProperty("--safe-top", (Number(settingsObj.paddingTB) || 0) + "px");
+        editorEl.style.setProperty("--safe-bottom", (Number(settingsObj.paddingTB) || 0) + "px");
+        editorEl.style.setProperty("--safe-left", (Number(settingsObj.paddingLR) || 0) + "px");
+        editorEl.style.setProperty("--safe-right", (Number(settingsObj.paddingLR) || 0) + "px");
+        editorEl.style.setProperty("--asset-gap", (Number(settingsObj.assetGap) || 0) + "px");
+        if (typeof settingsObj.backgroundColor === "string") {
+          editorEl.style.setProperty("--editor-bg", settingsObj.backgroundColor);
+        }
+        if (typeof settingsObj.assetColor === "string") {
+          editorEl.style.setProperty("--asset-color", settingsObj.assetColor);
+        }
+      }
+
+      function applyPartitionSettingsToEditors() {
+        for (const partitionKey of PARTITION_KEYS) {
+          const editor = partitionEditorForKey(partitionKey);
+          const settingsObj = editorState.settings.partitionSettings?.[partitionKey] || defaultPartitionSettings();
+          applySettingsToEditorElement(editor, settingsObj);
+        }
+      }
+
+      function refreshPartitionTabsUi() {
+        if (!(partitionTabs instanceof HTMLElement)) {
+          return;
+        }
+        const activeKey = currentPartitionKey();
+        const buttons = partitionTabs.querySelectorAll(".marquee-choice[data-partition-key]");
+        for (const button of buttons) {
+          const key = button.dataset.partitionKey || "";
+          const isSelected = key === activeKey;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-selected", isSelected ? "true" : "false");
+        }
+      }
+
+      function refreshControlsFromCurrentTarget() {
+        const target = currentSettingsTarget();
+        const source = target.settings;
+        const buttons = alignmentSettings.querySelectorAll(".alignment-button");
+        for (const button of buttons) {
+          const isSelected = button.dataset.align === source.verticalAlignment;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-checked", isSelected ? "true" : "false");
+        }
+        paddingTBControl.value = String(Number(source.paddingTB) || 0);
+        paddingLRControl.value = String(Number(source.paddingLR) || 0);
+        assetGapControl.value = String(Number(source.assetGap) || 0);
+        backgroundColorControl.value = source.backgroundColor || "#ff00ff";
+        assetColorControl.value = source.assetColor || "#1e6cff";
+      }
+
       function setVerticalAlignment(alignKey, shouldPersist) {
         if (!alignmentMap[alignKey]) {
           return;
@@ -2353,14 +2523,14 @@
           button.classList.toggle("inactive", !isSelected);
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
-        visualEditorBlock.style.alignItems = alignmentMap[alignKey];
-        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        for (const partitionEditor of partitionEditors) {
-          if (partitionEditor instanceof HTMLElement) {
-            partitionEditor.style.alignItems = alignmentMap[alignKey];
-          }
+        const target = currentSettingsTarget();
+        target.settings.verticalAlignment = alignKey;
+        if (target.partitioned) {
+          const editor = partitionEditorForKey(target.key);
+          applySettingsToEditorElement(editor, target.settings);
+        } else {
+          applySettingsToEditorElement(visualEditorBlock, target.settings);
         }
-        editorState.settings.verticalAlignment = alignKey;
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2370,24 +2540,17 @@
       function applyPaddingGuides(paddingTB, paddingLR, shouldPersist) {
         const normalizedTB = Math.max(0, Number(paddingTB) || 0);
         const normalizedLR = Math.max(0, Number(paddingLR) || 0);
-        visualEditorBlock.style.setProperty("--safe-top", normalizedTB + "px");
-        visualEditorBlock.style.setProperty("--safe-bottom", normalizedTB + "px");
-        visualEditorBlock.style.setProperty("--safe-left", normalizedLR + "px");
-        visualEditorBlock.style.setProperty("--safe-right", normalizedLR + "px");
-        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        for (const partitionEditor of partitionEditors) {
-          if (!(partitionEditor instanceof HTMLElement)) {
-            continue;
-          }
-          partitionEditor.style.setProperty("--safe-top", normalizedTB + "px");
-          partitionEditor.style.setProperty("--safe-bottom", normalizedTB + "px");
-          partitionEditor.style.setProperty("--safe-left", normalizedLR + "px");
-          partitionEditor.style.setProperty("--safe-right", normalizedLR + "px");
+        const target = currentSettingsTarget();
+        target.settings.paddingTB = normalizedTB;
+        target.settings.paddingLR = normalizedLR;
+        if (target.partitioned) {
+          const editor = partitionEditorForKey(target.key);
+          applySettingsToEditorElement(editor, target.settings);
+        } else {
+          applySettingsToEditorElement(visualEditorBlock, target.settings);
         }
         paddingTBControl.value = String(normalizedTB);
         paddingLRControl.value = String(normalizedLR);
-        editorState.settings.paddingTB = normalizedTB;
-        editorState.settings.paddingLR = normalizedLR;
         syncBillboardPaddingFromEditorPreview();
         updateAllAssetBlockSizes();
         if (shouldPersist) {
@@ -2397,15 +2560,15 @@
 
       function applyAssetGap(assetGapValue, shouldPersist) {
         const normalizedGap = Math.max(0, Number(assetGapValue) || 0);
-        visualEditorBlock.style.setProperty("--asset-gap", normalizedGap + "px");
-        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        for (const partitionEditor of partitionEditors) {
-          if (partitionEditor instanceof HTMLElement) {
-            partitionEditor.style.setProperty("--asset-gap", normalizedGap + "px");
-          }
+        const target = currentSettingsTarget();
+        target.settings.assetGap = normalizedGap;
+        if (target.partitioned) {
+          const editor = partitionEditorForKey(target.key);
+          applySettingsToEditorElement(editor, target.settings);
+        } else {
+          applySettingsToEditorElement(visualEditorBlock, target.settings);
         }
         assetGapControl.value = String(normalizedGap);
-        editorState.settings.assetGap = normalizedGap;
         syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
@@ -2413,10 +2576,15 @@
       }
 
       function syncBillboardPaddingFromEditorPreview() {
-        const editorHeight = Math.max(1, visualEditorBlock.clientHeight || 1);
-        const topRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingTB / editorHeight));
+        const target = currentSettingsTarget();
+        const sourceSettings = target.settings || editorState.settings;
+        const referenceEditor = target.partitioned
+          ? (partitionEditorForKey(target.key) || visualEditorBlock)
+          : visualEditorBlock;
+        const editorHeight = Math.max(1, referenceEditor.clientHeight || 1);
+        const topRatio = Math.max(0, Math.min(0.49, (Number(sourceSettings.paddingTB) || 0) / editorHeight));
         const referenceWidthFromHeight = Math.max(1, (editorHeight * 5900) / 3480);
-        const leftRatio = Math.max(0, Math.min(0.49, editorState.settings.paddingLR / referenceWidthFromHeight));
+        const leftRatio = Math.max(0, Math.min(0.49, (Number(sourceSettings.paddingLR) || 0) / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-left-ratio", String(leftRatio));
@@ -2467,17 +2635,19 @@
         flatBillboardPartitionLayers.innerHTML = "";
 
         const scaleFactor = billboardScaleFactor();
-        const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
-        const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
-        const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
-        const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
 
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
+          const partitionSettings = editorState.settings.partitionSettings?.[partitionKey] || defaultPartitionSettings();
+          const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
+          const paddingTB = (Number(partitionSettings.paddingTB) || 0) * scaleFactor;
+          const paddingLR = (Number(partitionSettings.paddingLR) || 0) * scaleFactor;
+          const gap = (Number(partitionSettings.assetGap) || 0) * scaleFactor;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
           layer.style.left = layout.offsetRatio * 100 + "%";
           layer.style.width = layout.widthRatio * 100 + "%";
+          layer.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
           track.className = "flat-billboard-partition-track";
@@ -2487,6 +2657,7 @@
           track.style.paddingRight = paddingLR + "px";
           track.style.gap = gap + "px";
           track.style.alignItems = align;
+          track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const editor = partitionEditorForKey(partitionKey);
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
@@ -2520,7 +2691,7 @@
               assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
               const src = sourceBlock.dataset.assetSrc || "";
               const group = sourceBlock.dataset.assetGroup || "";
-              resolvePreviewUrl(src, group)
+              resolvePreviewUrl(src, group, partitionSettings.assetColor)
                 .then((previewUrl) => {
                   if (assetImage.isConnected) {
                     assetImage.src = previewUrl;
@@ -2646,32 +2817,32 @@
       }
 
       function applyColors(backgroundColor, assetColor, shouldPersist) {
-        const previousAssetColor = editorState.settings.assetColor;
-        visualEditorBlock.style.setProperty("--editor-bg", backgroundColor);
-        visualEditorBlock.style.setProperty("--asset-color", assetColor);
-        const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        for (const partitionEditor of partitionEditors) {
-          if (!(partitionEditor instanceof HTMLElement)) {
-            continue;
-          }
-          partitionEditor.style.setProperty("--editor-bg", backgroundColor);
-          partitionEditor.style.setProperty("--asset-color", assetColor);
+        const target = currentSettingsTarget();
+        const previousAssetColor = target.settings.assetColor;
+        target.settings.backgroundColor = backgroundColor;
+        target.settings.assetColor = assetColor;
+        if (target.partitioned) {
+          const editor = partitionEditorForKey(target.key);
+          applySettingsToEditorElement(editor, target.settings);
+        } else {
+          applySettingsToEditorElement(visualEditorBlock, target.settings);
         }
         flatBillboard.style.setProperty("--editor-bg", backgroundColor);
         backgroundColorControl.value = backgroundColor;
         assetColorControl.value = assetColor;
-        editorState.settings.backgroundColor = backgroundColor;
-        editorState.settings.assetColor = assetColor;
         if (previousAssetColor !== assetColor) {
           clearSvgColorUrlCache();
-          const blocks = visualEditorBlock.querySelectorAll(".fake-asset-block");
+          const blocks = target.partitioned
+            ? (partitionEditorForKey(target.key)?.querySelectorAll(".fake-asset-block") || [])
+            : visualEditorBlock.querySelectorAll(".fake-asset-block");
           for (const block of blocks) {
             const src = block.dataset.assetSrc;
             const group = block.dataset.assetGroup;
             if (!src || !isGraphicsSvgAsset(src, group)) {
               continue;
             }
-            attachPreviewImageToBlock(block, src, group);
+            const colorOverride = target.partitioned ? target.settings.assetColor : undefined;
+            attachPreviewImageToBlock(block, src, group, colorOverride);
           }
         }
         syncFlatBillboardArtworks();
@@ -2725,6 +2896,25 @@
         }
         applyPartitionsSetting(value === "on", true);
       });
+
+      if (partitionTabs instanceof HTMLElement) {
+        partitionTabs.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLButtonElement)) {
+            return;
+          }
+          const key = target.dataset.partitionKey || "";
+          if (!PARTITION_KEYS.includes(key)) {
+            return;
+          }
+          editorState.settings.activePartitionKey = key;
+          refreshPartitionTabsUi();
+          refreshControlsFromCurrentTarget();
+          syncBillboardPaddingFromEditorPreview();
+          syncFlatBillboardArtworks();
+          saveEditorState();
+        });
+      }
 
       marqueeSpeedControl.addEventListener("input", () => {
         const raw = marqueeSpeedControl.value.trim();
@@ -2787,8 +2977,14 @@
           continue;
         }
         partitionEditor.addEventListener("click", async (event) => {
+          const key = partitionEditor.dataset.partitionKey || "";
+          if (PARTITION_KEYS.includes(key) && editorState.settings.activePartitionKey !== key) {
+            editorState.settings.activePartitionKey = key;
+            refreshPartitionTabsUi();
+            refreshControlsFromCurrentTarget();
+            syncBillboardPaddingFromEditorPreview();
+          }
           if (pendingPartitionAsset) {
-            const key = partitionEditor.dataset.partitionKey || "";
             await placePendingAssetInPartition(key);
             return;
           }
@@ -2878,6 +3074,16 @@
           saveEditorState();
           syncFlatBillboardArtworks();
           positionScaleControls();
+        });
+
+        partitionEditor.addEventListener("mousedown", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement) || !target.classList.contains("asset-crop-handle")) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          beginCropDrag(event, target);
         });
       }
 
@@ -3015,13 +3221,14 @@
         stopMarqueeAnimation();
       });
 
-      setVerticalAlignment(editorState.settings.verticalAlignment, false);
-      applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
-      applyAssetGap(editorState.settings.assetGap, false);
-      applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
+      applySettingsToEditorElement(visualEditorBlock, editorState.settings);
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
+      applyPartitionSettingsToEditors();
+      renderPartitionEditorsFromState();
+      refreshPartitionTabsUi();
+      refreshControlsFromCurrentTarget();
       applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
       applyPartitionsSetting(editorState.settings.partitionsEnabled, false);
       updateScaleControlsAnchorTop();
