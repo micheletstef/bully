@@ -310,6 +310,11 @@
         padding-top: 2px;
       }
 
+      .partition-visual-editor-block.is-drop-target {
+        outline: 2px dashed rgba(211, 0, 0, 0.9);
+        outline-offset: -2px;
+      }
+
       .visual-editor-block {
         --editor-height: 200px;
         --asset-gap: 8px;
@@ -547,6 +552,32 @@
         pointer-events: none;
         transform: translate(0px, 0px);
         overflow: visible;
+      }
+
+      .flat-billboard-partition-layers {
+        position: absolute;
+        inset: 0;
+        display: none;
+        pointer-events: none;
+      }
+
+      .flat-billboard-partition-layers.is-visible {
+        display: block;
+      }
+
+      .flat-billboard-partition-layer {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        overflow: hidden;
+      }
+
+      .flat-billboard-partition-track {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: flex-start;
       }
 
       .flat-billboard-asset {
@@ -789,15 +820,15 @@
           <div id="partitionEditorGrid" class="partition-editor-grid" aria-label="Partition visual editors">
             <div class="partition-editor-card">
               <div class="partition-editor-title">facing 7th</div>
-              <div id="partitionEditorLeft" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorLeft" data-partition-key="left" class="visual-editor-block partition-visual-editor-block"></div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">curve</div>
-              <div id="partitionEditorCurve" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorCurve" data-partition-key="curve" class="visual-editor-block partition-visual-editor-block"></div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">facing 47th</div>
-              <div id="partitionEditorRight" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorRight" data-partition-key="right" class="visual-editor-block partition-visual-editor-block"></div>
             </div>
           </div>
         </div>
@@ -812,6 +843,7 @@
           <div class="flat-billboard-shell">
             <div id="flatBillboard" class="flat-billboard">
               <div id="flatBillboardTrack" class="flat-billboard-track"></div>
+              <div id="flatBillboardPartitionLayers" class="flat-billboard-partition-layers"></div>
             </div>
             <div class="flat-billboard-annotations" aria-hidden="true">
               <div class="flat-anno-top-line"></div>
@@ -852,6 +884,7 @@
       const billboardViewportTimer = document.getElementById("billboardViewportTimer");
       const flatBillboard = document.getElementById("flatBillboard");
       const flatBillboardTrack = document.getElementById("flatBillboardTrack");
+      const flatBillboardPartitionLayers = document.getElementById("flatBillboardPartitionLayers");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const assetGapControl = document.getElementById("assetGapControl");
@@ -874,6 +907,13 @@
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
       let billboardMarqueeOffsetY = 0;
+      let pendingPartitionAsset = null;
+      const PARTITION_KEYS = ["left", "curve", "right"];
+      const PARTITION_LAYOUT = {
+        left: { offsetRatio: 0, widthRatio: 1820 / 5900 },
+        curve: { offsetRatio: 1820 / 5900, widthRatio: 1020 / 5900 },
+        right: { offsetRatio: 2840 / 5900, widthRatio: 3060 / 5900 },
+      };
       const alignmentMap = {
         top: "flex-start",
         center: "center",
@@ -888,6 +928,11 @@
       function loadEditorState() {
         const defaultState = {
           assets: [],
+          partitionAssets: {
+            left: [],
+            curve: [],
+            right: [],
+          },
           settings: {
             verticalAlignment: "top",
             partitionsEnabled: false,
@@ -908,6 +953,7 @@
           }
           const parsed = JSON.parse(raw);
           const parsedAssets = Array.isArray(parsed.assets) ? parsed.assets : [];
+          const parsedPartitionAssets = parsed && typeof parsed.partitionAssets === "object" && parsed.partitionAssets ? parsed.partitionAssets : {};
           const sanitizedAssets = parsedAssets
             .filter((asset) => asset && typeof asset === "object")
             .map((asset) => ({
@@ -935,6 +981,39 @@
               cropLeft: Math.max(0, Math.min(0.95, asset.cropLeft)),
               cropRight: Math.max(0, Math.min(0.95, asset.cropRight)),
             }));
+          const sanitizeAssetList = (list) =>
+            (Array.isArray(list) ? list : [])
+              .filter((asset) => asset && typeof asset === "object")
+              .map((asset) => ({
+                id: typeof asset.id === "string" ? asset.id : "asset-" + assetIdCounter++,
+                name: typeof asset.name === "string" ? asset.name : "asset",
+                src: typeof asset.src === "string" ? asset.src : "",
+                group: typeof asset.group === "string" ? asset.group : "graphics",
+                width: Number.isFinite(asset.width) ? asset.width : 100,
+                height: Number.isFinite(asset.height) ? asset.height : 60,
+                scalePercent: Number.isFinite(asset.scalePercent) ? asset.scalePercent : 100,
+                rotationTurns: Number.isFinite(asset.rotationTurns) ? asset.rotationTurns : 0,
+                cropLeft: Number.isFinite(asset.cropLeft) ? asset.cropLeft : 0,
+                cropRight: Number.isFinite(asset.cropRight) ? asset.cropRight : 0,
+              }))
+              .filter((asset) => asset.width > 0 && asset.height > 0)
+              .map((asset) => ({
+                id: asset.id,
+                name: asset.name,
+                src: asset.src,
+                group: asset.group === "animations" ? "animations" : "graphics",
+                width: asset.width,
+                height: asset.height,
+                scalePercent: Math.max(10, Math.min(400, asset.scalePercent)),
+                rotationTurns: ((Math.trunc(asset.rotationTurns) % 4) + 4) % 4,
+                cropLeft: Math.max(0, Math.min(0.95, asset.cropLeft)),
+                cropRight: Math.max(0, Math.min(0.95, asset.cropRight)),
+              }));
+          const sanitizedPartitionAssets = {
+            left: sanitizeAssetList(parsedPartitionAssets.left),
+            curve: sanitizeAssetList(parsedPartitionAssets.curve),
+            right: sanitizeAssetList(parsedPartitionAssets.right),
+          };
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
           const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
@@ -953,6 +1032,7 @@
           const savedAssetColor = typeof parsed?.settings?.assetColor === "string" ? parsed.settings.assetColor : "#1e6cff";
           return {
             assets: sanitizedAssets,
+            partitionAssets: sanitizedPartitionAssets,
             settings: {
               verticalAlignment,
               partitionsEnabled,
@@ -1183,12 +1263,36 @@
         content.appendChild(label);
         button.appendChild(content);
         button.title = asset.name;
+        button.draggable = true;
+        button.addEventListener("dragstart", (event) => {
+          if (!editorState.settings.partitionsEnabled) {
+            event.preventDefault();
+            return;
+          }
+          beginPartitionPlacement(asset);
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "copy";
+            event.dataTransfer.setData("text/plain", JSON.stringify({
+              src: asset.src,
+              name: asset.name,
+              group: asset.group,
+            }));
+          }
+        });
+        button.addEventListener("dragend", () => {
+          endPartitionPlacement();
+        });
         button.addEventListener("click", async () => {
           const activeButton = assetsList.querySelector(".asset-button.active");
           if (activeButton) {
             activeButton.classList.remove("active");
           }
           button.classList.add("active");
+
+          if (editorState.settings.partitionsEnabled) {
+            beginPartitionPlacement(asset);
+            return;
+          }
 
           const dimensions = await resolveAssetDimensions(asset);
           const assetSnapshot = {
@@ -1204,8 +1308,7 @@
             cropRight: 0,
           };
           editorState.assets.push(assetSnapshot);
-          appendAssetBlock(assetSnapshot);
-          selectSingleAssetBlock(visualEditorBlock.lastElementChild);
+          appendAssetBlock(assetSnapshot, visualEditorBlock, { select: true });
           saveEditorState();
         });
         return button;
@@ -1347,7 +1450,7 @@
         saveEditorState();
       }
 
-      function appendAssetBlock(asset) {
+      function appendAssetBlock(asset, targetEditor = visualEditorBlock, options = {}) {
         const block = document.createElement("div");
         block.className = "fake-asset-block";
         block.draggable = true;
@@ -1378,8 +1481,12 @@
         block.appendChild(rightHandle);
 
         updateAssetBlockSize(block);
-        visualEditorBlock.appendChild(block);
+        targetEditor.appendChild(block);
         syncBillboardPaddingFromEditorPreview();
+        if (options.select) {
+          selectSingleAssetBlock(block);
+        }
+        return block;
       }
 
       function getCropValues(block) {
@@ -1486,7 +1593,18 @@
       }
 
       function getSelectedAssetBlocks() {
-        return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block.is-selected:not(.marquee-copy)"));
+        if (!editorState.settings.partitionsEnabled) {
+          return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block.is-selected:not(.marquee-copy)"));
+        }
+        const editors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        const selected = [];
+        for (const editor of editors) {
+          if (!(editor instanceof HTMLElement)) {
+            continue;
+          }
+          selected.push(...Array.from(editor.querySelectorAll(".fake-asset-block.is-selected")));
+        }
+        return selected;
       }
 
       function getSelectedAssetBlock() {
@@ -1603,7 +1721,17 @@
           return;
         }
         const assetId = block.dataset.assetId;
-        const assetState = editorState.assets.find((asset) => asset.id === assetId);
+        let assetState = editorState.assets.find((asset) => asset.id === assetId);
+        if (!assetState && editorState.partitionAssets) {
+          for (const partitionKey of PARTITION_KEYS) {
+            const list = Array.isArray(editorState.partitionAssets[partitionKey]) ? editorState.partitionAssets[partitionKey] : [];
+            const found = list.find((asset) => asset.id === assetId);
+            if (found) {
+              assetState = found;
+              break;
+            }
+          }
+        }
         if (!assetState) {
           return;
         }
@@ -1686,6 +1814,94 @@
 
       function getPrimaryAssetBlocks() {
         return Array.from(visualEditorBlock.querySelectorAll(".fake-asset-block:not(.marquee-copy)"));
+      }
+
+      function partitionEditorForKey(partitionKey) {
+        if (partitionKey === "left") {
+          return partitionEditorLeft;
+        }
+        if (partitionKey === "curve") {
+          return partitionEditorCurve;
+        }
+        if (partitionKey === "right") {
+          return partitionEditorRight;
+        }
+        return null;
+      }
+
+      function clearPartitionEditors() {
+        const editors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const editor of editors) {
+          if (editor instanceof HTMLElement) {
+            editor.innerHTML = "";
+          }
+        }
+      }
+
+      function renderPartitionEditorsFromState() {
+        clearPartitionEditors();
+        for (const partitionKey of PARTITION_KEYS) {
+          const editor = partitionEditorForKey(partitionKey);
+          if (!(editor instanceof HTMLElement)) {
+            continue;
+          }
+          const list = Array.isArray(editorState.partitionAssets && editorState.partitionAssets[partitionKey])
+            ? editorState.partitionAssets[partitionKey]
+            : [];
+          for (const asset of list) {
+            appendAssetBlock(asset, editor);
+          }
+        }
+      }
+
+      function beginPartitionPlacement(assetTemplate) {
+        pendingPartitionAsset = assetTemplate;
+        document.body.style.cursor = "copy";
+      }
+
+      function endPartitionPlacement() {
+        pendingPartitionAsset = null;
+        document.body.style.cursor = "";
+        const editors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const editor of editors) {
+          if (editor instanceof HTMLElement) {
+            editor.classList.remove("is-drop-target");
+          }
+        }
+      }
+
+      async function placePendingAssetInPartition(partitionKey, fallbackTemplate = null) {
+        const template = pendingPartitionAsset || fallbackTemplate;
+        if (!template || !PARTITION_KEYS.includes(partitionKey)) {
+          return;
+        }
+        const dimensions = await resolveAssetDimensions(template);
+        const assetSnapshot = {
+          id: "asset-" + assetIdCounter++,
+          name: template.name,
+          src: template.src,
+          group: template.group,
+          width: dimensions.width,
+          height: dimensions.height,
+          scalePercent: 100,
+          rotationTurns: 0,
+          cropLeft: 0,
+          cropRight: 0,
+        };
+        if (!editorState.partitionAssets || typeof editorState.partitionAssets !== "object") {
+          editorState.partitionAssets = { left: [], curve: [], right: [] };
+        }
+        if (!Array.isArray(editorState.partitionAssets[partitionKey])) {
+          editorState.partitionAssets[partitionKey] = [];
+        }
+        editorState.partitionAssets[partitionKey].push(assetSnapshot);
+        const editor = partitionEditorForKey(partitionKey);
+        if (editor instanceof HTMLElement) {
+          appendAssetBlock(assetSnapshot, editor);
+        }
+        endPartitionPlacement();
+        syncFlatBillboardArtworks();
+        saveEditorState();
       }
 
       function clearMarqueeCopies() {
@@ -1949,7 +2165,11 @@
         if (!normalizedEnabled) {
           updateSelectionUi();
           updateEditorViewportFrame();
+          endPartitionPlacement();
+        } else {
+          renderPartitionEditorsFromState();
         }
+        syncFlatBillboardArtworks();
         if (shouldPersist) {
           saveEditorState();
         }
@@ -2069,16 +2289,36 @@
       }
 
       function syncAssetOrderFromDom() {
-        const orderedIds = getPrimaryAssetBlocks().map((block) => block.dataset.assetId);
-        const rankById = new Map();
-        for (let index = 0; index < orderedIds.length; index += 1) {
-          rankById.set(orderedIds[index], index);
+        if (!editorState.settings.partitionsEnabled) {
+          const orderedIds = getPrimaryAssetBlocks().map((block) => block.dataset.assetId);
+          const rankById = new Map();
+          for (let index = 0; index < orderedIds.length; index += 1) {
+            rankById.set(orderedIds[index], index);
+          }
+          editorState.assets.sort((a, b) => {
+            const rankA = rankById.has(a.id) ? rankById.get(a.id) : Number.MAX_SAFE_INTEGER;
+            const rankB = rankById.has(b.id) ? rankById.get(b.id) : Number.MAX_SAFE_INTEGER;
+            return rankA - rankB;
+          });
+          return;
         }
-        editorState.assets.sort((a, b) => {
-          const rankA = rankById.has(a.id) ? rankById.get(a.id) : Number.MAX_SAFE_INTEGER;
-          const rankB = rankById.has(b.id) ? rankById.get(b.id) : Number.MAX_SAFE_INTEGER;
-          return rankA - rankB;
-        });
+        for (const partitionKey of PARTITION_KEYS) {
+          const editor = partitionEditorForKey(partitionKey);
+          if (!(editor instanceof HTMLElement)) {
+            continue;
+          }
+          const orderedIds = Array.from(editor.querySelectorAll(".fake-asset-block")).map((block) => block.dataset.assetId);
+          const rankById = new Map();
+          for (let index = 0; index < orderedIds.length; index += 1) {
+            rankById.set(orderedIds[index], index);
+          }
+          const list = Array.isArray(editorState.partitionAssets[partitionKey]) ? editorState.partitionAssets[partitionKey] : [];
+          list.sort((a, b) => {
+            const rankA = rankById.has(a.id) ? rankById.get(a.id) : Number.MAX_SAFE_INTEGER;
+            const rankB = rankById.has(b.id) ? rankById.get(b.id) : Number.MAX_SAFE_INTEGER;
+            return rankA - rankB;
+          });
+        }
       }
 
       function removeSelectedAsset() {
@@ -2091,6 +2331,12 @@
           selectedBlock.remove();
         }
         editorState.assets = editorState.assets.filter((asset) => !selectedIds.has(asset.id));
+        if (editorState.partitionAssets) {
+          for (const partitionKey of PARTITION_KEYS) {
+            const list = Array.isArray(editorState.partitionAssets[partitionKey]) ? editorState.partitionAssets[partitionKey] : [];
+            editorState.partitionAssets[partitionKey] = list.filter((asset) => !selectedIds.has(asset.id));
+          }
+        }
         clearAssetSelection();
         syncBillboardPaddingFromEditorPreview();
         saveEditorState();
@@ -2205,10 +2451,94 @@
           return;
         }
         const selectedIds = new Set(getSelectedAssetBlocks().map((block) => block.dataset.assetId));
-        const mirroredAssets = flatBillboardTrack.querySelectorAll(".flat-billboard-asset");
+        const mirroredAssets = document.querySelectorAll("#flatBillboardTrack .flat-billboard-asset, #flatBillboardPartitionLayers .flat-billboard-asset");
         for (const mirroredAsset of mirroredAssets) {
           const assetId = mirroredAsset.dataset.assetId || "";
           mirroredAsset.classList.toggle("is-selected", selectedIds.has(assetId));
+        }
+      }
+
+      function syncFlatBillboardPartitioned() {
+        if (!(flatBillboardPartitionLayers instanceof HTMLElement)) {
+          return;
+        }
+        flatBillboardTrack.style.display = "none";
+        flatBillboardPartitionLayers.classList.add("is-visible");
+        flatBillboardPartitionLayers.innerHTML = "";
+
+        const scaleFactor = billboardScaleFactor();
+        const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
+        const paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
+        const paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
+        const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
+
+        for (const partitionKey of PARTITION_KEYS) {
+          const layout = PARTITION_LAYOUT[partitionKey];
+          const layer = document.createElement("div");
+          layer.className = "flat-billboard-partition-layer";
+          layer.style.left = layout.offsetRatio * 100 + "%";
+          layer.style.width = layout.widthRatio * 100 + "%";
+
+          const track = document.createElement("div");
+          track.className = "flat-billboard-partition-track";
+          track.style.paddingTop = paddingTB + "px";
+          track.style.paddingBottom = paddingTB + "px";
+          track.style.paddingLeft = paddingLR + "px";
+          track.style.paddingRight = paddingLR + "px";
+          track.style.gap = gap + "px";
+          track.style.alignItems = align;
+
+          const editor = partitionEditorForKey(partitionKey);
+          const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
+          for (const sourceBlock of blocks) {
+            const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
+            if (!editorMetrics) {
+              continue;
+            }
+            const previewImage = sourceBlock.querySelector(".asset-preview-image");
+            const targetBlock = document.createElement("div");
+            targetBlock.className = "flat-billboard-asset";
+            targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
+            targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
+            targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
+
+            if (previewImage instanceof HTMLImageElement) {
+              const assetFrame = document.createElement("div");
+              assetFrame.className = "flat-billboard-asset-frame";
+              assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
+              assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
+              assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
+
+              const assetImage = document.createElement("img");
+              assetImage.className = "flat-billboard-asset-image";
+              assetImage.alt = "";
+              assetImage.decoding = "async";
+              assetImage.loading = "lazy";
+              assetImage.style.width = Math.max(1, editorMetrics.sourceScaledWidth * scaleFactor) + "px";
+              assetImage.style.height = Math.max(1, editorMetrics.sourceScaledHeight * scaleFactor) + "px";
+              assetImage.style.transformOrigin = "50% 50%";
+              assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
+              const src = sourceBlock.dataset.assetSrc || "";
+              const group = sourceBlock.dataset.assetGroup || "";
+              resolvePreviewUrl(src, group)
+                .then((previewUrl) => {
+                  if (assetImage.isConnected) {
+                    assetImage.src = previewUrl;
+                  }
+                })
+                .catch(() => {
+                  targetBlock.classList.add("no-preview");
+                });
+              assetFrame.appendChild(assetImage);
+              targetBlock.appendChild(assetFrame);
+            } else {
+              targetBlock.classList.add("no-preview");
+            }
+            track.appendChild(targetBlock);
+          }
+
+          layer.appendChild(track);
+          flatBillboardPartitionLayers.appendChild(layer);
         }
       }
 
@@ -2216,6 +2546,15 @@
         if (!flatBillboardTrack) {
           return;
         }
+        if (editorState.settings.partitionsEnabled) {
+          syncFlatBillboardPartitioned();
+          return;
+        }
+        if (flatBillboardPartitionLayers instanceof HTMLElement) {
+          flatBillboardPartitionLayers.classList.remove("is-visible");
+          flatBillboardPartitionLayers.innerHTML = "";
+        }
+        flatBillboardTrack.style.display = "";
         const scaleFactor = billboardScaleFactor();
         const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
         let paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
@@ -2441,6 +2780,106 @@
           clearAssetSelection();
         }
       });
+
+      const partitionEditors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+      for (const partitionEditor of partitionEditors) {
+        if (!(partitionEditor instanceof HTMLElement)) {
+          continue;
+        }
+        partitionEditor.addEventListener("click", async (event) => {
+          if (pendingPartitionAsset) {
+            const key = partitionEditor.dataset.partitionKey || "";
+            await placePendingAssetInPartition(key);
+            return;
+          }
+          const block = getAssetBlockFromEventTarget(event.target);
+          if (block) {
+            if (event.shiftKey) {
+              addAssetBlockToSelection(block);
+            } else {
+              selectSingleAssetBlock(block);
+            }
+            return;
+          }
+          if (!event.shiftKey) {
+            clearAssetSelection();
+          }
+        });
+
+        partitionEditor.addEventListener("dragover", (event) => {
+          if (!editorState.settings.partitionsEnabled) {
+            return;
+          }
+          event.preventDefault();
+          partitionEditor.classList.add("is-drop-target");
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "copy";
+          }
+        });
+
+        partitionEditor.addEventListener("dragleave", () => {
+          partitionEditor.classList.remove("is-drop-target");
+        });
+
+        partitionEditor.addEventListener("drop", async (event) => {
+          event.preventDefault();
+          partitionEditor.classList.remove("is-drop-target");
+          const key = partitionEditor.dataset.partitionKey || "";
+          let payload = null;
+          if (event.dataTransfer) {
+            const text = event.dataTransfer.getData("text/plain");
+            if (text) {
+              try {
+                payload = JSON.parse(text);
+              } catch (error) {
+                payload = null;
+              }
+            }
+          }
+          await placePendingAssetInPartition(key, payload);
+        });
+
+        partitionEditor.addEventListener("dragstart", (event) => {
+          if (cropDragState) {
+            event.preventDefault();
+            return;
+          }
+          const block = getAssetBlockFromEventTarget(event.target);
+          if (!block) {
+            event.preventDefault();
+            return;
+          }
+          draggingAssetId = block.dataset.assetId;
+          block.classList.add("is-dragging");
+          selectSingleAssetBlock(block);
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", draggingAssetId);
+          }
+        });
+
+        partitionEditor.addEventListener("dragenter", (event) => {
+          if (!draggingAssetId) {
+            return;
+          }
+          const hoveredBlock = getAssetBlockFromEventTarget(event.target);
+          if (!hoveredBlock || hoveredBlock.dataset.assetId === draggingAssetId) {
+            return;
+          }
+          const draggingBlock = partitionEditor.querySelector('[data-asset-id="' + draggingAssetId + '"]');
+          if (!(draggingBlock instanceof HTMLElement)) {
+            return;
+          }
+          const didSwap = swapAssetBlocks(draggingBlock, hoveredBlock);
+          if (!didSwap) {
+            return;
+          }
+          syncAssetOrderFromDom();
+          saveEditorState();
+          syncFlatBillboardArtworks();
+          positionScaleControls();
+        });
+      }
 
       visualEditorBlock.addEventListener("mousedown", (event) => {
         const target = event.target;
