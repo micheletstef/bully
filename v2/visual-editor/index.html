@@ -1583,8 +1583,8 @@
         rightHandle.setAttribute("aria-label", "Crop right");
         block.appendChild(rightHandle);
 
-        updateAssetBlockSize(block);
         targetEditor.appendChild(block);
+        updateAssetBlockSize(block);
         syncBillboardPaddingFromEditorPreview();
         if (options.select) {
           selectSingleAssetBlock(block);
@@ -3171,6 +3171,7 @@
       }
       applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
       applyPartitionsSetting(editorState.settings.partitionsEnabled, false);
+      updateAllAssetBlockSizes();
       updateScaleControlsAnchorTop();
       setScaleControlsVisible(false);
       updateScaleControlButtons();
