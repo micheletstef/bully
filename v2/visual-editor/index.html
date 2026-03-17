@@ -2846,15 +2846,26 @@
 
         ensurePartitionSettingsState();
 
+        const billboardWidth = Math.max(1, flatBillboard.clientWidth || 1);
+        const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
+
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
           const partitionSettings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
-          const scaleFactor = billboardScaleFactor(editor);
+          const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
-          const paddingTB = (Number(partitionSettings.paddingTB) || 0) * scaleFactor;
-          const paddingLR = (Number(partitionSettings.paddingLR) || 0) * scaleFactor;
-          const gap = (Number(partitionSettings.assetGap) || 0) * scaleFactor;
+          const partitionWidthUnits = partitionArtboardWidth(partitionKey);
+          const isVertical = partitionSettings.orientation === "vertical";
+          const logicalArtboardWidth = (isVertical ? ARTBOARD_HEIGHT : partitionWidthUnits) * baseScaleFactor;
+          const logicalArtboardHeight = (isVertical ? partitionWidthUnits : ARTBOARD_HEIGHT) * baseScaleFactor;
+          const layerWidthPx = billboardWidth * layout.widthRatio;
+          const layerHeightPx = billboardHeight;
+          const fitScale = Math.max(0.0001, Math.min(layerWidthPx / Math.max(1, logicalArtboardWidth), layerHeightPx / Math.max(1, logicalArtboardHeight), 1));
+          const renderScale = baseScaleFactor * fitScale;
+          const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
+          const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
+          const gap = (Number(partitionSettings.assetGap) || 0) * renderScale;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
           layer.style.left = layout.offsetRatio * 100 + "%";
@@ -2862,7 +2873,18 @@
           layer.style.top = "0";
           layer.style.bottom = "0";
           layer.style.height = "auto";
-          layer.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
+          layer.style.backgroundColor = "transparent";
+
+          const artboard = document.createElement("div");
+          artboard.className = "flat-billboard-partition-artboard";
+          artboard.style.position = "absolute";
+          artboard.style.left = "50%";
+          artboard.style.top = "50%";
+          artboard.style.transform = "translate(-50%, -50%)";
+          artboard.style.overflow = "hidden";
+          artboard.style.width = Math.max(1, logicalArtboardWidth * fitScale) + "px";
+          artboard.style.height = Math.max(1, logicalArtboardHeight * fitScale) + "px";
+          artboard.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
           track.className = "flat-billboard-partition-track";
@@ -2884,14 +2906,14 @@
             const targetBlock = document.createElement("div");
             targetBlock.className = "flat-billboard-asset";
             targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
-            targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
-            targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
+            targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * renderScale) + "px";
+            targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * renderScale) + "px";
 
             if (previewImage instanceof HTMLImageElement) {
               const assetFrame = document.createElement("div");
               assetFrame.className = "flat-billboard-asset-frame";
-              assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * scaleFactor) + "px";
-              assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * scaleFactor) + "px";
+              assetFrame.style.width = Math.max(1, editorMetrics.croppedScaledWidth * renderScale) + "px";
+              assetFrame.style.height = Math.max(1, editorMetrics.croppedScaledHeight * renderScale) + "px";
               assetFrame.style.transform = "translate(-50%, -50%) rotate(" + editorMetrics.rotationDegrees + "deg)";
 
               const assetImage = document.createElement("img");
@@ -2899,10 +2921,10 @@
               assetImage.alt = "";
               assetImage.decoding = "async";
               assetImage.loading = "lazy";
-              assetImage.style.width = Math.max(1, editorMetrics.sourceScaledWidth * scaleFactor) + "px";
-              assetImage.style.height = Math.max(1, editorMetrics.sourceScaledHeight * scaleFactor) + "px";
+              assetImage.style.width = Math.max(1, editorMetrics.sourceScaledWidth * renderScale) + "px";
+              assetImage.style.height = Math.max(1, editorMetrics.sourceScaledHeight * renderScale) + "px";
               assetImage.style.transformOrigin = "50% 50%";
-              assetImage.style.transform = "translateX(" + editorMetrics.offsetX * scaleFactor + "px)";
+              assetImage.style.transform = "translateX(" + editorMetrics.offsetX * renderScale + "px)";
               const src = sourceBlock.dataset.assetSrc || "";
               const group = sourceBlock.dataset.assetGroup || "";
               resolvePreviewUrl(src, group, partitionSettings.assetColor)
@@ -2922,7 +2944,8 @@
             track.appendChild(targetBlock);
           }
 
-          layer.appendChild(track);
+          artboard.appendChild(track);
+          layer.appendChild(artboard);
           flatBillboardPartitionLayers.appendChild(layer);
         }
         syncFlatBillboardSelectionState();
