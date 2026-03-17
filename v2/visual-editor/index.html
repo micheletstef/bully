@@ -825,8 +825,6 @@
           <select id="marqueeDirectionControl" class="settings-input">
             <option value="rtl">right to left</option>
             <option value="ltr">left to right</option>
-            <option value="btt">bottom to top</option>
-            <option value="ttb">top to bottom</option>
           </select>
         </div>
         <div class="settings-row">
@@ -970,6 +968,7 @@
       let billboardMarqueeOffsetY = 0;
       let editorMarqueeOffsetX = 0;
       let editorMarqueeOffsetY = 0;
+      let viewportFrameDragState = null;
       let pendingPartitionAsset = null;
       const PARTITION_KEYS = ["left", "curve", "right"];
       const ARTBOARD_WIDTH = 5900;
@@ -1158,7 +1157,7 @@
           const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
           const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
           const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
-          const marqueeDirection = ["rtl", "ltr", "btt", "ttb"].includes(savedMarqueeDirection) ? savedMarqueeDirection : "rtl";
+          const marqueeDirection = savedMarqueeDirection === "ltr" ? "ltr" : "rtl";
           const savedOrientation = String(parsed?.settings?.orientation || "horizontal").toLowerCase();
           const orientation = savedOrientation === "vertical" ? "vertical" : "horizontal";
           const marqueeSpeed = Number.isFinite(savedMarqueeSpeed) ? Math.max(5, Math.min(600, savedMarqueeSpeed)) : 80;
@@ -2243,11 +2242,9 @@
       }
 
       function configureMarqueeLayout() {
-        const direction = editorState.settings.marqueeDirection;
-        const isVertical = direction === "btt" || direction === "ttb";
-        flatBillboardTrack.style.flexDirection = isVertical ? "column" : "row";
-        flatBillboardTrack.style.width = isVertical ? "100%" : "max-content";
-        flatBillboardTrack.style.height = isVertical ? "max-content" : "100%";
+        flatBillboardTrack.style.flexDirection = "row";
+        flatBillboardTrack.style.width = "max-content";
+        flatBillboardTrack.style.height = "100%";
       }
 
       function buildMarqueeCopies() {
@@ -2402,14 +2399,6 @@
           const delta = speed * dt;
           const rawDirection = editorState.settings.marqueeDirection;
           const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
-          let direction = rawDirection;
-          if (rotatedBillboard) {
-            if (rawDirection === "rtl") {
-              direction = "btt";
-            } else if (rawDirection === "ltr") {
-              direction = "ttb";
-            }
-          }
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
           const frameScale = Math.max(0.0001, billboardScaleFactor());
           const rotateFrame = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
@@ -2428,11 +2417,8 @@
           } else if (rawDirection === "ltr") {
             editorMarqueeOffsetX = -mappedTravelPx;
             editorMarqueeOffsetY = 0;
-          } else if (rawDirection === "btt") {
-            editorMarqueeOffsetY = -marqueeProgressPx;
-            editorMarqueeOffsetX = 0;
-          } else if (rawDirection === "ttb") {
-            editorMarqueeOffsetY = -(cycle - marqueeProgressPx);
+          } else {
+            editorMarqueeOffsetY = 0;
             editorMarqueeOffsetX = 0;
           }
           if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
@@ -2440,17 +2426,14 @@
             // projected billboard slice matches the red frame selection.
             billboardMarqueeOffsetX = 0;
             billboardMarqueeOffsetY = editorMarqueeOffsetX;
-          } else if (direction === "rtl") {
+          } else if (rawDirection === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
-          } else if (direction === "ltr") {
+          } else if (rawDirection === "ltr") {
             billboardMarqueeOffsetX = -marqueeProgressPx;
             billboardMarqueeOffsetY = 0;
-          } else if (direction === "btt") {
-            billboardMarqueeOffsetY = -marqueeProgressPx;
-            billboardMarqueeOffsetX = 0;
-          } else if (direction === "ttb") {
-            billboardMarqueeOffsetY = -(cycle - marqueeProgressPx);
+          } else {
+            billboardMarqueeOffsetY = 0;
             billboardMarqueeOffsetX = 0;
           }
           applyFlatBillboardTrackTransform();
@@ -2480,7 +2463,7 @@
         const normalizedSpeed = Number.isFinite(parsedSpeed)
           ? Math.max(5, Math.min(600, parsedSpeed))
           : Math.max(5, Math.min(600, Number(editorState.settings.marqueeSpeed) || 80));
-        const normalizedDirection = ["rtl", "ltr", "btt", "ttb"].includes(direction) ? direction : "rtl";
+        const normalizedDirection = direction === "ltr" ? "ltr" : "rtl";
 
         editorState.settings.marqueeEnabled = normalizedEnabled;
         editorState.settings.marqueeSpeed = normalizedSpeed;
@@ -2664,6 +2647,74 @@
         syncAssetStateFromBlock(block);
         saveEditorState();
         cropDragState = null;
+      }
+
+      function beginViewportFrameDrag(event) {
+        if (event.button !== 0) {
+          return false;
+        }
+        if (!(visualEditorBlock instanceof HTMLElement) || !(billboardViewportFrame instanceof HTMLElement)) {
+          return false;
+        }
+        if (editorState.settings.marqueeEnabled || editorState.settings.partitionsEnabled) {
+          return false;
+        }
+        if (billboardViewportFrame.style.display === "none") {
+          return false;
+        }
+        const frameRect = billboardViewportFrame.getBoundingClientRect();
+        if (frameRect.width <= 0 || frameRect.height <= 0) {
+          return false;
+        }
+        const x = event.clientX;
+        const y = event.clientY;
+        const insideFrame = x >= frameRect.left && x <= frameRect.right && y >= frameRect.top && y <= frameRect.bottom;
+        if (!insideFrame) {
+          return false;
+        }
+        const edgeThreshold = 8;
+        const nearFrameEdge =
+          Math.abs(x - frameRect.left) <= edgeThreshold
+          || Math.abs(frameRect.right - x) <= edgeThreshold
+          || Math.abs(y - frameRect.top) <= edgeThreshold
+          || Math.abs(frameRect.bottom - y) <= edgeThreshold;
+        if (!nearFrameEdge) {
+          return false;
+        }
+
+        viewportFrameDragState = {
+          startClientX: x,
+          startScrollLeft: editorStage.scrollLeft,
+          maxScrollLeft: Math.max(0, editorStage.scrollWidth - editorStage.clientWidth),
+        };
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "ew-resize";
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      }
+
+      function continueViewportFrameDrag(event) {
+        if (!viewportFrameDragState) {
+          return;
+        }
+        const deltaX = event.clientX - viewportFrameDragState.startClientX;
+        const nextScrollLeft = Math.max(
+          0,
+          Math.min(viewportFrameDragState.maxScrollLeft, viewportFrameDragState.startScrollLeft + deltaX)
+        );
+        editorStage.scrollLeft = nextScrollLeft;
+        syncFlatBillboardViewportOffset();
+        positionScaleControls();
+      }
+
+      function endViewportFrameDrag() {
+        if (!viewportFrameDragState) {
+          return;
+        }
+        viewportFrameDragState = null;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
       }
 
       function animateSwapWithFlip(blockA, blockB, swapAction) {
@@ -3045,15 +3096,11 @@
         const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
         const direction = editorState.settings.marqueeDirection;
         const horizontalMarquee = editorState.settings.marqueeEnabled && (direction === "rtl" || direction === "ltr");
-        const verticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
 
         // For seamless wrapping, remove padding on the scrolling axis so
         // original and duplicate runs are truly back-to-back.
         if (horizontalMarquee) {
           paddingLR = 0;
-        }
-        if (verticalMarquee) {
-          paddingTB = 0;
         }
 
         flatBillboardTrack.style.paddingTop = paddingTB + "px";
@@ -3401,6 +3448,9 @@
       }
 
       visualEditorBlock.addEventListener("mousedown", (event) => {
+        if (beginViewportFrameDrag(event)) {
+          return;
+        }
         const target = event.target;
         if (!(target instanceof HTMLElement) || !target.classList.contains("asset-crop-handle")) {
           return;
@@ -3411,10 +3461,12 @@
       });
 
       window.addEventListener("mousemove", (event) => {
+        continueViewportFrameDrag(event);
         continueCropDrag(event);
       });
 
       window.addEventListener("mouseup", () => {
+        endViewportFrameDrag();
         endCropDrag();
       });
 
