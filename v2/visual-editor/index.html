@@ -2241,11 +2241,32 @@
       }
 
       function configureMarqueeLayout() {
-        const direction = editorState.settings.marqueeDirection;
+        const direction = effectiveMarqueeDirection(editorState.settings.marqueeDirection);
         const isVertical = direction === "btt" || direction === "ttb";
         flatBillboardTrack.style.flexDirection = isVertical ? "column" : "row";
         flatBillboardTrack.style.width = isVertical ? "100%" : "max-content";
         flatBillboardTrack.style.height = isVertical ? "max-content" : "100%";
+      }
+
+      function effectiveMarqueeDirection(directionValue) {
+        const raw = ["rtl", "ltr", "btt", "ttb"].includes(directionValue) ? directionValue : "rtl";
+        const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        if (!rotatedBillboard) {
+          return raw;
+        }
+        if (raw === "rtl") {
+          return "ttb";
+        }
+        if (raw === "ltr") {
+          return "btt";
+        }
+        if (raw === "btt") {
+          return "rtl";
+        }
+        if (raw === "ttb") {
+          return "ltr";
+        }
+        return raw;
       }
 
       function buildMarqueeCopies() {
@@ -2257,7 +2278,7 @@
         if (!originals.length) {
           return;
         }
-        const direction = editorState.settings.marqueeDirection;
+        const direction = effectiveMarqueeDirection(editorState.settings.marqueeDirection);
         const horizontal = direction === "rtl" || direction === "ltr";
         const viewportLength = horizontal
           ? Math.max(1, flatBillboard.clientWidth || 1)
@@ -2285,7 +2306,7 @@
         if (!originals.length) {
           return 0;
         }
-        const direction = editorState.settings.marqueeDirection;
+        const direction = effectiveMarqueeDirection(editorState.settings.marqueeDirection);
         const horizontal = direction === "rtl" || direction === "ltr";
         const firstOriginal = originals[0];
         const firstCopy = flatBillboardTrack.querySelector(".flat-billboard-asset.marquee-copy");
@@ -2391,7 +2412,7 @@
         if (cycle > 0) {
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
           const delta = speed * dt;
-          const direction = editorState.settings.marqueeDirection;
+          const direction = effectiveMarqueeDirection(editorState.settings.marqueeDirection);
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
           if (direction === "rtl") {
             billboardMarqueeOffsetX = -marqueeProgressPx;
@@ -2994,7 +3015,7 @@
         let paddingTB = (Number(editorState.settings.paddingTB) || 0) * scaleFactor;
         let paddingLR = (Number(editorState.settings.paddingLR) || 0) * scaleFactor;
         const gap = (Number(editorState.settings.assetGap) || 0) * scaleFactor;
-        const direction = editorState.settings.marqueeDirection;
+        const direction = effectiveMarqueeDirection(editorState.settings.marqueeDirection);
         const horizontalMarquee = editorState.settings.marqueeEnabled && (direction === "rtl" || direction === "ltr");
         const verticalMarquee = editorState.settings.marqueeEnabled && (direction === "btt" || direction === "ttb");
 
