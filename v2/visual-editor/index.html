@@ -2388,6 +2388,56 @@
         }
       }
 
+      function applyMarqueePhaseOffsets(cycle) {
+        if (!(cycle > 0)) {
+          editorMarqueeOffsetX = 0;
+          editorMarqueeOffsetY = 0;
+          billboardMarqueeOffsetX = 0;
+          billboardMarqueeOffsetY = 0;
+          return;
+        }
+        const rawDirection = editorState.settings.marqueeDirection;
+        const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        const frameScale = Math.max(0.0001, billboardScaleFactor());
+        const rotateFrame = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        const billboardSpan = rotateFrame
+          ? Math.max(1, flatBillboard?.clientHeight || 1)
+          : Math.max(1, flatBillboard?.clientWidth || 1);
+        const editorSpan = Math.max(1, visualEditorBlock?.clientWidth || 1);
+        const frameSpanInEditor = billboardSpan / frameScale;
+        const maxEditorTravel = Math.max(0, editorSpan - frameSpanInEditor);
+        const maxEditorTravelPx = maxEditorTravel * frameScale;
+        const progressRatio = marqueeProgressPx / cycle;
+        const mappedTravelPx = maxEditorTravelPx * progressRatio;
+        if (rawDirection === "rtl") {
+          editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
+          editorMarqueeOffsetY = 0;
+        } else if (rawDirection === "ltr") {
+          editorMarqueeOffsetX = -mappedTravelPx;
+          editorMarqueeOffsetY = 0;
+        } else {
+          editorMarqueeOffsetY = 0;
+          editorMarqueeOffsetX = 0;
+        }
+        if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
+          // In rotated billboard mode, mirror the editor-frame phase so the
+          // projected billboard slice matches the red frame selection.
+          billboardMarqueeOffsetX = 0;
+          billboardMarqueeOffsetY = editorMarqueeOffsetX;
+        } else if (rawDirection === "rtl") {
+          const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
+          const mappedBillboardTravelPx = maxBillboardTravelPx * progressRatio;
+          billboardMarqueeOffsetX = -(maxBillboardTravelPx - mappedBillboardTravelPx);
+          billboardMarqueeOffsetY = 0;
+        } else if (rawDirection === "ltr") {
+          billboardMarqueeOffsetX = -marqueeProgressPx;
+          billboardMarqueeOffsetY = 0;
+        } else {
+          billboardMarqueeOffsetY = 0;
+          billboardMarqueeOffsetX = 0;
+        }
+      }
+
       function stepMarquee(now) {
         if (!editorState.settings.marqueeEnabled) {
           return;
@@ -2401,45 +2451,8 @@
         if (cycle > 0) {
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
           const delta = speed * dt;
-          const rawDirection = editorState.settings.marqueeDirection;
-          const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
           marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
-          const frameScale = Math.max(0.0001, billboardScaleFactor());
-          const rotateFrame = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
-          const billboardSpan = rotateFrame
-            ? Math.max(1, flatBillboard?.clientHeight || 1)
-            : Math.max(1, flatBillboard?.clientWidth || 1);
-          const editorSpan = Math.max(1, visualEditorBlock?.clientWidth || 1);
-          const frameSpanInEditor = billboardSpan / frameScale;
-          const maxEditorTravel = Math.max(0, editorSpan - frameSpanInEditor);
-          const maxEditorTravelPx = maxEditorTravel * frameScale;
-          const progressRatio = cycle > 0 ? (marqueeProgressPx / cycle) : 0;
-          const mappedTravelPx = maxEditorTravelPx * progressRatio;
-          if (rawDirection === "rtl") {
-            editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
-            editorMarqueeOffsetY = 0;
-          } else if (rawDirection === "ltr") {
-            editorMarqueeOffsetX = -mappedTravelPx;
-            editorMarqueeOffsetY = 0;
-          } else {
-            editorMarqueeOffsetY = 0;
-            editorMarqueeOffsetX = 0;
-          }
-          if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
-            // In rotated billboard mode, mirror the editor-frame phase so the
-            // projected billboard slice matches the red frame selection.
-            billboardMarqueeOffsetX = 0;
-            billboardMarqueeOffsetY = editorMarqueeOffsetX;
-          } else if (rawDirection === "rtl") {
-            billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
-            billboardMarqueeOffsetY = 0;
-          } else if (rawDirection === "ltr") {
-            billboardMarqueeOffsetX = -marqueeProgressPx;
-            billboardMarqueeOffsetY = 0;
-          } else {
-            billboardMarqueeOffsetY = 0;
-            billboardMarqueeOffsetX = 0;
-          }
+          applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
         }
         marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
@@ -2501,6 +2514,7 @@
         syncFlatBillboardArtworks();
         const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
         if (normalizedEnabled && cycle > 0) {
+          applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
           startMarqueeAnimation();
         }
