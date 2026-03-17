@@ -2354,8 +2354,9 @@
         const trackY = billboardViewportOffsetY + editorMarqueeOffsetY;
         const frameLeft = -trackX / scale;
         const frameTop = -trackY / scale;
-        const frameWidth = billboardWidth / scale;
-        const frameHeight = billboardHeight / scale;
+        const rotateArtwork = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
+        const frameWidth = (rotateArtwork ? billboardHeight : billboardWidth) / scale;
+        const frameHeight = (rotateArtwork ? billboardWidth : billboardHeight) / scale;
 
         billboardViewportFrame.style.display = "block";
         billboardViewportFrame.style.left = frameLeft + "px";
