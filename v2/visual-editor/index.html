@@ -393,14 +393,6 @@
         width: calc(var(--editor-height) * 5900 / 3480);
       }
 
-      .visual-editor-block.is-vertical {
-        min-width: calc(var(--editor-height) * 3480 / 5900);
-      }
-
-      .partition-visual-editor-block.is-vertical {
-        width: calc(var(--editor-height) * 3480 / 5900);
-      }
-
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -991,10 +983,6 @@
 
       function isVerticalOrientation() {
         return editorState?.settings?.orientation === "vertical";
-      }
-
-      function artboardAspectRatio() {
-        return isVerticalOrientation() ? (ARTBOARD_HEIGHT / ARTBOARD_WIDTH) : (ARTBOARD_WIDTH / ARTBOARD_HEIGHT);
       }
 
       function defaultPartitionSettings() {
@@ -2474,16 +2462,9 @@
           orientationControl.value = normalized;
         }
         const isVertical = normalized === "vertical";
-        const editors = [visualEditorBlock, partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
-        for (const editor of editors) {
-          if (editor instanceof HTMLElement) {
-            editor.classList.toggle("is-vertical", isVertical);
-          }
-        }
         if (flatBillboard instanceof HTMLElement) {
           flatBillboard.classList.toggle("is-vertical", isVertical);
         }
-        updateAllAssetBlockSizes();
         syncBillboardPaddingFromEditorPreview();
         syncFlatBillboardArtworks();
         updateEditorViewportFrame();
@@ -2754,7 +2735,7 @@
             : 200)
         );
         const topRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingTB) || 0) / editorHeight));
-        const referenceWidthFromHeight = Math.max(1, editorHeight * artboardAspectRatio());
+        const referenceWidthFromHeight = Math.max(1, (editorHeight * ARTBOARD_WIDTH) / ARTBOARD_HEIGHT);
         const leftRatio = Math.max(0, Math.min(0.49, (Number(target.settings.paddingLR) || 0) / referenceWidthFromHeight));
         flatBillboard.style.setProperty("--safe-top-ratio", String(topRatio));
         flatBillboard.style.setProperty("--safe-bottom-ratio", String(topRatio));
