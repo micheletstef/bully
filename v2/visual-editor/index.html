@@ -2424,7 +2424,14 @@
             editorMarqueeOffsetY = -(cycle - marqueeProgressPx);
             editorMarqueeOffsetX = 0;
           }
-          if (direction === "rtl") {
+          if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
+            // Keep the same marquee phase/start logic as the visual editor frame,
+            // but project it on the vertical axis for rotated billboard mode.
+            billboardMarqueeOffsetX = 0;
+            billboardMarqueeOffsetY = rawDirection === "rtl"
+              ? -(cycle - marqueeProgressPx)
+              : -marqueeProgressPx;
+          } else if (direction === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
           } else if (direction === "ltr") {
@@ -2434,11 +2441,7 @@
             billboardMarqueeOffsetY = -marqueeProgressPx;
             billboardMarqueeOffsetX = 0;
           } else if (direction === "ttb") {
-            const remappedVertical =
-              rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr");
-            billboardMarqueeOffsetY = remappedVertical
-              ? marqueeProgressPx
-              : -(cycle - marqueeProgressPx);
+            billboardMarqueeOffsetY = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetX = 0;
           }
           applyFlatBillboardTrackTransform();
