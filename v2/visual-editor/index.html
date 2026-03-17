@@ -2430,7 +2430,9 @@
           billboardMarqueeOffsetX = -(maxBillboardTravelPx - mappedBillboardTravelPx);
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          billboardMarqueeOffsetX = -marqueeProgressPx;
+          const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
+          const mappedBillboardTravelPx = maxBillboardTravelPx * progressRatio;
+          billboardMarqueeOffsetX = -mappedBillboardTravelPx;
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
