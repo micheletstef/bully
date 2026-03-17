@@ -2425,12 +2425,12 @@
             editorMarqueeOffsetX = 0;
           }
           if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
-            // Keep the same marquee phase/start logic as the visual editor frame,
-            // but project it on the vertical axis for rotated billboard mode.
+            // Use the visible equivalent cycle phase for rotated billboard mode so
+            // the projected slice matches what the frame indicates immediately.
             billboardMarqueeOffsetX = 0;
             billboardMarqueeOffsetY = rawDirection === "rtl"
-              ? -(cycle - marqueeProgressPx)
-              : marqueeProgressPx;
+              ? marqueeProgressPx
+              : -(cycle - marqueeProgressPx);
           } else if (direction === "rtl") {
             billboardMarqueeOffsetX = -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetY = 0;
