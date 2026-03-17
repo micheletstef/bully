@@ -2409,7 +2409,18 @@
         const maxEditorTravelPx = maxEditorTravel * frameScale;
         const progressRatio = marqueeProgressPx / cycle;
         const mappedTravelPx = maxEditorTravelPx * progressRatio;
-        if (rawDirection === "rtl") {
+        const maxBillboardTravelPx = Math.max(0, cycle - billboardSpan);
+        if (!rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
+          const wrappedTravelPx = maxBillboardTravelPx > 0
+            ? (marqueeProgressPx % maxBillboardTravelPx)
+            : 0;
+          if (rawDirection === "rtl") {
+            editorMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
+          } else {
+            editorMarqueeOffsetX = -wrappedTravelPx;
+          }
+          editorMarqueeOffsetY = 0;
+        } else if (rawDirection === "rtl") {
           editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
@@ -2425,7 +2436,7 @@
           billboardMarqueeOffsetX = 0;
           billboardMarqueeOffsetY = -editorMarqueeOffsetX;
         } else if (rawDirection === "rtl") {
-          const startOffsetX = -(Math.max(0, cycle - billboardSpan));
+          const startOffsetX = -maxBillboardTravelPx;
           // Travel one full run so wrap lands on an equivalent duplicate slice.
           billboardMarqueeOffsetX = startOffsetX + marqueeProgressPx;
           billboardMarqueeOffsetY = 0;
