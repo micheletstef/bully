@@ -2441,15 +2441,15 @@
           const wrappedTravelPx = maxBillboardTravelPx > 0
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
-          // RTL should move content leftward across the visible run.
-          billboardMarqueeOffsetX = -wrappedTravelPx;
+          // RTL starts right-aligned, then travels left across duplicated runs.
+          billboardMarqueeOffsetX = -(maxBillboardTravelPx + wrappedTravelPx);
           billboardMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           const wrappedTravelPx = maxBillboardTravelPx > 0
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
-          // LTR is the mirrored travel range so content moves rightward.
-          billboardMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
+          // LTR starts left-aligned, then travels rightward.
+          billboardMarqueeOffsetX = wrappedTravelPx;
           billboardMarqueeOffsetY = 0;
         } else {
           billboardMarqueeOffsetY = 0;
