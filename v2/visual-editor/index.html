@@ -2427,7 +2427,11 @@
             billboardMarqueeOffsetY = -marqueeProgressPx;
             billboardMarqueeOffsetX = 0;
           } else if (direction === "ttb") {
-            billboardMarqueeOffsetY = -(cycle - marqueeProgressPx);
+            const remappedVertical =
+              rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr");
+            billboardMarqueeOffsetY = remappedVertical
+              ? (cycle - marqueeProgressPx)
+              : -(cycle - marqueeProgressPx);
             billboardMarqueeOffsetX = 0;
           }
           applyFlatBillboardTrackTransform();
