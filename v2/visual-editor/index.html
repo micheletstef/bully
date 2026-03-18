@@ -2594,7 +2594,10 @@
           let mainAxisOffset = 0;
           if (orientation === "vertical") {
             const containerMainSpan = Math.max(1, artboard.clientWidth || 1);
-            const alignmentSpan = containerMainSpan - originalMainSpan;
+            // Keep alignment offsets bounded so center/bottom cannot push content
+            // fully out of the partition when run length exceeds viewport span.
+            const clampedMainSpan = Math.min(containerMainSpan, originalMainSpan);
+            const alignmentSpan = Math.max(0, containerMainSpan - clampedMainSpan);
             // Because of rotate(-90deg), main-axis start renders at the bottom.
             if (alignKey === "top") {
               mainAxisOffset = alignmentSpan;
