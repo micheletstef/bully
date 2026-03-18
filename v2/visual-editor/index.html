@@ -2449,9 +2449,9 @@
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           if (rotatedBillboard) {
-            // Keep rotated right-to-left frame phase exactly in lockstep with
-            // the billboard phase mapping (frameX = -billboardY).
-            editorMarqueeOffsetX = cycleProgressPx - maxBillboardTravelPx - cycle;
+            // Keep the vertical right-to-left frame contained in the editor
+            // while moving right->left across the full marquee cycle.
+            editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
           } else {
             editorMarqueeOffsetX = -mappedTravelPx;
           }
@@ -2501,7 +2501,7 @@
         if (cycle > 0) {
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
           const delta = speed * dt;
-          marqueeProgressPx = (marqueeProgressPx + delta) % cycle;
+          marqueeProgressPx += delta;
           applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
         }
