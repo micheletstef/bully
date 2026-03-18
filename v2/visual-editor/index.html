@@ -2455,8 +2455,9 @@
             // beginning of the artboard bottom-aligned, then move downward.
             billboardMarqueeOffsetY = cycleProgressPx;
           } else {
-            // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
-            billboardMarqueeOffsetY = -cycleProgressPx;
+            // Vertical mode (UI label: right to left): start with the end of
+            // the artboard top-aligned, then continue in the same direction.
+            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx;
           }
         } else if (rawDirection === "rtl") {
           // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
