@@ -790,9 +790,9 @@
         position: absolute;
         inset: 0;
         display: none;
-        background: #0f1117;
+        background: #fff;
         overflow: hidden;
-        pointer-events: none;
+        pointer-events: auto;
       }
 
       .flat-billboard-3d-canvas {
@@ -1325,6 +1325,7 @@
       let marqueeVisibilityObserver = null;
       let previewMode = "flat";
       let preview3dRaf = null;
+      let preview3dDragState = null;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1344,6 +1345,20 @@
         targetX: 0,
         targetY: 0,
         targetZ: 0,
+      };
+      const PREVIEW3D_CAMERA_LIMITS = {
+        pitchMin: -0.6,
+        pitchMax: 1.4,
+        perspectiveMin: 0.1,
+        perspectiveMax: 2.5,
+        zoomMin: 0.12,
+        zoomMax: 4.8,
+        targetXMin: -3500,
+        targetXMax: 3500,
+        targetYMin: -5000,
+        targetYMax: 6000,
+        targetZMin: -4500,
+        targetZMax: 4500,
       };
       const PREVIEW3D_TEXTURE_HEIGHT = 1400;
       const preview3dThreeState = {
@@ -1391,6 +1406,7 @@
         if (normalized === "3d") {
           startPreview3dLoop();
         } else {
+          clearPreview3dDragState();
           stopPreview3dLoop();
         }
         if (persist && editorState && editorState.settings) {
@@ -1465,6 +1481,18 @@
         return typeof window !== "undefined" ? window.THREE || null : null;
       }
 
+      function clampPreview3dCamera() {
+        PREVIEW3D_CAMERA.pitch = Math.min(PREVIEW3D_CAMERA_LIMITS.pitchMax, Math.max(PREVIEW3D_CAMERA_LIMITS.pitchMin, PREVIEW3D_CAMERA.pitch));
+        PREVIEW3D_CAMERA.perspective = Math.min(
+          PREVIEW3D_CAMERA_LIMITS.perspectiveMax,
+          Math.max(PREVIEW3D_CAMERA_LIMITS.perspectiveMin, PREVIEW3D_CAMERA.perspective)
+        );
+        PREVIEW3D_CAMERA.zoom = Math.min(PREVIEW3D_CAMERA_LIMITS.zoomMax, Math.max(PREVIEW3D_CAMERA_LIMITS.zoomMin, PREVIEW3D_CAMERA.zoom));
+        PREVIEW3D_CAMERA.targetX = Math.min(PREVIEW3D_CAMERA_LIMITS.targetXMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetXMin, PREVIEW3D_CAMERA.targetX));
+        PREVIEW3D_CAMERA.targetY = Math.min(PREVIEW3D_CAMERA_LIMITS.targetYMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetYMin, PREVIEW3D_CAMERA.targetY));
+        PREVIEW3D_CAMERA.targetZ = Math.min(PREVIEW3D_CAMERA_LIMITS.targetZMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetZMin, PREVIEW3D_CAMERA.targetZ));
+      }
+
       function createCurvedBillboardGeometry(THREE) {
         const widthSegments = 220;
         const geometry = new THREE.PlaneGeometry(ARTBOARD_WIDTH, ARTBOARD_HEIGHT, widthSegments, 1);
@@ -1506,10 +1534,10 @@
           alpha: true,
         });
         renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio || 1)));
-        renderer.setClearColor(0x0f1117, 1);
+        renderer.setClearColor(0xffffff, 1);
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0f1117);
+        scene.background = new THREE.Color(0xffffff);
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
         scene.add(ambientLight);
@@ -1591,6 +1619,104 @@
           Math.cos(yaw) * cosPitch * radius
         );
         camera.lookAt(PREVIEW3D_CAMERA.targetX, PREVIEW3D_CAMERA.targetY, PREVIEW3D_CAMERA.targetZ);
+      }
+
+      function clearPreview3dDragState() {
+        preview3dDragState = null;
+        if (flatBillboard3dCanvas instanceof HTMLCanvasElement) {
+          flatBillboard3dCanvas.style.cursor = "grab";
+        }
+      }
+
+      function applyPreview3dDrag(clientX, clientY) {
+        if (!preview3dDragState || !(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+          return;
+        }
+        const dx = clientX - preview3dDragState.lastX;
+        const dy = clientY - preview3dDragState.lastY;
+        preview3dDragState.lastX = clientX;
+        preview3dDragState.lastY = clientY;
+
+        if (preview3dDragState.dragMode === "pan") {
+          const canvasHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+          const perspectiveFactor = Math.min(2.5, Math.max(0.1, PREVIEW3D_CAMERA.perspective));
+          const radius = (4200 * PREVIEW3D_CAMERA.zoom) / perspectiveFactor;
+          const panScale = (radius / canvasHeight) * 2.2;
+          PREVIEW3D_CAMERA.targetX -= dx * panScale;
+          PREVIEW3D_CAMERA.targetY += dy * panScale;
+        } else {
+          PREVIEW3D_CAMERA.yaw += dx * 0.005;
+          PREVIEW3D_CAMERA.pitch -= dy * 0.004;
+        }
+
+        clampPreview3dCamera();
+        if (previewMode === "3d") {
+          drawCurvedBillboard3dFrame();
+        }
+      }
+
+      function setupPreview3dCanvasInteraction() {
+        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+          return;
+        }
+        flatBillboard3dCanvas.style.cursor = "grab";
+        flatBillboard3dCanvas.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+        });
+        flatBillboard3dCanvas.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) {
+            return;
+          }
+          if (previewMode !== "3d") {
+            return;
+          }
+          const dragMode = event.shiftKey ? "pan" : "orbit";
+          preview3dDragState = {
+            lastX: event.clientX,
+            lastY: event.clientY,
+            dragMode,
+          };
+          flatBillboard3dCanvas.style.cursor = "grabbing";
+          try {
+            flatBillboard3dCanvas.setPointerCapture(event.pointerId);
+          } catch (error) {
+            // Ignore pointer capture failures.
+          }
+          event.preventDefault();
+        });
+        flatBillboard3dCanvas.addEventListener("pointermove", (event) => {
+          if (!preview3dDragState) {
+            return;
+          }
+          applyPreview3dDrag(event.clientX, event.clientY);
+        });
+        flatBillboard3dCanvas.addEventListener("pointerup", () => {
+          clearPreview3dDragState();
+        });
+        flatBillboard3dCanvas.addEventListener("pointercancel", () => {
+          clearPreview3dDragState();
+        });
+        flatBillboard3dCanvas.addEventListener("pointerleave", () => {
+          clearPreview3dDragState();
+        });
+        flatBillboard3dCanvas.addEventListener(
+          "wheel",
+          (event) => {
+            if (previewMode !== "3d") {
+              return;
+            }
+            const delta = Number(event.deltaY) || 0;
+            if (!delta) {
+              return;
+            }
+            const factor = Math.exp(delta * 0.0012);
+            PREVIEW3D_CAMERA.zoom *= factor;
+            clampPreview3dCamera();
+            drawCurvedBillboard3dFrame();
+            event.preventDefault();
+          },
+          { passive: false }
+        );
       }
 
       function drawFlatBillboardSourceCanvas(targetWidth, targetHeight) {
@@ -5564,6 +5690,7 @@
           marqueeVisibilityObserver.disconnect();
           marqueeVisibilityObserver = null;
         }
+        clearPreview3dDragState();
         stopMarqueeAnimation();
         stopPreview3dLoop();
         if (preview3dThreeState.texture && typeof preview3dThreeState.texture.dispose === "function") {
@@ -5585,6 +5712,7 @@
         }
       });
 
+      setupPreview3dCanvasInteraction();
       initMarqueeVisibilityTracking();
       if (!loadSnapshotFromPathIfPresent()) {
         loadBillboardMakerState({ updatePath: false, replaceHistory: true });
