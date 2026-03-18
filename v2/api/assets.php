@@ -7,7 +7,7 @@ header("Cache-Control: no-store");
 $rootDir = dirname(__DIR__);
 $assetsRoot = $rootDir . "/assets";
 $allowedGroups = ["animations", "graphics"];
-$allowedExtensions = ["svg", "png", "jpg", "jpeg", "jpt", "gif", "pdf", "webp"];
+$allowedExtensions = ["svg", "png", "jpg", "jpeg", "jpt", "gif", "pdf", "eps", "webp"];
 
 function respond(int $statusCode, $payload): void
 {

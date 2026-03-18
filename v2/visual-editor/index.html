@@ -1730,7 +1730,7 @@
 
       async function resolveAssetDimensions(asset) {
         const ext = extensionOf(asset.src);
-        if (ext === "pdf") {
+        if (ext === "pdf" || ext === "eps") {
           return fallbackDimensionsForAsset(asset);
         }
         try {
@@ -2440,10 +2440,16 @@
           return 0;
         }
         const gap = Math.max(0, parseFloat(track.style.gap || "0") || 0);
+        const originalMainSpan = Math.max(0, Number(track.dataset.originalMainSpan) || 0);
+        if (originalMainSpan > 0) {
+          // Prefer explicit computed span: reliable even before DOM layout settles.
+          return Math.max(1, originalMainSpan + gap);
+        }
         let run = 0;
         for (let index = 0; index < originals.length; index += 1) {
           const block = originals[index];
-          run += block.offsetWidth;
+          const explicitWidth = parseFloat(block.style.width || "0");
+          run += explicitWidth > 0 ? explicitWidth : block.offsetWidth;
           if (index < originals.length - 1) {
             run += gap;
           }
