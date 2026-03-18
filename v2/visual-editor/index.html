@@ -1759,6 +1759,24 @@
         const boardHeight = Math.max(1, boardRect.height);
         const sx = width / boardWidth;
         const sy = height / boardHeight;
+        const parseRotateDeg = (transformValue) => {
+          const value = String(transformValue || "");
+          const match = value.match(/rotate\((-?\d+(?:\.\d+)?)deg\)/i);
+          if (!match) {
+            return 0;
+          }
+          const parsed = Number(match[1]);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const parseTranslateXPx = (transformValue) => {
+          const value = String(transformValue || "");
+          const match = value.match(/translateX\((-?\d+(?:\.\d+)?)px\)/i);
+          if (!match) {
+            return 0;
+          }
+          const parsed = Number(match[1]);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
         const assets = flatBillboard.querySelectorAll(".flat-billboard-asset");
         for (const asset of assets) {
           if (!(asset instanceof HTMLElement)) {
@@ -1776,8 +1794,41 @@
             continue;
           }
           const image = asset.querySelector(".flat-billboard-asset-image");
-          if (image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0) {
-            sourceCtx.drawImage(image, x, y, w, h);
+          const frame = asset.querySelector(".flat-billboard-asset-frame");
+          if (
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0 &&
+            frame instanceof HTMLElement
+          ) {
+            const centerX = x + w * 0.5;
+            const centerY = y + h * 0.5;
+            const frameWidthCss = parseFloat(frame.style.width || String(rect.width));
+            const frameHeightCss = parseFloat(frame.style.height || String(rect.height));
+            const imageWidthCss = parseFloat(image.style.width || String(rect.width));
+            const imageHeightCss = parseFloat(image.style.height || String(rect.height));
+            const rotateDeg = parseRotateDeg(frame.style.transform);
+            const imageOffsetXCss = parseTranslateXPx(image.style.transform);
+            const frameWidth = Math.max(1, frameWidthCss * sx);
+            const frameHeight = Math.max(1, frameHeightCss * sy);
+            const imageWidth = Math.max(1, imageWidthCss * sx);
+            const imageHeight = Math.max(1, imageHeightCss * sy);
+            const imageOffsetX = imageOffsetXCss * sx;
+
+            sourceCtx.save();
+            sourceCtx.translate(centerX, centerY);
+            sourceCtx.rotate((rotateDeg * Math.PI) / 180);
+            sourceCtx.beginPath();
+            sourceCtx.rect(-frameWidth * 0.5, -frameHeight * 0.5, frameWidth, frameHeight);
+            sourceCtx.clip();
+            sourceCtx.drawImage(
+              image,
+              -imageWidth * 0.5 + imageOffsetX,
+              -imageHeight * 0.5,
+              imageWidth,
+              imageHeight
+            );
+            sourceCtx.restore();
             continue;
           }
           const fill = window.getComputedStyle(asset).backgroundColor;
