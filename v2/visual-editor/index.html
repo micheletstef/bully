@@ -2462,10 +2462,10 @@
 
       function getSelectedAssetBlock() {
         const selectedBlocks = getSelectedAssetBlocks();
-        if (selectedBlocks.length !== 1) {
+        if (!selectedBlocks.length) {
           return null;
         }
-        return selectedBlocks[0];
+        return selectedBlocks[selectedBlocks.length - 1];
       }
 
       function setScaleControlsVisible(isVisible) {
@@ -2527,14 +2527,13 @@
       }
 
       function updateSelectionUi() {
-        const selectedBlocks = getSelectedAssetBlocks();
-        if (selectedBlocks.length !== 1) {
+        const block = getSelectedAssetBlock();
+        if (!block) {
           setScaleControlsVisible(false);
           updateScaleControlButtons();
           syncFlatBillboardSelectionState();
           return;
         }
-        const block = selectedBlocks[0];
         updateScaleControlsValue();
         updateScaleControlButtons();
         positionScaleControls();
