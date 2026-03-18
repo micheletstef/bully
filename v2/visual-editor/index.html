@@ -2451,9 +2451,9 @@
         if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
           billboardMarqueeOffsetX = 0;
           if (rawDirection === "rtl") {
-            // Vertical mode (UI label: left to right): move artwork upward over
-            // a full duplicated cycle so wrap lands seamlessly.
-            billboardMarqueeOffsetY = -cycleProgressPx;
+            // Vertical mode (UI label: left to right): start with the end of
+            // the artboard top-aligned, then move upward seamlessly.
+            billboardMarqueeOffsetY = -(maxBillboardTravelPx + cycleProgressPx);
           } else {
             // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
             billboardMarqueeOffsetY = -cycleProgressPx;
