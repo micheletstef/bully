@@ -1584,7 +1584,7 @@
         }
         if (!(preview3dThreeState.texture instanceof THREE.Texture)) {
           const texture = new THREE.CanvasTexture(preview3dSourceCanvas);
-          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapS = THREE.RepeatWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.flipY = false;
           // Mesh orientation is flipped to show the visible front face from our default camera.
@@ -1607,6 +1607,8 @@
           }
           mesh.material.needsUpdate = true;
         } else {
+          preview3dThreeState.texture.wrapS = THREE.RepeatWrapping;
+          preview3dThreeState.texture.wrapT = THREE.ClampToEdgeWrapping;
           preview3dThreeState.texture.center.set(0.5, 0.5);
           preview3dThreeState.texture.rotation = Math.PI;
           preview3dThreeState.texture.repeat.set(-1, 1);
