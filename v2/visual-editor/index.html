@@ -1314,7 +1314,7 @@
               : partitionViewportFrameRight;
           const layout = PARTITION_LAYOUT[key];
           if (frame instanceof HTMLElement && layout) {
-            frame.style.left = layout.offsetRatio * 100 + "%";
+            frame.style.left = "0";
             frame.style.width = layout.widthRatio * 100 + "%";
           }
         }
