@@ -2427,9 +2427,10 @@
         billboardViewportFrame.style.top = frameTop + "px";
         billboardViewportFrame.style.width = frameWidth + "px";
         billboardViewportFrame.style.height = frameHeight + "px";
-        const canDragFrame = !editorState.settings.marqueeEnabled && !editorState.settings.partitionsEnabled;
-        billboardViewportFrame.style.pointerEvents = canDragFrame ? "auto" : "none";
-        billboardViewportFrame.style.cursor = canDragFrame ? "ew-resize" : "default";
+        // Keep frame transparent to clicks; drag handling is border-hit tested
+        // from editor mousedown so assets remain directly clickable.
+        billboardViewportFrame.style.pointerEvents = "none";
+        billboardViewportFrame.style.cursor = "default";
 
         if (billboardViewportTimer instanceof HTMLElement) {
           const timerLeft = frameLeft - editorStage.scrollLeft + frameWidth / 2;
