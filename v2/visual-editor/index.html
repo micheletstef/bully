@@ -396,6 +396,17 @@
         width: max-content;
       }
 
+      .partition-editor-viewport-frame {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 0;
+        border: 1px solid #d30000;
+        pointer-events: none;
+        z-index: 6;
+      }
+
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -915,15 +926,21 @@
           <div id="partitionEditorGrid" class="partition-editor-grid" aria-label="Partition visual editors">
             <div class="partition-editor-card">
               <div class="partition-editor-title">facing 7th</div>
-              <div id="partitionEditorLeft" data-partition-key="left" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorLeft" data-partition-key="left" class="visual-editor-block partition-visual-editor-block">
+                <div id="partitionViewportFrameLeft" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+              </div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">curve</div>
-              <div id="partitionEditorCurve" data-partition-key="curve" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorCurve" data-partition-key="curve" class="visual-editor-block partition-visual-editor-block">
+                <div id="partitionViewportFrameCurve" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+              </div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">facing 47th</div>
-              <div id="partitionEditorRight" data-partition-key="right" class="visual-editor-block partition-visual-editor-block"></div>
+              <div id="partitionEditorRight" data-partition-key="right" class="visual-editor-block partition-visual-editor-block">
+                <div id="partitionViewportFrameRight" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -979,6 +996,9 @@
       const partitionEditorLeft = document.getElementById("partitionEditorLeft");
       const partitionEditorCurve = document.getElementById("partitionEditorCurve");
       const partitionEditorRight = document.getElementById("partitionEditorRight");
+      const partitionViewportFrameLeft = document.getElementById("partitionViewportFrameLeft");
+      const partitionViewportFrameCurve = document.getElementById("partitionViewportFrameCurve");
+      const partitionViewportFrameRight = document.getElementById("partitionViewportFrameRight");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const billboardViewportFrame = document.getElementById("billboardViewportFrame");
       const billboardViewportTimer = document.getElementById("billboardViewportTimer");
@@ -1285,7 +1305,18 @@
           if (!(editor instanceof HTMLElement)) {
             continue;
           }
-          editor.style.setProperty("--partition-width", String(partitionArtboardWidth(key)));
+          // Partition editors keep full billboard ratio for editing context.
+          editor.style.setProperty("--partition-width", String(ARTBOARD_WIDTH));
+          const frame = key === "left"
+            ? partitionViewportFrameLeft
+            : key === "curve"
+              ? partitionViewportFrameCurve
+              : partitionViewportFrameRight;
+          const layout = PARTITION_LAYOUT[key];
+          if (frame instanceof HTMLElement && layout) {
+            frame.style.left = layout.offsetRatio * 100 + "%";
+            frame.style.width = layout.widthRatio * 100 + "%";
+          }
         }
       }
 
@@ -2206,7 +2237,10 @@
         const editors = [partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
         for (const editor of editors) {
           if (editor instanceof HTMLElement) {
-            editor.innerHTML = "";
+            const blocks = editor.querySelectorAll(".fake-asset-block");
+            for (const block of blocks) {
+              block.remove();
+            }
           }
         }
       }
@@ -3117,47 +3151,9 @@
         if (!(flatBillboardSinglePartitionGuides instanceof HTMLElement)) {
           return;
         }
-        if (editorState.settings.partitionsEnabled) {
-          flatBillboardSinglePartitionGuides.classList.remove("is-visible");
-          flatBillboardSinglePartitionGuides.innerHTML = "";
-          return;
-        }
-        flatBillboardSinglePartitionGuides.classList.add("is-visible");
+        // In single-mode, padding is billboard-wide. Do not draw partition-level guides.
+        flatBillboardSinglePartitionGuides.classList.remove("is-visible");
         flatBillboardSinglePartitionGuides.innerHTML = "";
-        for (const partitionKey of PARTITION_KEYS) {
-          const layout = PARTITION_LAYOUT[partitionKey];
-          const { topRatio, sideRatio } = partitionPaddingRatios(partitionKey);
-          const guide = document.createElement("div");
-          guide.className = "flat-billboard-single-partition-guide";
-          guide.style.left = layout.offsetRatio * 100 + "%";
-          guide.style.width = layout.widthRatio * 100 + "%";
-
-          const leftLine = document.createElement("div");
-          leftLine.className = "flat-billboard-single-partition-guide-line";
-          leftLine.dataset.edge = "left";
-          leftLine.style.left = sideRatio * 100 + "%";
-
-          const rightLine = document.createElement("div");
-          rightLine.className = "flat-billboard-single-partition-guide-line";
-          rightLine.dataset.edge = "right";
-          rightLine.style.right = sideRatio * 100 + "%";
-
-          const topLine = document.createElement("div");
-          topLine.className = "flat-billboard-single-partition-guide-line";
-          topLine.dataset.edge = "top";
-          topLine.style.top = topRatio * 100 + "%";
-
-          const bottomLine = document.createElement("div");
-          bottomLine.className = "flat-billboard-single-partition-guide-line";
-          bottomLine.dataset.edge = "bottom";
-          bottomLine.style.bottom = topRatio * 100 + "%";
-
-          guide.appendChild(leftLine);
-          guide.appendChild(rightLine);
-          guide.appendChild(topLine);
-          guide.appendChild(bottomLine);
-          flatBillboardSinglePartitionGuides.appendChild(guide);
-        }
       }
 
       function syncFlatBillboardPartitioned() {
