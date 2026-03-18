@@ -2433,9 +2433,13 @@
           const wrappedTravelPx = maxBillboardTravelPx > 0
             ? (cycleProgressPx % maxBillboardTravelPx)
             : 0;
+          const boundaryGapPx = Math.max(0, parseFloat(flatBillboardTrack?.style?.gap || "0") || 0);
+          const adjustedTravelPx = maxBillboardTravelPx > 0
+            ? (((wrappedTravelPx - boundaryGapPx) % maxBillboardTravelPx) + maxBillboardTravelPx) % maxBillboardTravelPx
+            : 0;
           // Vertical path: keep frame phase on the same wrapped run distance
           // as the billboard so both timelines stay locked.
-          editorMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
+          editorMarqueeOffsetX = -(maxBillboardTravelPx - adjustedTravelPx);
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           editorMarqueeOffsetX = -mappedTravelPx;
@@ -2447,10 +2451,9 @@
         if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
           billboardMarqueeOffsetX = 0;
           if (rawDirection === "rtl") {
-            // For the UI direction labeled "left to right" (stored as rtl),
-            // mirror the red-frame phase exactly so frame/billboard timing
-            // stays locked to the same artwork slice.
-            billboardMarqueeOffsetY = -editorMarqueeOffsetX;
+            // Vertical mode (UI label: left to right): move artwork upward over
+            // a full duplicated cycle so wrap lands seamlessly.
+            billboardMarqueeOffsetY = -cycleProgressPx;
           } else {
             // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
             billboardMarqueeOffsetY = -cycleProgressPx;
