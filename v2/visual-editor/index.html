@@ -2101,7 +2101,10 @@
         if (value.length <= maxLength) {
           return value;
         }
-        return value.slice(0, Math.max(1, maxLength - 1)) + "…";
+        const tailLength = Math.min(7, value.length);
+        const tail = value.slice(-tailLength);
+        const headLength = Math.max(1, maxLength - tailLength - 1);
+        return value.slice(0, headLength) + "…" + tail;
       }
 
       function normalizeAssetEntry(entry) {
