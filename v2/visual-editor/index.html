@@ -440,6 +440,10 @@
         background: var(--asset-color);
       }
 
+      .fake-asset-block.no-preview.no-preview-no-fill {
+        background: transparent;
+      }
+
       .fake-asset-block.is-selected {
         outline: 2px solid rgba(0, 255, 255, 0.95);
         outline-offset: -2px;
@@ -693,6 +697,10 @@
 
       .flat-billboard-asset.no-preview {
         background: var(--asset-color);
+      }
+
+      .flat-billboard-asset.no-preview.no-preview-no-fill {
+        background: transparent;
       }
 
       .flat-billboard-asset-image {
@@ -1473,6 +1481,11 @@
         return extensionOf(src) === "svg" && String(group || "").toLowerCase() === "graphics";
       }
 
+      function shouldUseNoPreviewFill(src) {
+        const ext = extensionOf(src);
+        return ext !== "pdf" && ext !== "eps";
+      }
+
       function clearSvgColorUrlCache() {
         for (const objectUrl of svgColorUrlCache.values()) {
           URL.revokeObjectURL(objectUrl);
@@ -1566,6 +1579,11 @@
       function attachPreviewImageToBlock(block, src, group, colorOverride) {
         if (!block || !src) {
           return;
+        }
+        if (shouldUseNoPreviewFill(src)) {
+          block.classList.remove("no-preview-no-fill");
+        } else {
+          block.classList.add("no-preview-no-fill");
         }
         let frame = block.querySelector(".asset-preview-frame");
         if (!(frame instanceof HTMLElement)) {
@@ -3505,6 +3523,9 @@
             const previewImage = sourceBlock.querySelector(".asset-preview-image");
             const targetBlock = document.createElement("div");
             targetBlock.className = "flat-billboard-asset";
+            if (sourceBlock.classList.contains("no-preview-no-fill")) {
+              targetBlock.classList.add("no-preview-no-fill");
+            }
             targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
             targetBlock.dataset.marqueeOriginal = "true";
             targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * renderScale) + "px";
@@ -3655,6 +3676,9 @@
 
           const targetBlock = document.createElement("div");
           targetBlock.className = "flat-billboard-asset";
+          if (sourceBlock.classList.contains("no-preview-no-fill")) {
+            targetBlock.classList.add("no-preview-no-fill");
+          }
           targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
           targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
           targetBlock.style.height = Math.max(1, editorMetrics.scaledHeight * scaleFactor) + "px";
