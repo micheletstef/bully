@@ -39,11 +39,10 @@
       .settings-panel {
         position: relative;
         height: 100%;
-        padding: 0;
+        padding: 0 28px 0 16px;
         background: transparent;
         border-right: 1px solid rgba(31, 31, 31, 0.16);
-        padding-right: 12px;
-        margin-right: 12px;
+        margin-right: 24px;
       }
 
       .assets-title,
@@ -1053,8 +1052,6 @@
       const PARTITION_KEYS = ["left", "curve", "right"];
       const ARTBOARD_WIDTH = 5900;
       const ARTBOARD_HEIGHT = 3480;
-      const PARTITION_BASE_PADDING_TB = 120;
-      const PARTITION_BASE_PADDING_LR = 120;
       const PARTITION_LAYOUT = {
         left: { offsetRatio: 0, widthRatio: 1820 / ARTBOARD_WIDTH },
         curve: { offsetRatio: 1820 / ARTBOARD_WIDTH, widthRatio: 1020 / ARTBOARD_WIDTH },
@@ -1063,20 +1060,6 @@
 
       function isVerticalOrientation() {
         return editorState?.settings?.orientation === "vertical";
-      }
-
-      function isPartitionSettingsContextFromEditor(editorEl) {
-        return editorEl instanceof HTMLElement && typeof editorEl.dataset.partitionKey === "string" && editorEl.dataset.partitionKey.length > 0;
-      }
-
-      function resolvedPaddingTB(settingsObj, isPartitionContext) {
-        const base = Number(settingsObj?.paddingTB) || 0;
-        return isPartitionContext ? base + PARTITION_BASE_PADDING_TB : base;
-      }
-
-      function resolvedPaddingLR(settingsObj, isPartitionContext) {
-        const base = Number(settingsObj?.paddingLR) || 0;
-        return isPartitionContext ? base + PARTITION_BASE_PADDING_LR : base;
       }
 
       function defaultPartitionSettings() {
@@ -3118,14 +3101,11 @@
           return;
         }
         const align = alignmentMap[settingsObj.verticalAlignment] || "flex-start";
-        const partitionContext = isPartitionSettingsContextFromEditor(editorEl);
-        const paddingTB = resolvedPaddingTB(settingsObj, partitionContext);
-        const paddingLR = resolvedPaddingLR(settingsObj, partitionContext);
         editorEl.style.alignItems = align;
-        editorEl.style.setProperty("--safe-top", paddingTB + "px");
-        editorEl.style.setProperty("--safe-bottom", paddingTB + "px");
-        editorEl.style.setProperty("--safe-left", paddingLR + "px");
-        editorEl.style.setProperty("--safe-right", paddingLR + "px");
+        editorEl.style.setProperty("--safe-top", (Number(settingsObj.paddingTB) || 0) + "px");
+        editorEl.style.setProperty("--safe-bottom", (Number(settingsObj.paddingTB) || 0) + "px");
+        editorEl.style.setProperty("--safe-left", (Number(settingsObj.paddingLR) || 0) + "px");
+        editorEl.style.setProperty("--safe-right", (Number(settingsObj.paddingLR) || 0) + "px");
         editorEl.style.setProperty("--asset-gap", (Number(settingsObj.assetGap) || 0) + "px");
         if (typeof settingsObj.backgroundColor === "string") {
           editorEl.style.setProperty("--editor-bg", settingsObj.backgroundColor);
@@ -3260,17 +3240,15 @@
         ensurePartitionSettingsState();
         const settings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
         const editor = partitionEditorForSettingsKey(partitionKey);
-        const effectivePaddingTB = resolvedPaddingTB(settings, true);
-        const effectivePaddingLR = resolvedPaddingLR(settings, true);
         const editorHeight = Math.max(
           1,
           (editor instanceof HTMLElement
             ? (editor.clientHeight || parseFloat(window.getComputedStyle(editor).getPropertyValue("--editor-height")) || 200)
             : 200)
         );
-        const topRatio = Math.max(0, Math.min(0.49, effectivePaddingTB / editorHeight));
+        const topRatio = Math.max(0, Math.min(0.49, (Number(settings.paddingTB) || 0) / editorHeight));
         const widthFromHeight = Math.max(1, (editorHeight * partitionArtboardWidth(partitionKey)) / ARTBOARD_HEIGHT);
-        const sideRatio = Math.max(0, Math.min(0.49, effectivePaddingLR / widthFromHeight));
+        const sideRatio = Math.max(0, Math.min(0.49, (Number(settings.paddingLR) || 0) / widthFromHeight));
         return { topRatio, sideRatio };
       }
 
@@ -3308,8 +3286,8 @@
           const logicalArtboardWidth = partitionWidthUnits * baseScaleFactor;
           const logicalArtboardHeight = ARTBOARD_HEIGHT * baseScaleFactor;
           const renderScale = baseScaleFactor;
-          const paddingTB = resolvedPaddingTB(partitionSettings, true) * renderScale;
-          const paddingLR = resolvedPaddingLR(partitionSettings, true) * renderScale;
+          const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
+          const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
           const gap = (Number(partitionSettings.assetGap) || 0) * renderScale;
           const layer = document.createElement("div");
           layer.className = "flat-billboard-partition-layer";
