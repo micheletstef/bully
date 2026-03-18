@@ -2101,7 +2101,7 @@
         if (value.length <= maxLength) {
           return value;
         }
-        const tailLength = Math.min(10, value.length);
+        const tailLength = Math.min(12, value.length);
         const tail = value.slice(-tailLength);
         const headLength = Math.max(1, maxLength - tailLength - 1);
         return value.slice(0, headLength) + "…" + tail;
