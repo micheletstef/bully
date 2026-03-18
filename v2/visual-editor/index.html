@@ -1333,6 +1333,8 @@
       let preview3dDomSnapshotPromise = null;
       let preview3dDomSnapshotQueued = false;
       let preview3dDomSnapshotLastMs = 0;
+      let preview3dLastTextureUpdateMs = 0;
+      let preview3dForceTextureUpdate = true;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1367,9 +1369,11 @@
         targetZMin: -4500,
         targetZMax: 4500,
       };
-      const PREVIEW3D_TEXTURE_HEIGHT = 1400;
-      const PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS = 120;
+      const PREVIEW3D_TEXTURE_HEIGHT = 960;
+      const PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS = 180;
       const PREVIEW3D_USE_DOM_SNAPSHOT = true;
+      const PREVIEW3D_TEXTURE_UPDATE_INTERVAL_MS = 80;
+      const PREVIEW3D_RENDER_PIXEL_RATIO_MAX = 1.5;
       const preview3dThreeState = {
         renderer: null,
         scene: null,
@@ -1377,6 +1381,8 @@
         mesh: null,
         texture: null,
         initFailed: false,
+        renderCssWidth: 0,
+        renderCssHeight: 0,
       };
       const preview3dSourceCanvas = document.createElement("canvas");
       const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
@@ -1415,6 +1421,7 @@
         syncPreviewModeToggleStates();
         if (normalized === "3d") {
           queueFlatBillboardSnapshot(true);
+          preview3dForceTextureUpdate = true;
           startPreview3dLoop();
         } else {
           clearPreview3dDragState();
@@ -1621,7 +1628,7 @@
       }
 
       function createCurvedBillboardGeometry(THREE) {
-        const widthSegments = 220;
+        const widthSegments = 120;
         const geometry = new THREE.PlaneGeometry(ARTBOARD_WIDTH, ARTBOARD_HEIGHT, widthSegments, 1);
         const positions = geometry.attributes.position;
         for (let i = 0; i < positions.count; i += 1) {
@@ -1676,7 +1683,7 @@
           renderer.domElement.className = "flat-billboard-3d-canvas";
           flatBillboard3d.replaceChildren(renderer.domElement);
         }
-        renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio || 1)));
+        renderer.setPixelRatio(Math.min(PREVIEW3D_RENDER_PIXEL_RATIO_MAX, Math.max(1, window.devicePixelRatio || 1)));
         renderer.setClearColor(0xffffff, 1);
 
         const scene = new THREE.Scene();
@@ -1718,12 +1725,12 @@
         const THREE = getThreeLib();
         const mesh = preview3dThreeState.mesh;
         if (!THREE || !mesh || !mesh.material) {
-          return;
+          return false;
         }
-        const textureHeight = PREVIEW3D_TEXTURE_HEIGHT;
+        const textureHeight = Math.max(640, PREVIEW3D_TEXTURE_HEIGHT);
         const textureWidth = Math.max(1, Math.round(textureHeight * ARTBOARD_WIDTH / ARTBOARD_HEIGHT));
         if (!drawFlatBillboardSourceCanvas(textureWidth, textureHeight)) {
-          return;
+          return false;
         }
         if (!(preview3dThreeState.texture instanceof THREE.Texture)) {
           const texture = new THREE.CanvasTexture(preview3dSourceCanvas);
@@ -1737,7 +1744,8 @@
           // Final left/right correction to match flat preview exactly.
           texture.repeat.set(-1, 1);
           texture.offset.set(1, 0);
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.generateMipmaps = false;
+          texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
             texture.colorSpace = THREE.SRGBColorSpace;
@@ -1758,6 +1766,7 @@
           preview3dThreeState.texture.offset.set(1, 0);
           preview3dThreeState.texture.needsUpdate = true;
         }
+        return true;
       }
 
       function syncThreeCameraTransform() {
@@ -2018,11 +2027,31 @@
         }
         const cssWidth = Math.max(1, canvas.clientWidth || 1);
         const cssHeight = Math.max(1, canvas.clientHeight || 1);
-        renderer.setSize(cssWidth, cssHeight, false);
+        if (
+          preview3dThreeState.renderCssWidth !== cssWidth ||
+          preview3dThreeState.renderCssHeight !== cssHeight
+        ) {
+          renderer.setSize(cssWidth, cssHeight, false);
+          preview3dThreeState.renderCssWidth = cssWidth;
+          preview3dThreeState.renderCssHeight = cssHeight;
+        }
         camera.aspect = cssWidth / cssHeight;
         syncThreeCameraTransform();
         camera.updateProjectionMatrix();
-        syncThreeTextureFromFlatSource();
+        const now = (typeof performance !== "undefined" && typeof performance.now === "function")
+          ? performance.now()
+          : Date.now();
+        const marqueeActive = isMarqueeEnabledForCurrentMode();
+        const textureIntervalMs = marqueeActive ? 33 : PREVIEW3D_TEXTURE_UPDATE_INTERVAL_MS;
+        const shouldUpdateTexture = preview3dForceTextureUpdate
+          || (now - preview3dLastTextureUpdateMs >= textureIntervalMs);
+        if (shouldUpdateTexture) {
+          const didUpdateTexture = syncThreeTextureFromFlatSource();
+          if (didUpdateTexture) {
+            preview3dLastTextureUpdateMs = now;
+            preview3dForceTextureUpdate = false;
+          }
+        }
         renderer.render(scene, camera);
       }
 
@@ -5357,6 +5386,7 @@
       }
 
       function syncFlatBillboardArtworks() {
+        preview3dForceTextureUpdate = true;
         if (!flatBillboardTrack) {
           return;
         }
