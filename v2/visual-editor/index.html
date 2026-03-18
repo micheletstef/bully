@@ -1591,6 +1591,9 @@
           // Rotate UVs 180deg so projected artwork matches flat preview orientation.
           texture.center.set(0.5, 0.5);
           texture.rotation = Math.PI;
+          // Final left/right correction to match flat preview exactly.
+          texture.repeat.set(-1, 1);
+          texture.offset.set(1, 0);
           texture.minFilter = THREE.LinearMipmapLinearFilter;
           texture.magFilter = THREE.LinearFilter;
           if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
@@ -1606,6 +1609,8 @@
         } else {
           preview3dThreeState.texture.center.set(0.5, 0.5);
           preview3dThreeState.texture.rotation = Math.PI;
+          preview3dThreeState.texture.repeat.set(-1, 1);
+          preview3dThreeState.texture.offset.set(1, 0);
           preview3dThreeState.texture.needsUpdate = true;
         }
       }
