@@ -2769,6 +2769,10 @@
         if (!(visualEditorBlock instanceof HTMLElement) || !(billboardViewportFrame instanceof HTMLElement)) {
           return false;
         }
+        // Never steal clicks from assets; allow normal asset selection/editing.
+        if (getAssetBlockFromEventTarget(event.target)) {
+          return false;
+        }
         if (editorState.settings.marqueeEnabled || editorState.settings.partitionsEnabled) {
           return false;
         }
