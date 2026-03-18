@@ -191,6 +191,43 @@
         outline: none;
       }
 
+      .saved-billboard-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .saved-billboard-row .saved-billboard-button {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .saved-billboard-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding-right: 2px;
+      }
+
+      .saved-billboard-action-button {
+        border: 0;
+        background: transparent;
+        color: #6a6a6a;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+        line-height: 1.1;
+        padding: 0 2px;
+      }
+
+      .saved-billboard-action-button:hover,
+      .saved-billboard-action-button:focus {
+        color: #1f1f1f;
+        text-decoration: underline;
+        outline: none;
+      }
+
       .asset-button {
         width: 100%;
         text-align: left;
@@ -1600,15 +1637,90 @@
           return;
         }
         for (const snapshot of savedBillboards) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "saved-billboard-button";
-          button.textContent = snapshot.name || "untitled snapshot";
-          button.title = snapshot.name || "untitled snapshot";
-          button.addEventListener("click", () => {
+          const row = document.createElement("div");
+          row.className = "saved-billboard-row";
+
+          const openButton = document.createElement("button");
+          openButton.type = "button";
+          openButton.className = "saved-billboard-button";
+          openButton.textContent = snapshot.name || "untitled snapshot";
+          openButton.title = snapshot.name || "untitled snapshot";
+          openButton.addEventListener("click", () => {
             loadBillboardSnapshot(snapshot.id, { updatePath: true, replaceHistory: false });
           });
-          savedBillboardsList.appendChild(button);
+          row.appendChild(openButton);
+
+          const actions = document.createElement("div");
+          actions.className = "saved-billboard-actions";
+
+          const renameButton = document.createElement("button");
+          renameButton.type = "button";
+          renameButton.className = "saved-billboard-action-button";
+          renameButton.textContent = "rename";
+          renameButton.title = "rename saved billboard";
+          renameButton.addEventListener("click", () => {
+            renameSavedBillboard(snapshot.id);
+          });
+          actions.appendChild(renameButton);
+
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.className = "saved-billboard-action-button";
+          removeButton.textContent = "x";
+          removeButton.title = "remove saved billboard";
+          removeButton.addEventListener("click", () => {
+            removeSavedBillboard(snapshot.id);
+          });
+          actions.appendChild(removeButton);
+
+          row.appendChild(actions);
+          savedBillboardsList.appendChild(row);
+        }
+      }
+
+      function renameSavedBillboard(snapshotId) {
+        const index = savedBillboards.findIndex((entry) => entry.id === snapshotId);
+        if (index === -1) {
+          return;
+        }
+        const snapshot = savedBillboards[index];
+        const currentName = String(snapshot.name || "untitled snapshot").trim();
+        const nextNameInput = window.prompt("rename saved billboard", currentName);
+        if (nextNameInput === null) {
+          return;
+        }
+        const nextName = String(nextNameInput).trim();
+        if (!nextName || nextName === currentName) {
+          return;
+        }
+        savedBillboards[index] = {
+          ...snapshot,
+          name: nextName,
+        };
+        persistSavedBillboards();
+        renderSavedBillboardsList();
+        if (activeSnapshotId === snapshotId) {
+          setPathForSnapshot(savedBillboards[index], true);
+        }
+      }
+
+      function removeSavedBillboard(snapshotId) {
+        const index = savedBillboards.findIndex((entry) => entry.id === snapshotId);
+        if (index === -1) {
+          return;
+        }
+        const snapshot = savedBillboards[index];
+        const name = String(snapshot.name || "untitled snapshot").trim() || "untitled snapshot";
+        const confirmed = window.confirm('remove saved billboard "' + name + '"?');
+        if (!confirmed) {
+          return;
+        }
+        const wasActiveSnapshot = activeSnapshotId === snapshotId;
+        savedBillboards.splice(index, 1);
+        persistSavedBillboards();
+        renderSavedBillboardsList();
+        if (wasActiveSnapshot) {
+          loadBillboardMakerState({ updatePath: true, replaceHistory: true });
         }
       }
 
