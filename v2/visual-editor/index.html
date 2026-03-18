@@ -2270,7 +2270,7 @@
         // Rotated marquee needs one extra buffered run per side so cycle-wrap
         // always lands on already-present duplicate content.
         const duplicateSets = baseDuplicateSets + (rotatedBillboard && horizontal ? 1 : 0);
-        const leadingDuplicateSets = duplicateSets;
+        const leadingDuplicateSets = duplicateSets + (rotatedBillboard && direction === "ltr" ? 1 : 0);
         const trailingDuplicateSets = duplicateSets + (rotatedBillboard && direction === "ltr" ? 1 : 0);
         for (let setIndex = 0; setIndex < leadingDuplicateSets; setIndex += 1) {
           for (let i = originals.length - 1; i >= 0; i -= 1) {
@@ -2451,7 +2451,7 @@
           if (rotatedBillboard) {
             // Keep rotated right-to-left frame phase exactly in lockstep with
             // the billboard phase mapping (frameX = -billboardY).
-            editorMarqueeOffsetX = cycleProgressPx - maxBillboardTravelPx;
+            editorMarqueeOffsetX = cycleProgressPx - maxBillboardTravelPx - cycle;
           } else {
             editorMarqueeOffsetX = -mappedTravelPx;
           }
@@ -2469,7 +2469,9 @@
           } else {
             // Vertical mode (UI label: right to left): start with the end of
             // the artboard top-aligned, then continue in the same direction.
-            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx;
+            // Shift by one full run into buffered duplicate space so the next
+            // artboard is already below and wrap stays seamless.
+            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx + cycle;
           }
         } else if (rawDirection === "rtl") {
           // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
