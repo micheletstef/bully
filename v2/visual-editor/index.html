@@ -3589,9 +3589,8 @@
           const direction = partitionSettings.marqueeDirection === "ltr" ? "ltr" : "rtl";
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
-          const partitionWidthUnits = partitionArtboardWidth(partitionKey);
-          const logicalArtboardWidth = partitionWidthUnits * baseScaleFactor;
-          const logicalArtboardHeight = ARTBOARD_HEIGHT * baseScaleFactor;
+          const partitionPixelWidth = Math.max(1, (flatBillboard.clientWidth || 1) * layout.widthRatio);
+          const partitionPixelHeight = billboardHeight;
           const renderScale = baseScaleFactor;
           const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
           let paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
@@ -3618,15 +3617,15 @@
           if (partitionSettings.orientation === "vertical") {
             artboard.style.transformOrigin = "top left";
             artboard.style.transform = "translateY(" + billboardHeight + "px) rotate(-90deg)";
-            // Swap logical dimensions in vertical mode so rotated main-axis span
-            // maps to billboard height (enabling top/center/bottom movement).
-            artboard.style.width = Math.max(1, logicalArtboardHeight) + "px";
-            artboard.style.height = Math.max(1, logicalArtboardWidth) + "px";
+            // Swap rendered partition dimensions so rotated content remains
+            // bounded by the visible billboard partition.
+            artboard.style.width = Math.max(1, partitionPixelHeight) + "px";
+            artboard.style.height = Math.max(1, partitionPixelWidth) + "px";
           } else {
             artboard.style.transformOrigin = "top left";
             artboard.style.transform = "none";
-            artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
-            artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
+            artboard.style.width = Math.max(1, partitionPixelWidth) + "px";
+            artboard.style.height = Math.max(1, partitionPixelHeight) + "px";
           }
           artboard.style.overflow = "hidden";
           artboard.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
@@ -3727,7 +3726,7 @@
           }
           track.dataset.originalMainSpan = String(Math.max(1, originalMainSpan));
           if (marqueeEnabled && originalBlocks.length) {
-            const viewportLength = Math.max(1, (artboard.clientWidth || logicalArtboardWidth));
+            const viewportLength = Math.max(1, (artboard.clientWidth || partitionPixelWidth));
             const runLength = partitionMarqueeCycleLength(track);
             const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
             const leadingDuplicateSets = duplicateSets + (direction === "ltr" ? 1 : 0);
