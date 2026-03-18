@@ -1556,10 +1556,12 @@
           metalness: 0.06,
           emissive: 0xffffff,
           emissiveIntensity: 0.92,
-          side: THREE.DoubleSide,
+          side: THREE.FrontSide,
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.frustumCulled = false;
+        // Orient the curved screen so its front face matches default camera view.
+        mesh.rotation.y = Math.PI;
         scene.add(mesh);
 
         preview3dThreeState.renderer = renderer;
