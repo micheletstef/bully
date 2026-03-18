@@ -685,6 +685,7 @@
         display: flex;
         flex-wrap: nowrap;
         align-items: flex-start;
+        will-change: transform;
       }
 
       .flat-billboard-asset {
@@ -2624,11 +2625,8 @@
             }
           }
           const transformX = mainAxisOffset + marqueeOffset;
-          if (orientation === "vertical" || Math.abs(transformX) > 0.1) {
-            track.style.transform = "translateX(" + transformX + "px)";
-          } else {
-            track.style.transform = "none";
-          }
+          const stableTransformX = Math.abs(transformX) < 0.001 ? 0 : transformX;
+          track.style.transform = "translate3d(" + stableTransformX + "px, 0px, 0px)";
         }
       }
 
@@ -2906,7 +2904,17 @@
               continue;
             }
             const speed = Math.max(5, Number(partitionSettings.marqueeSpeed) || 80);
-            partitionMarqueeProgressPx[key] = (Number(partitionMarqueeProgressPx[key]) || 0) + (speed * dt);
+            const existingProgress = Number(partitionMarqueeProgressPx[key]) || 0;
+            const nextProgress = existingProgress + (speed * dt);
+            const partitionTrack = flatBillboardPartitionLayers instanceof HTMLElement
+              ? flatBillboardPartitionLayers.querySelector(
+                '.flat-billboard-partition-layer[data-partition-key="' + key + '"] .flat-billboard-partition-track'
+              )
+              : null;
+            const cycle = Math.max(0, Number(partitionTrack?.dataset?.marqueeCyclePx) || 0);
+            partitionMarqueeProgressPx[key] = cycle > 0
+              ? (((nextProgress % cycle) + cycle) % cycle)
+              : nextProgress;
             hasMovingPartition = true;
           }
           if (hasMovingPartition) {
