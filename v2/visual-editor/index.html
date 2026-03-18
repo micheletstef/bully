@@ -3061,11 +3061,6 @@
           const partitionSettings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
-          const verticalAlignForRotated = partitionSettings.verticalAlignment === "top"
-            ? "flex-start"
-            : partitionSettings.verticalAlignment === "bottom"
-              ? "flex-end"
-              : "center";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
           const previewEditorHeight = Math.max(
             1,
@@ -3129,7 +3124,7 @@
             // - justify-content controls screen vertical position (inverted)
             // - align-items controls screen horizontal position
             track.style.alignItems = "center";
-            track.style.justifyContent = verticalAlignForRotated;
+            track.style.justifyContent = "flex-start";
           } else {
             track.style.alignItems = align;
             track.style.justifyContent = "flex-start";
@@ -3137,6 +3132,7 @@
           track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
+          let contentMainSpan = paddingLR * 2;
           for (const sourceBlock of blocks) {
             const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
             if (!editorMetrics) {
@@ -3182,6 +3178,28 @@
               targetBlock.classList.add("no-preview");
             }
             track.appendChild(targetBlock);
+            contentMainSpan += Math.max(1, editorMetrics.scaledWidth * renderScale);
+            if (sourceBlock !== blocks[blocks.length - 1]) {
+              contentMainSpan += gap;
+            }
+          }
+
+          if (partitionSettings.orientation === "vertical") {
+            const containerMainSpan = Math.max(1, logicalArtboardWidth);
+            const remaining = containerMainSpan - contentMainSpan;
+            // Because of rotate(-90deg), main-axis start renders at the bottom.
+            // So top/center/bottom on screen maps to end/center/start offsets.
+            let mainAxisOffset = 0;
+            if (partitionSettings.verticalAlignment === "top") {
+              mainAxisOffset = remaining;
+            } else if (partitionSettings.verticalAlignment === "center") {
+              mainAxisOffset = remaining / 2;
+            } else {
+              mainAxisOffset = 0;
+            }
+            track.style.transform = "translateX(" + mainAxisOffset + "px)";
+          } else {
+            track.style.transform = "none";
           }
 
           artboard.appendChild(track);
