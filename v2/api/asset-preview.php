@@ -64,7 +64,7 @@ function convertWithGhostscript(string $inputPath, string $outputPath): bool
     if (!commandExists("gs")) {
         return false;
     }
-    $cmd = "gs -q -dSAFER -dBATCH -dNOPAUSE -dEPSCrop -sDEVICE=pngalpha -r150 " .
+    $cmd = "gs -q -dSAFER -dBATCH -dNOPAUSE -dUseCropBox -sDEVICE=pngalpha -r150 " .
         "-dFirstPage=1 -dLastPage=1 -sOutputFile=" . escapeshellarg($outputPath) . " " .
         escapeshellarg($inputPath) . " 2>/dev/null";
     $output = [];
@@ -135,8 +135,8 @@ if (strpos($absolutePath, $assetsRoot . DIRECTORY_SEPARATOR) !== 0) {
 }
 
 $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
-if ($extension !== "eps" && $extension !== "pdf") {
-    fail(400, "Preview conversion is only available for EPS/PDF.");
+if ($extension !== "pdf") {
+    fail(400, "Preview conversion is only available for PDF.");
 }
 
 $fingerprint = $absolutePath . "|" . (string)filemtime($absolutePath) . "|" . (string)filesize($absolutePath);

@@ -1499,7 +1499,7 @@
 
       function shouldUseNoPreviewFill(src) {
         const ext = extensionOf(src);
-        return ext !== "pdf" && ext !== "eps";
+        return ext !== "pdf";
       }
 
       function clearSvgColorUrlCache() {
@@ -1531,18 +1531,28 @@
             return source;
           }
 
+          const isColorizablePaintValue = (value) => {
+            const normalized = String(value || "").trim().toLowerCase();
+            return !!normalized && normalized !== "none" && normalized !== "currentcolor" && normalized !== "inherit" && !normalized.startsWith("url(");
+          };
+          const rewritePaintDeclarations = (cssText) => String(cssText || "")
+            .replace(/fill\s*:\s*([^;}{!]+)(!important)?/gi, (match, rawValue, important) => (
+              isColorizablePaintValue(rawValue) ? ("fill:" + color + (important || "")) : match
+            ))
+            .replace(/stroke\s*:\s*([^;}{!]+)(!important)?/gi, (match, rawValue, important) => (
+              isColorizablePaintValue(rawValue) ? ("stroke:" + color + (important || "")) : match
+            ));
+
           const styleNodes = Array.from(svg.querySelectorAll("style"));
           for (const styleNode of styleNodes) {
             const css = String(styleNode.textContent || "");
             if (!css) {
               continue;
             }
-            styleNode.textContent = css
-              .replace(/fill\s*:\s*[^;}{!]+(!important)?/gi, "fill:" + color + "$1")
-              .replace(/stroke\s*:\s*[^;}{!]+(!important)?/gi, "stroke:" + color + "$1");
+            styleNode.textContent = rewritePaintDeclarations(css);
           }
 
-          const paintableTags = new Set(["path", "rect", "circle", "ellipse", "polygon", "polyline", "line", "text", "g"]);
+          const paintableTags = new Set(["path", "rect", "circle", "ellipse", "polygon", "polyline", "line", "text"]);
           const nodes = Array.from(svg.querySelectorAll("*"));
           for (const node of nodes) {
             const tag = String(node.tagName || "").toLowerCase();
@@ -1554,19 +1564,25 @@
             const fillValue = String(fill || "").trim().toLowerCase();
             const strokeValue = String(stroke || "").trim().toLowerCase();
 
-            if ((!fill || fillValue !== "none") && !fillValue.startsWith("url(")) {
+            if (fill !== null && isColorizablePaintValue(fillValue)) {
               node.setAttribute("fill", color);
             }
-            if (stroke && strokeValue !== "none" && !strokeValue.startsWith("url(")) {
+            if (stroke !== null && isColorizablePaintValue(strokeValue)) {
               node.setAttribute("stroke", color);
             }
 
             const style = node.getAttribute("style");
             if (style) {
-              const rewritten = style
-                .replace(/fill\s*:\s*[^;]+/gi, "fill:" + color)
-                .replace(/stroke\s*:\s*[^;]+/gi, "stroke:" + color);
+              const rewritten = rewritePaintDeclarations(style);
               node.setAttribute("style", rewritten);
+            }
+
+            // If shape has no explicit paint at all, set fill only (never inject stroke).
+            if (fill === null && stroke === null) {
+              const hasPaintInStyle = /(?:^|;)\s*(fill|stroke)\s*:/i.test(String(style || ""));
+              if (!hasPaintInStyle && tag !== "line") {
+                node.setAttribute("fill", color);
+              }
             }
           }
 
@@ -1578,7 +1594,7 @@
 
       async function resolvePreviewUrl(src, group, colorOverride) {
         const ext = extensionOf(src);
-        if (ext === "eps" || ext === "pdf") {
+        if (ext === "pdf") {
           return apiPath("api/asset-preview?src=" + encodeURIComponent(String(src || "")));
         }
         if (!isGraphicsSvgAsset(src, group)) {
@@ -1658,7 +1674,7 @@
         const thumb = document.createElement("img");
         thumb.className = "asset-thumb";
         const thumbExtension = extensionOf(asset.src);
-        thumb.src = (thumbExtension === "eps" || thumbExtension === "pdf")
+        thumb.src = (thumbExtension === "pdf")
           ? apiPath("api/asset-preview?src=" + encodeURIComponent(String(asset.src || "")))
           : asset.url;
         thumb.alt = "";
@@ -2547,10 +2563,12 @@
               const cycleProgressPx = ((marqueeProgressPx % cycle) + cycle) % cycle;
               const viewportSpan = Math.max(1, artboard.clientWidth || 1);
               const maxTravelPx = Math.max(0, cycle - viewportSpan);
-              const wrappedTravelPx = maxTravelPx > 0 ? (cycleProgressPx % maxTravelPx) : 0;
               marqueeOffset = direction === "ltr"
-                ? -(maxTravelPx - wrappedTravelPx)
-                : -wrappedTravelPx;
+                // Keep LTR anchored to equivalent duplicate content.
+                ? -((maxTravelPx + cycle) - cycleProgressPx)
+                // Move across full cycle so partitions still animate when
+                // a single run is shorter than the partition viewport.
+                : -cycleProgressPx;
             }
           }
           const transformX = mainAxisOffset + marqueeOffset;
@@ -2952,6 +2970,21 @@
           updateAllAssetBlockSizes();
         }
         syncFlatBillboardArtworks();
+        const cycle = normalizedEnabled
+          ? partitionMaxMarqueeCycleLength()
+          : (marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength());
+        if (editorState.settings.marqueeEnabled && cycle > 0) {
+          if (!normalizedEnabled) {
+            applyMarqueePhaseOffsets(cycle);
+          }
+          applyFlatBillboardTrackTransform();
+          if (!marqueeAnimationRaf) {
+            marqueeLastTimestamp = 0;
+            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+          }
+        } else if (marqueeAnimationRaf && !(editorState.settings.marqueeEnabled && cycle > 0)) {
+          stopMarqueeAnimation();
+        }
         if (shouldPersist) {
           saveEditorState();
         }

@@ -1084,15 +1084,24 @@ function applyColorToSvgText(svgText, color) {
   if (!svg) {
     return "";
   }
+  const isColorizablePaintValue = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    return !!normalized && normalized !== "none" && normalized !== "currentcolor" && normalized !== "inherit" && !normalized.startsWith("url(");
+  };
+  const rewritePaintDeclarations = (cssText) => String(cssText || "")
+    .replace(/fill\s*:\s*([^;}{!]+)(!important)?/gi, (match, rawValue, important) => (
+      isColorizablePaintValue(rawValue) ? `fill:${color}${important || ""}` : match
+    ))
+    .replace(/stroke\s*:\s*([^;}{!]+)(!important)?/gi, (match, rawValue, important) => (
+      isColorizablePaintValue(rawValue) ? `stroke:${color}${important || ""}` : match
+    ));
   const styleNodes = [...svg.querySelectorAll("style")];
   styleNodes.forEach((styleNode) => {
     const css = String(styleNode.textContent || "");
     if (!css) {
       return;
     }
-    styleNode.textContent = css
-      .replace(/fill\s*:\s*[^;}{!]+(!important)?/gi, `fill:${color}$1`)
-      .replace(/stroke\s*:\s*[^;}{!]+(!important)?/gi, `stroke:${color}$1`);
+    styleNode.textContent = rewritePaintDeclarations(css);
   });
   const paintableTags = new Set([
     "path",
@@ -1102,8 +1111,7 @@ function applyColorToSvgText(svgText, color) {
     "polygon",
     "polyline",
     "line",
-    "text",
-    "g"
+    "text"
   ]);
   const nodes = [svg, ...svg.querySelectorAll("*")];
   nodes.forEach((node) => {
@@ -1113,20 +1121,24 @@ function applyColorToSvgText(svgText, color) {
     }
     const fill = node.getAttribute("fill");
     const stroke = node.getAttribute("stroke");
-    const fillValue = String(fill || "").toLowerCase();
-    const strokeValue = String(stroke || "").toLowerCase();
-    if ((!fill || fillValue !== "none") && !fillValue.startsWith("url(")) {
+    const fillValue = String(fill || "").trim().toLowerCase();
+    const strokeValue = String(stroke || "").trim().toLowerCase();
+    if (fill !== null && isColorizablePaintValue(fillValue)) {
       node.setAttribute("fill", color);
     }
-    if (stroke && strokeValue !== "none" && !strokeValue.startsWith("url(")) {
+    if (stroke !== null && isColorizablePaintValue(strokeValue)) {
       node.setAttribute("stroke", color);
     }
     const style = node.getAttribute("style");
     if (style) {
-      const rewritten = style
-        .replace(/fill\s*:\s*[^;]+/gi, `fill:${color}`)
-        .replace(/stroke\s*:\s*[^;]+/gi, `stroke:${color}`);
+      const rewritten = rewritePaintDeclarations(style);
       node.setAttribute("style", rewritten);
+    }
+    if (fill === null && stroke === null) {
+      const hasPaintInStyle = /(?:^|;)\s*(fill|stroke)\s*:/i.test(String(style || ""));
+      if (!hasPaintInStyle && tag !== "line") {
+        node.setAttribute("fill", color);
+      }
     }
   });
   return new XMLSerializer().serializeToString(svg);
