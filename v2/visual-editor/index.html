@@ -3056,8 +3056,22 @@
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
-          const logicalArtboardWidth = partitionWidthUnits * baseScaleFactor;
-          const logicalArtboardHeight = ARTBOARD_HEIGHT * baseScaleFactor;
+          const previewEditorHeight = Math.max(
+            1,
+            editor instanceof HTMLElement
+              ? (editor.clientHeight || parseFloat(window.getComputedStyle(editor).getPropertyValue("--editor-height")) || 200)
+              : 200
+          );
+          const previewEditorWidth = Math.max(
+            1,
+            editor instanceof HTMLElement
+              ? (editor.clientWidth || ((previewEditorHeight * partitionWidthUnits) / ARTBOARD_HEIGHT))
+              : ((previewEditorHeight * partitionWidthUnits) / ARTBOARD_HEIGHT)
+          );
+          // Scale from the actual partition editor preview box, not raw design
+          // units, so billboard partition artboards match expected dimensions.
+          const logicalArtboardWidth = previewEditorWidth * baseScaleFactor;
+          const logicalArtboardHeight = previewEditorHeight * baseScaleFactor;
           const renderScale = baseScaleFactor;
           const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
           const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
