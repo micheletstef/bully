@@ -1225,6 +1225,8 @@
       let marqueeCyclePx = 0;
       let partitionViewportUiLastUpdateMs = 0;
       const PARTITION_VIEWPORT_UI_INTERVAL_MS = 100;
+      let marqueeTargetVisible = true;
+      let marqueeVisibilityObserver = null;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -3492,8 +3494,60 @@
         }
       }
 
+      function computeMarqueeTargetVisibility() {
+        if (!(flatBillboard instanceof HTMLElement)) {
+          return false;
+        }
+        if (document.hidden) {
+          return false;
+        }
+        const rect = flatBillboard.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          return false;
+        }
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        return rect.right > 0 && rect.bottom > 0 && rect.left < viewportWidth && rect.top < viewportHeight;
+      }
+
+      function shouldRunMarqueeAnimation() {
+        return isMarqueeEnabledForCurrentMode() && marqueeTargetVisible && !document.hidden;
+      }
+
+      function syncMarqueeAnimationState() {
+        if (shouldRunMarqueeAnimation()) {
+          if (!marqueeAnimationRaf) {
+            marqueeLastTimestamp = 0;
+            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+          }
+        } else if (marqueeAnimationRaf) {
+          stopMarqueeAnimation();
+        }
+      }
+
+      function refreshMarqueeTargetVisibility() {
+        marqueeTargetVisible = computeMarqueeTargetVisibility();
+        syncMarqueeAnimationState();
+      }
+
+      function initMarqueeVisibilityTracking() {
+        marqueeTargetVisible = computeMarqueeTargetVisibility();
+        if (flatBillboard instanceof HTMLElement && "IntersectionObserver" in window) {
+          marqueeVisibilityObserver = new IntersectionObserver((entries) => {
+            if (!entries.length) {
+              return;
+            }
+            marqueeTargetVisible = entries[0].isIntersecting;
+            syncMarqueeAnimationState();
+          }, { root: null, threshold: 0.01 });
+          marqueeVisibilityObserver.observe(flatBillboard);
+        }
+        document.addEventListener("visibilitychange", refreshMarqueeTargetVisibility);
+        window.addEventListener("scroll", refreshMarqueeTargetVisibility, { passive: true });
+      }
+
       function stepMarquee(now) {
-        if (!isMarqueeEnabledForCurrentMode()) {
+        if (!shouldRunMarqueeAnimation()) {
           stopMarqueeAnimation();
           return;
         }
@@ -3564,7 +3618,7 @@
       function startMarqueeAnimation() {
         stopMarqueeAnimation();
         marqueeLastTimestamp = 0;
-        marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+        syncMarqueeAnimationState();
       }
 
       function applyMarqueeSettings(enabled, speed, direction, shouldPersist, options = {}) {
@@ -3625,10 +3679,7 @@
           }
         } else if (isMarqueeEnabledForCurrentMode()) {
           applyFlatBillboardTrackTransform();
-          if (!marqueeAnimationRaf) {
-            marqueeLastTimestamp = 0;
-            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
-          }
+          syncMarqueeAnimationState();
         }
         if (shouldPersist) {
           saveEditorState();
@@ -3683,16 +3734,10 @@
         if (!normalizedEnabled && editorState.settings.marqueeEnabled && cycle > 0) {
           applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
-          if (!marqueeAnimationRaf) {
-            marqueeLastTimestamp = 0;
-            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
-          }
+          syncMarqueeAnimationState();
         } else if (normalizedEnabled && isMarqueeEnabledForCurrentMode()) {
           applyFlatBillboardTrackTransform();
-          if (!marqueeAnimationRaf) {
-            marqueeLastTimestamp = 0;
-            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
-          }
+          syncMarqueeAnimationState();
         } else if (marqueeAnimationRaf && !isMarqueeEnabledForCurrentMode()) {
           stopMarqueeAnimation();
         }
@@ -4932,6 +4977,7 @@
         updateScaleControlsAnchorTop();
         syncBillboardPaddingFromEditorPreview();
         positionScaleControls();
+        refreshMarqueeTargetVisibility();
       });
 
       window.addEventListener("keydown", (event) => {
@@ -4953,9 +4999,14 @@
       });
 
       window.addEventListener("beforeunload", () => {
+        if (marqueeVisibilityObserver) {
+          marqueeVisibilityObserver.disconnect();
+          marqueeVisibilityObserver = null;
+        }
         stopMarqueeAnimation();
       });
 
+      initMarqueeVisibilityTracking();
       if (!loadSnapshotFromPathIfPresent()) {
         loadBillboardMakerState({ updatePath: false, replaceHistory: true });
       }
