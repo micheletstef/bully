@@ -3062,9 +3062,9 @@
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
           const verticalAlignForRotated = partitionSettings.verticalAlignment === "top"
-            ? "flex-end"
+            ? "flex-start"
             : partitionSettings.verticalAlignment === "bottom"
-              ? "flex-start"
+              ? "flex-end"
               : "center";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
           const previewEditorHeight = Math.max(
