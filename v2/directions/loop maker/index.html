@@ -247,7 +247,7 @@
 
       .item {
         display: grid;
-        grid-template-columns: 36px 1fr auto auto;
+        grid-template-columns: 36px 1fr auto auto auto;
         align-items: center;
         gap: 6px;
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -1347,6 +1347,15 @@
           downButton.addEventListener("click", () => moveFrame(index, index + 1));
           item.appendChild(downButton);
 
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "mini";
+          deleteButton.textContent = "x";
+          deleteButton.title = "remove frame";
+          deleteButton.setAttribute("aria-label", `remove ${frameDisplayName(frame, index)}`);
+          deleteButton.addEventListener("click", () => removeFrame(index));
+          item.appendChild(deleteButton);
+
           frameList.appendChild(item);
         });
       }
@@ -1458,6 +1467,26 @@
         state.currentIndex = Math.max(0, Math.min(state.currentIndex, state.frames.length - 1));
         renderFrameList();
         restartPlayback();
+      }
+
+      function removeFrame(frameIndex) {
+        if (frameIndex < 0 || frameIndex >= state.frames.length) {
+          return;
+        }
+        const [removed] = state.frames.splice(frameIndex, 1);
+        if (removed && removed.url) {
+          URL.revokeObjectURL(removed.url);
+        }
+        state.currentIndex = Math.max(0, Math.min(state.currentIndex, Math.max(0, steppedFrames().length - 1)));
+        resetProcessingCaches();
+        if (!state.frames.length) {
+          previewOutputAspect = null;
+          stopPlayback();
+        }
+        renderFrameList();
+        updateButtons();
+        updatePreview();
+        startPlayback();
       }
 
       function clearFrames() {
