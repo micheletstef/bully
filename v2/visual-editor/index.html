@@ -2442,12 +2442,11 @@
         if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
           billboardMarqueeOffsetX = 0;
           if (rawDirection === "rtl") {
-            // Vertical RTL keeps its current start anchor, but wraps by cycle
-            // distance so it lands on an equivalent duplicate run.
-            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx;
-          } else {
-            // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
+            // Mirror the proven seamless horizontal RTL phase, on Y-axis.
             billboardMarqueeOffsetY = -cycleProgressPx;
+          } else {
+            // Mirror the proven seamless horizontal LTR phase, on Y-axis.
+            billboardMarqueeOffsetY = -((maxBillboardTravelPx + cycle) - cycleProgressPx);
           }
         } else if (rawDirection === "rtl") {
           // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
