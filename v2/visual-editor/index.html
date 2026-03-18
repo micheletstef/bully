@@ -1734,16 +1734,13 @@
         }
         if (!(preview3dThreeState.texture instanceof THREE.Texture)) {
           const texture = new THREE.CanvasTexture(preview3dSourceCanvas);
-          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapS = THREE.ClampToEdgeWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.flipY = false;
-          // Mesh orientation is flipped to show the visible front face from our default camera.
-          // Rotate UVs 180deg so projected artwork matches flat preview orientation.
-          texture.center.set(0.5, 0.5);
-          texture.rotation = Math.PI;
-          // Final left/right correction to match flat preview exactly.
-          texture.repeat.set(-1, 1);
-          texture.offset.set(1, 0);
+          texture.center.set(0, 0);
+          texture.rotation = 0;
+          texture.repeat.set(1, 1);
+          texture.offset.set(0, 0);
           texture.generateMipmaps = false;
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
@@ -1758,12 +1755,12 @@
           }
           mesh.material.needsUpdate = true;
         } else {
-          preview3dThreeState.texture.wrapS = THREE.RepeatWrapping;
+          preview3dThreeState.texture.wrapS = THREE.ClampToEdgeWrapping;
           preview3dThreeState.texture.wrapT = THREE.ClampToEdgeWrapping;
-          preview3dThreeState.texture.center.set(0.5, 0.5);
-          preview3dThreeState.texture.rotation = Math.PI;
-          preview3dThreeState.texture.repeat.set(-1, 1);
-          preview3dThreeState.texture.offset.set(1, 0);
+          preview3dThreeState.texture.center.set(0, 0);
+          preview3dThreeState.texture.rotation = 0;
+          preview3dThreeState.texture.repeat.set(1, 1);
+          preview3dThreeState.texture.offset.set(0, 0);
           preview3dThreeState.texture.needsUpdate = true;
         }
         return true;
