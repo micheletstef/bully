@@ -3256,18 +3256,47 @@
         if (!(flatBillboardSinglePartitionGuides instanceof HTMLElement)) {
           return;
         }
-        // In single-mode, padding is billboard-wide. Do not draw partition-level guides.
+        // In single-mode, the billboard-level background guides are sufficient.
         flatBillboardSinglePartitionGuides.classList.remove("is-visible");
         flatBillboardSinglePartitionGuides.innerHTML = "";
+      }
+
+      function syncPartitionPaddingGuides() {
+        if (!(flatBillboardSinglePartitionGuides instanceof HTMLElement)) {
+          return;
+        }
+        flatBillboardSinglePartitionGuides.innerHTML = "";
+        for (const partitionKey of PARTITION_KEYS) {
+          const layout = PARTITION_LAYOUT[partitionKey];
+          const ratios = partitionPaddingRatios(partitionKey);
+          const guide = document.createElement("div");
+          guide.className = "flat-billboard-single-partition-guide";
+          guide.style.left = layout.offsetRatio * 100 + "%";
+          guide.style.width = layout.widthRatio * 100 + "%";
+
+          const edges = [
+            { edge: "left", position: { left: (ratios.sideRatio * 100) + "%" } },
+            { edge: "right", position: { right: (ratios.sideRatio * 100) + "%" } },
+            { edge: "top", position: { top: (ratios.topRatio * 100) + "%" } },
+            { edge: "bottom", position: { bottom: (ratios.topRatio * 100) + "%" } },
+          ];
+          for (const edgeDef of edges) {
+            const line = document.createElement("div");
+            line.className = "flat-billboard-single-partition-guide-line";
+            line.dataset.edge = edgeDef.edge;
+            for (const [key, value] of Object.entries(edgeDef.position)) {
+              line.style[key] = value;
+            }
+            guide.appendChild(line);
+          }
+          flatBillboardSinglePartitionGuides.appendChild(guide);
+        }
+        flatBillboardSinglePartitionGuides.classList.add("is-visible");
       }
 
       function syncFlatBillboardPartitioned() {
         if (!(flatBillboardPartitionLayers instanceof HTMLElement)) {
           return;
-        }
-        if (flatBillboardSinglePartitionGuides instanceof HTMLElement) {
-          flatBillboardSinglePartitionGuides.classList.remove("is-visible");
-          flatBillboardSinglePartitionGuides.innerHTML = "";
         }
         flatBillboardTrack.style.display = "none";
         flatBillboardPartitionLayers.classList.add("is-visible");
@@ -3408,6 +3437,7 @@
             track.style.transform = "none";
           }
         }
+        syncPartitionPaddingGuides();
         syncFlatBillboardSelectionState();
       }
 
