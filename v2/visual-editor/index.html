@@ -1223,6 +1223,8 @@
       let marqueeProgressPx = 0;
       let partitionMarqueeProgressPx = { left: 0, curve: 0, right: 0 };
       let marqueeCyclePx = 0;
+      let partitionViewportUiLastUpdateMs = 0;
+      const PARTITION_VIEWPORT_UI_INTERVAL_MS = 100;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1302,26 +1304,35 @@
         return idSuffix ? base + "-" + idSuffix : base;
       }
 
-      function snapshotPathnameForSlug(slug) {
-        const normalizedBase = TOOL_BASE_PATHNAME.replace(/\/+$/, "");
-        return normalizedBase + "/" + encodeURIComponent(slug);
+      function snapshotUrlForSlug(slug) {
+        return TOOL_BASE_PATHNAME + "?snapshot=" + encodeURIComponent(slug);
       }
 
       function snapshotSlugFromLocationPath() {
+        const query = new URLSearchParams(window.location.search || "");
+        const querySlug = query.get("snapshot");
+        if (querySlug) {
+          return snapshotSlugify(querySlug);
+        }
+        const hash = String(window.location.hash || "");
+        if (hash.startsWith("#snapshot=")) {
+          return snapshotSlugify(hash.slice("#snapshot=".length));
+        }
         const path = window.location.pathname || "";
         const base = TOOL_BASE_PATHNAME;
-        if (!path.startsWith(base)) {
+        const normalizedBase = base.endsWith("/") ? base : base + "/";
+        if (!path.startsWith(normalizedBase)) {
           return "";
         }
-        const remainder = path.slice(base.length).replace(/^\/+/, "");
+        const remainder = path.slice(normalizedBase.length).replace(/^\/+/, "");
         if (!remainder) {
           return "";
         }
         const slug = remainder.split("/")[0];
         try {
-          return decodeURIComponent(slug);
+          return snapshotSlugify(decodeURIComponent(slug));
         } catch (error) {
-          return slug;
+          return snapshotSlugify(slug);
         }
       }
 
@@ -1338,14 +1349,15 @@
           return;
         }
         const slug = snapshotSlugForEntry(snapshot);
-        const pathname = snapshotPathnameForSlug(slug);
-        if (window.location.pathname === pathname) {
+        const nextUrl = snapshotUrlForSlug(slug);
+        const currentUrl = window.location.pathname + window.location.search;
+        if (currentUrl === nextUrl) {
           return;
         }
         if (replaceHistory) {
-          history.replaceState({ slug }, "", pathname);
+          history.replaceState({ slug }, "", nextUrl);
         } else {
-          history.pushState({ slug }, "", pathname);
+          history.pushState({ slug }, "", nextUrl);
         }
       }
 
@@ -1354,7 +1366,8 @@
           window.location.href = TOOL_BASE_URL;
           return;
         }
-        if (window.location.pathname === TOOL_BASE_PATHNAME) {
+        const currentUrl = window.location.pathname + window.location.search;
+        if (currentUrl === TOOL_BASE_PATHNAME) {
           return;
         }
         if (replaceHistory) {
@@ -3512,7 +3525,16 @@
             hasMovingPartition = true;
           }
           if (hasMovingPartition) {
-            applyFlatBillboardTrackTransform();
+            // Keep marquee motion on every frame, but throttle viewport/timer UI
+            // updates to reduce partition-mode layout thrash and GC jitter.
+            applyPartitionMarqueeTransforms();
+            if (
+              !partitionViewportUiLastUpdateMs
+              || (now - partitionViewportUiLastUpdateMs) >= PARTITION_VIEWPORT_UI_INTERVAL_MS
+            ) {
+              updatePartitionViewportFrames();
+              partitionViewportUiLastUpdateMs = now;
+            }
           }
         } else {
           const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
@@ -3535,6 +3557,7 @@
           marqueeAnimationRaf = null;
         }
         marqueeLastTimestamp = 0;
+        partitionViewportUiLastUpdateMs = 0;
         marqueeProgressPx = 0;
       }
 
