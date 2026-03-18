@@ -2777,7 +2777,7 @@
         const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
         if (rotatedBillboard) {
           billboardMarqueeOffsetX = 0;
-          billboardMarqueeOffsetY = nextEditorOffsetX;
+          billboardMarqueeOffsetY = -nextEditorOffsetX;
         } else {
           billboardMarqueeOffsetX = nextEditorOffsetX;
           billboardMarqueeOffsetY = 0;
