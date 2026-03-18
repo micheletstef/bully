@@ -4071,7 +4071,9 @@
           if (marqueeEnabled && originalBlocks.length) {
             const viewportLength = Math.max(1, (artboard.clientWidth || partitionPixelWidth));
             const runLength = partitionMarqueeCycleLength(track);
-            const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
+            // Keep at least two duplicate runs buffered so narrow partitions
+            // (like curve) don't reveal/hide originals at wrap boundaries.
+            const duplicateSets = Math.max(2, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
             const leadingDuplicateSets = duplicateSets + (direction === "ltr" ? 1 : 0);
             const trailingDuplicateSets = duplicateSets + (direction === "ltr" ? 1 : 0);
             for (let setIndex = 0; setIndex < leadingDuplicateSets; setIndex += 1) {
