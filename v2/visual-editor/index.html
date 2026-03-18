@@ -3186,10 +3186,10 @@
 
           if (partitionSettings.orientation === "vertical") {
             const containerMainSpan = Math.max(1, logicalArtboardWidth);
-            const alignmentSpan = Math.abs(containerMainSpan - contentMainSpan);
+            const alignmentSpan = containerMainSpan - contentMainSpan;
             // Because of rotate(-90deg), main-axis start renders at the bottom.
-            // So top/center/bottom on screen map to larger/smaller upward
-            // offsets from that bottom-anchored start.
+            // Use signed span delta so overflow and underflow cases move in the
+            // correct direction for top/center/bottom alignment.
             let mainAxisOffset = 0;
             if (partitionSettings.verticalAlignment === "top") {
               mainAxisOffset = alignmentSpan;
