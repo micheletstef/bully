@@ -2265,7 +2265,10 @@
           ? Math.max(1, (rotatedBillboard ? flatBillboard.clientHeight : flatBillboard.clientWidth) || 1)
           : Math.max(1, flatBillboard.clientHeight || 1);
         const runLength = marqueeCycleLength();
-        const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
+        const baseDuplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
+        // Rotated marquee needs one extra buffered run per side so cycle-wrap
+        // always lands on already-present duplicate content.
+        const duplicateSets = baseDuplicateSets + (rotatedBillboard && horizontal ? 1 : 0);
         for (let setIndex = 0; setIndex < duplicateSets; setIndex += 1) {
           for (let i = originals.length - 1; i >= 0; i -= 1) {
             const original = originals[i];
