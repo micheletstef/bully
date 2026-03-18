@@ -146,6 +146,13 @@
         margin-bottom: 10px;
       }
 
+      .tools-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-bottom: 10px;
+      }
+
       .saved-billboards-list[hidden] {
         display: none;
       }
@@ -949,10 +956,14 @@
     <div class="page-shell">
       <aside class="assets-directory" aria-label="Placeholder assets directory">
         <div class="assets-title-row">
-          <h2 class="assets-title">assets</h2>
+          <h2 class="assets-title">saved</h2>
           <button id="saveBillboardButton" type="button" class="assets-save-button">save</button>
         </div>
         <div id="savedBillboardsList" class="saved-billboards-list"></div>
+        <div id="toolsList" class="tools-list">
+          <div class="saved-billboards-title">tools</div>
+          <button id="billboardMakerButton" type="button" class="saved-billboard-button">billboard maker</button>
+        </div>
         <div id="assetsList" class="assets-list"></div>
       </aside>
       <aside class="settings-panel" aria-label="Visual editor settings">
@@ -1123,6 +1134,7 @@
       const assetsList = document.getElementById("assetsList");
       const saveBillboardButton = document.getElementById("saveBillboardButton");
       const savedBillboardsList = document.getElementById("savedBillboardsList");
+      const billboardMakerButton = document.getElementById("billboardMakerButton");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
       const partitionsToggle = document.getElementById("partitionsToggle");
@@ -1214,9 +1226,104 @@
         bottom: "flex-end",
       };
 
+      function resolveToolBasePathname() {
+        const pathname = window.location.pathname || "/";
+        const marker = "/visual-editor";
+        const markerIndex = pathname.indexOf(marker);
+        if (markerIndex === -1) {
+          return pathname.replace(/\/+$/, "") || "/";
+        }
+        const prefix = pathname.slice(0, markerIndex + marker.length);
+        const afterMarker = pathname.slice(markerIndex + marker.length);
+        if (afterMarker.startsWith("/index.html")) {
+          return prefix + "/index.html";
+        }
+        return prefix + "/";
+      }
+
+      const TOOL_BASE_PATHNAME = resolveToolBasePathname();
+      const TOOL_BASE_URL = new URL(TOOL_BASE_PATHNAME, window.location.origin).toString();
+      const APP_BASE_URL = new URL("../", TOOL_BASE_URL).toString();
+
       function apiPath(path) {
         const cleanPath = String(path || "").replace(/^\/+/, "");
-        return new URL("../" + cleanPath, window.location.href).toString();
+        return new URL(cleanPath, APP_BASE_URL).toString();
+      }
+
+      function snapshotSlugify(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+
+      function snapshotSlugForEntry(snapshot) {
+        const nameBase = snapshotSlugify(snapshot && snapshot.name ? snapshot.name : "snapshot");
+        const base = nameBase || "snapshot";
+        const idSuffix = snapshotSlugify(snapshot && snapshot.id ? snapshot.id : "").replace(/-/g, "").slice(-8);
+        return idSuffix ? base + "-" + idSuffix : base;
+      }
+
+      function snapshotPathnameForSlug(slug) {
+        const normalizedBase = TOOL_BASE_PATHNAME.replace(/\/+$/, "");
+        return normalizedBase + "/" + encodeURIComponent(slug);
+      }
+
+      function snapshotSlugFromLocationPath() {
+        const path = window.location.pathname || "";
+        const base = TOOL_BASE_PATHNAME;
+        if (!path.startsWith(base)) {
+          return "";
+        }
+        const remainder = path.slice(base.length).replace(/^\/+/, "");
+        if (!remainder) {
+          return "";
+        }
+        const slug = remainder.split("/")[0];
+        try {
+          return decodeURIComponent(slug);
+        } catch (error) {
+          return slug;
+        }
+      }
+
+      function findSavedBillboardBySlug(slug) {
+        const normalizedSlug = snapshotSlugify(slug);
+        if (!normalizedSlug) {
+          return null;
+        }
+        return savedBillboards.find((entry) => snapshotSlugForEntry(entry) === normalizedSlug) || null;
+      }
+
+      function setPathForSnapshot(snapshot, replaceHistory) {
+        if (!snapshot || typeof history === "undefined") {
+          return;
+        }
+        const slug = snapshotSlugForEntry(snapshot);
+        const pathname = snapshotPathnameForSlug(slug);
+        if (window.location.pathname === pathname) {
+          return;
+        }
+        if (replaceHistory) {
+          history.replaceState({ slug }, "", pathname);
+        } else {
+          history.pushState({ slug }, "", pathname);
+        }
+      }
+
+      function setPathToToolRoot(replaceHistory) {
+        if (typeof history === "undefined") {
+          window.location.href = TOOL_BASE_URL;
+          return;
+        }
+        if (window.location.pathname === TOOL_BASE_PATHNAME) {
+          return;
+        }
+        if (replaceHistory) {
+          history.replaceState({}, "", TOOL_BASE_PATHNAME);
+        } else {
+          history.pushState({}, "", TOOL_BASE_PATHNAME);
+        }
       }
 
       function loadEditorState() {
@@ -1481,10 +1588,6 @@
           return;
         }
         savedBillboardsList.innerHTML = "";
-        const title = document.createElement("div");
-        title.className = "saved-billboards-title";
-        title.textContent = "saved";
-        savedBillboardsList.appendChild(title);
         if (!savedBillboards.length) {
           const empty = document.createElement("div");
           empty.className = "saved-billboards-empty";
@@ -1499,7 +1602,7 @@
           button.textContent = snapshot.name || "untitled snapshot";
           button.title = snapshot.name || "untitled snapshot";
           button.addEventListener("click", () => {
-            loadBillboardSnapshot(snapshot.id);
+            loadBillboardSnapshot(snapshot.id, { updatePath: true, replaceHistory: false });
           });
           savedBillboardsList.appendChild(button);
         }
@@ -1611,7 +1714,9 @@
         renderSavedBillboardsList();
       }
 
-      function loadBillboardSnapshot(snapshotId) {
+      function loadBillboardSnapshot(snapshotId, options = {}) {
+        const shouldUpdatePath = !!options.updatePath;
+        const shouldReplaceHistory = !!options.replaceHistory;
         const snapshot = savedBillboards.find((entry) => entry.id === snapshotId);
         if (!snapshot || !snapshot.state) {
           return;
@@ -1634,6 +1739,22 @@
         updateAssetIdCounterFromState();
         rebuildEditorFromState(snapshot.runtime || {});
         saveEditorState();
+        if (shouldUpdatePath) {
+          setPathForSnapshot(snapshot, shouldReplaceHistory);
+        }
+      }
+
+      function loadSnapshotFromPathIfPresent() {
+        const slug = snapshotSlugFromLocationPath();
+        if (!slug) {
+          return false;
+        }
+        const snapshot = findSavedBillboardBySlug(slug);
+        if (!snapshot) {
+          return false;
+        }
+        loadBillboardSnapshot(snapshot.id, { updatePath: true, replaceHistory: true });
+        return true;
       }
 
       function recoverLikelyScaleRegression() {
@@ -2112,6 +2233,10 @@
 
       function renderAssetList() {
         assetsList.innerHTML = "";
+        const rootTitle = document.createElement("div");
+        rootTitle.className = "saved-billboards-title";
+        rootTitle.textContent = "assets";
+        assetsList.appendChild(rootTitle);
         if (!availableAssets.length) {
           const empty = document.createElement("div");
           empty.className = "assets-status";
@@ -2489,12 +2614,14 @@
         if (!selectedBlock) {
           return;
         }
-        const selectedEditor = selectedBlock.closest(".visual-editor-block");
-        if (!(selectedEditor instanceof HTMLElement)) {
+        const editorShell = editorStage.closest(".editor-shell");
+        if (!(editorShell instanceof HTMLElement)) {
           return;
         }
-        const centerX = selectedEditor.offsetLeft + selectedBlock.offsetLeft - editorStage.scrollLeft + selectedBlock.offsetWidth / 2;
-        const controlsTop = editorStage.offsetTop + selectedEditor.offsetTop - editorStage.scrollTop + selectedEditor.offsetHeight + 6;
+        const shellRect = editorShell.getBoundingClientRect();
+        const blockRect = selectedBlock.getBoundingClientRect();
+        const centerX = blockRect.left - shellRect.left + (blockRect.width / 2);
+        const controlsTop = blockRect.bottom - shellRect.top + 6;
         assetScaleControls.style.left = centerX + "px";
         assetScaleControls.style.top = controlsTop + "px";
       }
@@ -4363,6 +4490,16 @@
         });
       }
 
+      if (billboardMakerButton instanceof HTMLButtonElement) {
+        billboardMakerButton.addEventListener("click", () => {
+          setPathToToolRoot(false);
+        });
+      }
+
+      window.addEventListener("popstate", () => {
+        loadSnapshotFromPathIfPresent();
+      });
+
       assetGapControl.addEventListener("input", () => {
         applyAssetGap(assetGapControl.value, true);
       });
@@ -4650,7 +4787,9 @@
         stopMarqueeAnimation();
       });
 
-      rebuildEditorFromState();
+      if (!loadSnapshotFromPathIfPresent()) {
+        rebuildEditorFromState();
+      }
       loadAvailableAssets();
     </script>
   </body>
