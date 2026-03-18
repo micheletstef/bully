@@ -850,6 +850,19 @@
         left: 48.1356%;
         top: -34px;
       }
+
+      body.billboard-guides-hidden .visual-editor-block,
+      body.billboard-guides-hidden .flat-billboard {
+        background-image: none;
+      }
+
+      body.billboard-guides-hidden .flat-billboard-single-partition-guides {
+        display: none !important;
+      }
+
+      body.billboard-guides-hidden .flat-billboard-annotations {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -933,6 +946,10 @@
               <input id="paddingLRControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
             </label>
           </div>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="showGuidesControl">guides</label>
+          <input id="showGuidesControl" type="checkbox" checked />
         </div>
         <div class="settings-row">
           <label class="settings-label" for="assetGapControl">asset gap</label>
@@ -1050,6 +1067,7 @@
       const flatBillboardSinglePartitionGuides = document.getElementById("flatBillboardSinglePartitionGuides");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
+      const showGuidesControl = document.getElementById("showGuidesControl");
       const assetGapControl = document.getElementById("assetGapControl");
       const backgroundColorControl = document.getElementById("backgroundColorControl");
       const assetColorControl = document.getElementById("assetColorControl");
@@ -1141,6 +1159,7 @@
             orientation: "horizontal",
             paddingTB: 0,
             paddingLR: 0,
+            showGuides: true,
             assetGap: 8,
             backgroundColor: "#ff00ff",
             assetColor: "#1e6cff",
@@ -1281,9 +1300,11 @@
           const orientation = savedOrientation === "vertical" ? "vertical" : "horizontal";
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
           const savedPaddingLR = Number(parsed?.settings?.paddingLR);
+          const savedShowGuides = parsed?.settings?.showGuides;
           const savedAssetGap = Number(parsed?.settings?.assetGap);
           const paddingTB = Number.isFinite(savedPaddingTB) ? Math.max(0, savedPaddingTB) : 0;
           const paddingLR = Number.isFinite(savedPaddingLR) ? Math.max(0, savedPaddingLR) : 0;
+          const showGuides = typeof savedShowGuides === "boolean" ? savedShowGuides : true;
           const assetGap = Number.isFinite(savedAssetGap) ? Math.max(0, savedAssetGap) : 8;
           const savedBackgroundColor = typeof parsed?.settings?.backgroundColor === "string" ? parsed.settings.backgroundColor : "#ff00ff";
           const savedAssetColor = typeof parsed?.settings?.assetColor === "string" ? parsed.settings.assetColor : "#1e6cff";
@@ -1302,6 +1323,7 @@
               orientation,
               paddingTB,
               paddingLR,
+              showGuides,
               assetGap,
               backgroundColor: savedBackgroundColor,
               assetColor: savedAssetColor,
@@ -1460,6 +1482,9 @@
         }
         paddingTBControl.value = String(Number(source.paddingTB) || 0);
         paddingLRControl.value = String(Number(source.paddingLR) || 0);
+        if (showGuidesControl instanceof HTMLInputElement) {
+          showGuidesControl.checked = editorState.settings.showGuides !== false;
+        }
         assetGapControl.value = String(Number(source.assetGap) || 0);
         backgroundColorControl.value = source.backgroundColor || "#ff00ff";
         assetColorControl.value = source.assetColor || "#1e6cff";
@@ -3461,6 +3486,18 @@
         }
       }
 
+      function applyGuidesVisibility(enabled, shouldPersist) {
+        const normalizedEnabled = enabled !== false;
+        editorState.settings.showGuides = normalizedEnabled;
+        document.body.classList.toggle("billboard-guides-hidden", !normalizedEnabled);
+        if (showGuidesControl instanceof HTMLInputElement) {
+          showGuidesControl.checked = normalizedEnabled;
+        }
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
       function syncBillboardPaddingFromEditorPreview() {
         const target = currentSettingsTarget();
         const referenceEditor = target.partitioned
@@ -4019,6 +4056,12 @@
         applyPaddingGuides(paddingTBControl.value, paddingLRControl.value, true);
       });
 
+      if (showGuidesControl instanceof HTMLInputElement) {
+        showGuidesControl.addEventListener("change", () => {
+          applyGuidesVisibility(showGuidesControl.checked, true);
+        });
+      }
+
       assetGapControl.addEventListener("input", () => {
         applyAssetGap(assetGapControl.value, true);
       });
@@ -4314,6 +4357,7 @@
       applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
       applyAssetGap(editorState.settings.assetGap, false);
       applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
+      applyGuidesVisibility(editorState.settings.showGuides !== false, false);
       for (const savedAsset of editorState.assets) {
         appendAssetBlock(savedAsset);
       }
