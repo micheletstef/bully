@@ -1250,6 +1250,7 @@
         <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
       </main>
     </div>
+    <script type="module" src="../assets/js/three-loader.js"></script>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
       const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
@@ -1335,15 +1336,22 @@
       const PARTITION_KEYS = ["left", "curve", "right"];
       const ARTBOARD_WIDTH = 5900;
       const ARTBOARD_HEIGHT = 3480;
-      const PREVIEW3D_STRIP_COUNT = 180;
-      const PREVIEW3D_FRAME_FIT = 0.86;
-      const PREVIEW3D_FIXED_CAMERA = {
-        yaw: -0.72,
-        pitch: 0.1,
-        perspective: 1.32,
-        targetX: 250,
-        targetDepth: 2920,
+      const PREVIEW3D_CAMERA = {
+        yaw: -0.7,
+        pitch: 0.11,
+        perspective: 1.33,
+        zoom: 2.68,
+        targetX: 0,
+        targetY: 0,
         targetZ: 0,
+      };
+      const PREVIEW3D_TEXTURE_HEIGHT = 1400;
+      const preview3dThreeState = {
+        renderer: null,
+        scene: null,
+        camera: null,
+        mesh: null,
+        texture: null,
       };
       const preview3dSourceCanvas = document.createElement("canvas");
       const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
@@ -1437,30 +1445,6 @@
         };
       }
 
-      function projectPreview3dVertex(worldX, worldDepth, worldZ) {
-        const cosYaw = Math.cos(PREVIEW3D_FIXED_CAMERA.yaw);
-        const sinYaw = Math.sin(PREVIEW3D_FIXED_CAMERA.yaw);
-        const cosPitch = Math.cos(PREVIEW3D_FIXED_CAMERA.pitch);
-        const sinPitch = Math.sin(PREVIEW3D_FIXED_CAMERA.pitch);
-        const x = worldX - PREVIEW3D_FIXED_CAMERA.targetX;
-        const depth = worldDepth - PREVIEW3D_FIXED_CAMERA.targetDepth;
-        const z = worldZ - PREVIEW3D_FIXED_CAMERA.targetZ;
-        const x1 = x * cosYaw - depth * sinYaw;
-        const y1 = x * sinYaw + depth * cosYaw;
-        const z1 = z;
-        const y2 = y1 * cosPitch - z1 * sinPitch;
-        const z2 = y1 * sinPitch + z1 * cosPitch;
-        const cameraDepth = 6400;
-        const focal = 4600 * PREVIEW3D_FIXED_CAMERA.perspective;
-        const denom = Math.max(320, cameraDepth + y2);
-        const perspective = focal / denom;
-        return {
-          x: x1 * perspective,
-          y: -z2 * perspective,
-          depth: y2,
-        };
-      }
-
       function ensurePreview3dCanvasSize() {
         if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
           return { width: 0, height: 0 };
@@ -1475,6 +1459,138 @@
           flatBillboard3dCanvas.height = height;
         }
         return { width, height };
+      }
+
+      function getThreeLib() {
+        return typeof window !== "undefined" ? window.THREE || null : null;
+      }
+
+      function createCurvedBillboardGeometry(THREE) {
+        const widthSegments = 220;
+        const geometry = new THREE.PlaneGeometry(ARTBOARD_WIDTH, ARTBOARD_HEIGHT, widthSegments, 1);
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i += 1) {
+          const originalX = positions.getX(i);
+          const distanceAlongWidth = originalX + ARTBOARD_WIDTH * 0.5;
+          const sample = computePreview3dCurveSample(distanceAlongWidth);
+          positions.setX(i, sample.x - PREVIEW3D_CURVE_CENTER.x);
+          positions.setZ(i, sample.depth - PREVIEW3D_CURVE_CENTER.depth);
+        }
+        positions.needsUpdate = true;
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        geometry.computeVertexNormals();
+        return geometry;
+      }
+
+      function ensureThreePreviewSetup() {
+        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+          return false;
+        }
+        const THREE = getThreeLib();
+        if (!THREE) {
+          return false;
+        }
+        if (
+          preview3dThreeState.renderer &&
+          preview3dThreeState.scene &&
+          preview3dThreeState.camera &&
+          preview3dThreeState.mesh
+        ) {
+          return true;
+        }
+
+        const renderer = new THREE.WebGLRenderer({
+          canvas: flatBillboard3dCanvas,
+          antialias: true,
+          alpha: true,
+        });
+        renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio || 1)));
+        renderer.setClearColor(0x0f1117, 1);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f1117);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        scene.add(ambientLight);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(2200, 3200, 2800);
+        scene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0xb7c3ff, 0.22);
+        fillLight.position.set(-1800, 1200, 900);
+        scene.add(fillLight);
+
+        const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 30000);
+        const geometry = createCurvedBillboardGeometry(THREE);
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.48,
+          metalness: 0.06,
+          emissive: 0xffffff,
+          emissiveIntensity: 0.92,
+          side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.frustumCulled = false;
+        scene.add(mesh);
+
+        preview3dThreeState.renderer = renderer;
+        preview3dThreeState.scene = scene;
+        preview3dThreeState.camera = camera;
+        preview3dThreeState.mesh = mesh;
+        return true;
+      }
+
+      function syncThreeTextureFromFlatSource() {
+        const THREE = getThreeLib();
+        const mesh = preview3dThreeState.mesh;
+        if (!THREE || !mesh || !mesh.material) {
+          return;
+        }
+        const textureHeight = PREVIEW3D_TEXTURE_HEIGHT;
+        const textureWidth = Math.max(1, Math.round(textureHeight * ARTBOARD_WIDTH / ARTBOARD_HEIGHT));
+        if (!drawFlatBillboardSourceCanvas(textureWidth, textureHeight)) {
+          return;
+        }
+        if (!(preview3dThreeState.texture instanceof THREE.Texture)) {
+          const texture = new THREE.CanvasTexture(preview3dSourceCanvas);
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.flipY = false;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+          }
+          texture.needsUpdate = true;
+          preview3dThreeState.texture = texture;
+          mesh.material.map = texture;
+          if ("emissiveMap" in mesh.material) {
+            mesh.material.emissiveMap = texture;
+          }
+          mesh.material.needsUpdate = true;
+        } else {
+          preview3dThreeState.texture.needsUpdate = true;
+        }
+      }
+
+      function syncThreeCameraTransform() {
+        const camera = preview3dThreeState.camera;
+        if (!camera) {
+          return;
+        }
+        const perspectiveFactor = Math.min(2.5, Math.max(0.1, PREVIEW3D_CAMERA.perspective));
+        camera.fov = Math.max(18, Math.min(72, 44 / perspectiveFactor));
+        const radius = 2200 * PREVIEW3D_CAMERA.zoom;
+        const yaw = PREVIEW3D_CAMERA.yaw;
+        const pitch = PREVIEW3D_CAMERA.pitch;
+        const cosPitch = Math.cos(pitch);
+        camera.position.set(
+          Math.sin(yaw) * cosPitch * radius,
+          Math.sin(pitch) * radius * 0.9,
+          Math.cos(yaw) * cosPitch * radius
+        );
+        camera.lookAt(PREVIEW3D_CAMERA.targetX, PREVIEW3D_CAMERA.targetY, PREVIEW3D_CAMERA.targetZ);
       }
 
       function drawFlatBillboardSourceCanvas(targetWidth, targetHeight) {
@@ -1531,116 +1647,27 @@
       }
 
       function drawCurvedBillboard3dFrame() {
-        if (previewMode !== "3d") {
+        if (previewMode !== "3d" || !ensureThreePreviewSetup()) {
           return;
         }
-        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
-          return;
-        }
-        const ctx = flatBillboard3dCanvas.getContext("2d");
-        if (!ctx) {
+        const renderer = preview3dThreeState.renderer;
+        const scene = preview3dThreeState.scene;
+        const camera = preview3dThreeState.camera;
+        if (!renderer || !scene || !camera || !(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
           return;
         }
         const { width, height } = ensurePreview3dCanvasSize();
         if (!width || !height) {
           return;
         }
-        if (!drawFlatBillboardSourceCanvas(width, height)) {
-          return;
-        }
-
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, width, height);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.fillStyle = "#0f1117";
-        ctx.fillRect(0, 0, width, height);
-
-        const rawBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-        for (let i = 0; i <= PREVIEW3D_STRIP_COUNT; i += 1) {
-          const s = (i / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
-          const sample = computePreview3dCurveSample(s);
-          const worldX = sample.x - PREVIEW3D_CURVE_CENTER.x;
-          const worldDepth = sample.depth - PREVIEW3D_CURVE_CENTER.depth;
-          const top = projectPreview3dVertex(worldX, worldDepth, 0);
-          const bottom = projectPreview3dVertex(worldX, worldDepth, -ARTBOARD_HEIGHT);
-          rawBounds.minX = Math.min(rawBounds.minX, top.x, bottom.x);
-          rawBounds.maxX = Math.max(rawBounds.maxX, top.x, bottom.x);
-          rawBounds.minY = Math.min(rawBounds.minY, top.y, bottom.y);
-          rawBounds.maxY = Math.max(rawBounds.maxY, top.y, bottom.y);
-        }
-
-        const projectedWidth = Math.max(1, rawBounds.maxX - rawBounds.minX);
-        const projectedHeight = Math.max(1, rawBounds.maxY - rawBounds.minY);
-        const fitScale = Math.min((width * PREVIEW3D_FRAME_FIT) / projectedWidth, (height * PREVIEW3D_FRAME_FIT) / projectedHeight);
-        const offsetX = (width - projectedWidth * fitScale) * 0.5 - rawBounds.minX * fitScale;
-        const offsetY = (height - projectedHeight * fitScale) * 0.5 - rawBounds.minY * fitScale;
-
-        for (let i = 0; i < PREVIEW3D_STRIP_COUNT; i += 1) {
-          const s0 = (i / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
-          const s1 = ((i + 1) / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
-          const sample0 = computePreview3dCurveSample(s0);
-          const sample1 = computePreview3dCurveSample(s1);
-          const x0 = sample0.x - PREVIEW3D_CURVE_CENTER.x;
-          const x1 = sample1.x - PREVIEW3D_CURVE_CENTER.x;
-          const depth0 = sample0.depth - PREVIEW3D_CURVE_CENTER.depth;
-          const depth1 = sample1.depth - PREVIEW3D_CURVE_CENTER.depth;
-          const topLeft = projectPreview3dVertex(x0, depth0, 0);
-          const topRight = projectPreview3dVertex(x1, depth1, 0);
-          const bottomRight = projectPreview3dVertex(x1, depth1, -ARTBOARD_HEIGHT);
-          const bottomLeft = projectPreview3dVertex(x0, depth0, -ARTBOARD_HEIGHT);
-
-          const p0 = { x: topLeft.x * fitScale + offsetX, y: topLeft.y * fitScale + offsetY };
-          const p1 = { x: topRight.x * fitScale + offsetX, y: topRight.y * fitScale + offsetY };
-          const p2 = { x: bottomRight.x * fitScale + offsetX, y: bottomRight.y * fitScale + offsetY };
-          const p3 = { x: bottomLeft.x * fitScale + offsetX, y: bottomLeft.y * fitScale + offsetY };
-          const sx0 = (s0 / ARTBOARD_WIDTH) * preview3dSourceCanvas.width;
-          const sx1 = (s1 / ARTBOARD_WIDTH) * preview3dSourceCanvas.width;
-          const sw = Math.max(1, sx1 - sx0);
-          const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
-          const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p1.x, p1.y);
-          ctx.lineTo(p2.x, p2.y);
-          ctx.lineTo(p3.x, p3.y);
-          ctx.closePath();
-          ctx.clip();
-          ctx.setTransform(
-            (p1.x - p0.x) / dw,
-            (p1.y - p0.y) / dw,
-            (p3.x - p0.x) / dh,
-            (p3.y - p0.y) / dh,
-            p0.x,
-            p0.y
-          );
-          ctx.drawImage(preview3dSourceCanvas, sx0, 0, sw, preview3dSourceCanvas.height, 0, 0, dw, dh);
-          ctx.restore();
-
-          const depthDelta = Math.abs(depth1 - depth0);
-          const shadeAlpha = Math.max(0, Math.min(0.24, depthDelta / 1200));
-          if (shadeAlpha > 0) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(p0.x, p0.y);
-            ctx.lineTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.lineTo(p3.x, p3.y);
-            ctx.closePath();
-            ctx.fillStyle = "rgba(0, 0, 0, " + shadeAlpha.toFixed(3) + ")";
-            ctx.fill();
-            ctx.restore();
-          }
-        }
-
-        const gradient = ctx.createLinearGradient(0, 0, width, height * 0.85);
-        gradient.addColorStop(0, "rgba(255,255,255,0.08)");
-        gradient.addColorStop(0.45, "rgba(255,255,255,0)");
-        gradient.addColorStop(1, "rgba(0,0,0,0.24)");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
+        const cssWidth = Math.max(1, flatBillboard3dCanvas.clientWidth || 1);
+        const cssHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+        renderer.setSize(cssWidth, cssHeight, false);
+        camera.aspect = cssWidth / cssHeight;
+        syncThreeCameraTransform();
+        camera.updateProjectionMatrix();
+        syncThreeTextureFromFlatSource();
+        renderer.render(scene, camera);
       }
 
       function tickPreview3d() {
@@ -5508,6 +5535,12 @@
         }
       });
 
+      window.addEventListener("three-ready", () => {
+        if (previewMode === "3d") {
+          drawCurvedBillboard3dFrame();
+        }
+      });
+
       window.addEventListener("keydown", (event) => {
         const target = event.target;
         if (target instanceof HTMLElement) {
@@ -5533,6 +5566,23 @@
         }
         stopMarqueeAnimation();
         stopPreview3dLoop();
+        if (preview3dThreeState.texture && typeof preview3dThreeState.texture.dispose === "function") {
+          preview3dThreeState.texture.dispose();
+          preview3dThreeState.texture = null;
+        }
+        if (preview3dThreeState.mesh) {
+          if (preview3dThreeState.mesh.geometry && typeof preview3dThreeState.mesh.geometry.dispose === "function") {
+            preview3dThreeState.mesh.geometry.dispose();
+          }
+          if (preview3dThreeState.mesh.material && typeof preview3dThreeState.mesh.material.dispose === "function") {
+            preview3dThreeState.mesh.material.dispose();
+          }
+          preview3dThreeState.mesh = null;
+        }
+        if (preview3dThreeState.renderer && typeof preview3dThreeState.renderer.dispose === "function") {
+          preview3dThreeState.renderer.dispose();
+          preview3dThreeState.renderer = null;
+        }
       });
 
       initMarqueeVisibilityTracking();
