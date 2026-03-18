@@ -3186,14 +3186,15 @@
 
           if (partitionSettings.orientation === "vertical") {
             const containerMainSpan = Math.max(1, logicalArtboardWidth);
-            const remaining = containerMainSpan - contentMainSpan;
+            const alignmentSpan = Math.abs(containerMainSpan - contentMainSpan);
             // Because of rotate(-90deg), main-axis start renders at the bottom.
-            // So top/center/bottom on screen maps to end/center/start offsets.
+            // So top/center/bottom on screen map to larger/smaller upward
+            // offsets from that bottom-anchored start.
             let mainAxisOffset = 0;
             if (partitionSettings.verticalAlignment === "top") {
-              mainAxisOffset = remaining;
+              mainAxisOffset = alignmentSpan;
             } else if (partitionSettings.verticalAlignment === "center") {
-              mainAxisOffset = remaining / 2;
+              mainAxisOffset = alignmentSpan / 2;
             } else {
               mainAxisOffset = 0;
             }
