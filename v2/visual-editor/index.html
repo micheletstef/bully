@@ -2463,6 +2463,13 @@
         if (!(billboardViewportFrame instanceof HTMLElement)) {
           return;
         }
+        if (editorState.settings.partitionsEnabled) {
+          billboardViewportFrame.style.display = "none";
+          if (billboardViewportTimer instanceof HTMLElement) {
+            billboardViewportTimer.style.display = "none";
+          }
+          return;
+        }
         const scale = billboardScaleFactor();
         const billboardWidth = flatBillboard ? flatBillboard.clientWidth : 0;
         const billboardHeight = flatBillboard ? flatBillboard.clientHeight : 0;
@@ -2528,7 +2535,7 @@
         const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
         const totalSeconds = cycle > 0 ? (cycle / speed) : 0;
         const currentSeconds = cycle > 0 ? (cycleProgressPx / speed) : 0;
-        const showTimers = false;
+        const showTimers = editorState.settings.partitionsEnabled && editorState.settings.marqueeEnabled && totalSeconds > 0;
         for (const key of PARTITION_KEYS) {
           const frame = partitionViewportFrameForKey(key);
           const timer = partitionViewportTimerForKey(key);
