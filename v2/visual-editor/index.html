@@ -198,6 +198,15 @@
         min-width: 0;
       }
 
+      .saved-billboard-row.is-dragging {
+        opacity: 0.45;
+      }
+
+      .saved-billboard-row.is-drop-target {
+        outline: 1px dashed #6a6a6a;
+        outline-offset: 1px;
+      }
+
       .saved-billboard-row .saved-billboard-button {
         flex: 1 1 auto;
         min-width: 0;
@@ -226,6 +235,11 @@
         color: #1f1f1f;
         text-decoration: underline;
         outline: none;
+      }
+
+      .saved-billboard-drag-handle {
+        cursor: grab;
+        user-select: none;
       }
 
       .asset-button {
@@ -1167,6 +1181,7 @@
       let assetIdCounter = 1;
       let availableAssets = [];
       let savedBillboards = [];
+      let draggingSavedSnapshotId = null;
       let activeSnapshotId = null;
 
       const assetsList = document.getElementById("assetsList");
@@ -1624,11 +1639,6 @@
               runtime: entry.runtime && typeof entry.runtime === "object" ? entry.runtime : {},
             }))
             .filter((entry) => !!entry.id && !!entry.state);
-          normalized.sort((a, b) => {
-            const aTime = Date.parse(a.createdAt || "") || 0;
-            const bTime = Date.parse(b.createdAt || "") || 0;
-            return bTime - aTime;
-          });
           return normalized;
         } catch (error) {
           return [];
@@ -1637,6 +1647,37 @@
 
       function persistSavedBillboards() {
         localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(savedBillboards));
+      }
+
+      function clearSavedBillboardDropIndicators() {
+        if (!(savedBillboardsList instanceof HTMLElement)) {
+          return;
+        }
+        const rows = savedBillboardsList.querySelectorAll(".saved-billboard-row");
+        for (const row of rows) {
+          row.classList.remove("is-drop-target");
+          row.classList.remove("is-dragging");
+        }
+      }
+
+      function moveSavedBillboardById(sourceSnapshotId, targetSnapshotId, placeAfter = false) {
+        const fromIndex = savedBillboards.findIndex((entry) => entry.id === sourceSnapshotId);
+        const toIndex = savedBillboards.findIndex((entry) => entry.id === targetSnapshotId);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+          return;
+        }
+        const [moved] = savedBillboards.splice(fromIndex, 1);
+        let insertIndex = toIndex;
+        if (fromIndex < toIndex) {
+          insertIndex -= 1;
+        }
+        if (placeAfter) {
+          insertIndex += 1;
+        }
+        insertIndex = Math.max(0, Math.min(insertIndex, savedBillboards.length));
+        savedBillboards.splice(insertIndex, 0, moved);
+        persistSavedBillboards();
+        renderSavedBillboardsList();
       }
 
       function renderSavedBillboardsList() {
@@ -1654,6 +1695,44 @@
         for (const snapshot of savedBillboards) {
           const row = document.createElement("div");
           row.className = "saved-billboard-row";
+          row.dataset.snapshotId = snapshot.id;
+          row.draggable = true;
+          row.addEventListener("dragstart", (event) => {
+            draggingSavedSnapshotId = snapshot.id;
+            row.classList.add("is-dragging");
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", snapshot.id);
+            }
+          });
+          row.addEventListener("dragover", (event) => {
+            if (!draggingSavedSnapshotId || draggingSavedSnapshotId === snapshot.id) {
+              return;
+            }
+            event.preventDefault();
+            row.classList.add("is-drop-target");
+            if (event.dataTransfer) {
+              event.dataTransfer.dropEffect = "move";
+            }
+          });
+          row.addEventListener("dragleave", () => {
+            row.classList.remove("is-drop-target");
+          });
+          row.addEventListener("drop", (event) => {
+            if (!draggingSavedSnapshotId || draggingSavedSnapshotId === snapshot.id) {
+              return;
+            }
+            event.preventDefault();
+            const rect = row.getBoundingClientRect();
+            const placeAfter = event.clientY > rect.top + rect.height * 0.5;
+            moveSavedBillboardById(draggingSavedSnapshotId, snapshot.id, placeAfter);
+            draggingSavedSnapshotId = null;
+            clearSavedBillboardDropIndicators();
+          });
+          row.addEventListener("dragend", () => {
+            draggingSavedSnapshotId = null;
+            clearSavedBillboardDropIndicators();
+          });
 
           const openButton = document.createElement("button");
           openButton.type = "button";
@@ -1667,6 +1746,14 @@
 
           const actions = document.createElement("div");
           actions.className = "saved-billboard-actions";
+
+          const dragHandleButton = document.createElement("button");
+          dragHandleButton.type = "button";
+          dragHandleButton.className = "saved-billboard-action-button saved-billboard-drag-handle";
+          dragHandleButton.textContent = "↕";
+          dragHandleButton.title = "drag to reorder saved billboard";
+          dragHandleButton.setAttribute("aria-label", "drag to reorder saved billboard");
+          actions.appendChild(dragHandleButton);
 
           const renameButton = document.createElement("button");
           renameButton.type = "button";
@@ -1869,7 +1956,19 @@
         ensurePartitionSettingsState();
         recoverLikelyScaleRegression();
         updateAssetIdCounterFromState();
-        rebuildEditorFromState(snapshot.runtime || {});
+        const snapshotRuntime = snapshot.runtime && typeof snapshot.runtime === "object"
+          ? snapshot.runtime
+          : {};
+        rebuildEditorFromState({
+          ...snapshotRuntime,
+          // Always restart marquee animation from the beginning when opening a saved snapshot.
+          marqueeProgressPx: 0,
+          partitionMarqueeProgressPx: {
+            left: 0,
+            curve: 0,
+            right: 0,
+          },
+        });
         saveEditorState();
         if (shouldUpdatePath) {
           setPathForSnapshot(snapshot, shouldReplaceHistory);
