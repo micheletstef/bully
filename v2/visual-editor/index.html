@@ -1814,13 +1814,10 @@
             const imageWidth = Math.max(1, imageWidthCss * sx);
             const imageHeight = Math.max(1, imageHeightCss * sy);
             const imageOffsetX = imageOffsetXCss * sx;
-            // Final projected UVs are mirrored on X to correct front-facing orientation.
-            // Invert local frame rotation so rotated assets keep the same visual angle as flat preview.
-            const correctedRotateDeg = -rotateDeg;
 
             sourceCtx.save();
             sourceCtx.translate(centerX, centerY);
-            sourceCtx.rotate((correctedRotateDeg * Math.PI) / 180);
+            sourceCtx.rotate((rotateDeg * Math.PI) / 180);
             sourceCtx.beginPath();
             sourceCtx.rect(-frameWidth * 0.5, -frameHeight * 0.5, frameWidth, frameHeight);
             sourceCtx.clip();
