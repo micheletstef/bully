@@ -1253,6 +1253,7 @@
       </main>
     </div>
     <script type="module" src="../assets/js/three-basic-loader.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
       const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
@@ -1368,7 +1369,7 @@
       };
       const PREVIEW3D_TEXTURE_HEIGHT = 1400;
       const PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS = 120;
-      const PREVIEW3D_USE_DOM_SNAPSHOT = false;
+      const PREVIEW3D_USE_DOM_SNAPSHOT = true;
       const preview3dThreeState = {
         renderer: null,
         scene: null,
@@ -1859,6 +1860,8 @@
             sourceCtx.drawImage(preview3dDomSnapshotCanvas, 0, 0, width, height);
             return true;
           }
+          // Snapshot mode: wait for DOM raster so 3D exactly matches flat.
+          return false;
         }
 
         const computed = window.getComputedStyle(flatBillboard);
