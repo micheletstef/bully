@@ -53,6 +53,35 @@
         text-transform: lowercase;
       }
 
+      .assets-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .assets-title-row .assets-title {
+        margin: 0;
+      }
+
+      .assets-save-button {
+        border: 1px solid #1f1f1f;
+        background: #fff;
+        color: #1f1f1f;
+        padding: 1px 6px;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+        line-height: 1.25;
+      }
+
+      .assets-save-button:hover,
+      .assets-save-button:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
       .settings-title-row {
         display: flex;
         align-items: center;
@@ -103,6 +132,51 @@
       .assets-status {
         color: #6a6a6a;
         font-size: 12px;
+      }
+
+      .saved-billboards-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-bottom: 10px;
+      }
+
+      .saved-billboards-list[hidden] {
+        display: none;
+      }
+
+      .saved-billboards-title {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 400;
+        color: #6a6a6a;
+        text-transform: lowercase;
+      }
+
+      .saved-billboards-empty {
+        color: #6a6a6a;
+      }
+
+      .saved-billboard-button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 1px 0 1px 10px;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .saved-billboard-button:hover,
+      .saved-billboard-button:focus {
+        text-decoration: underline;
+        outline: none;
       }
 
       .asset-button {
@@ -570,7 +644,7 @@
       }
 
       .flat-billboard-wrap {
-        margin-top: 78px;
+        margin-bottom: 78px;
       }
 
       .flat-billboard-shell {
@@ -693,7 +767,7 @@
         position: relative;
         overflow: hidden;
         background: transparent;
-        border: 1px solid transparent;
+        border: 0;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -868,7 +942,11 @@
   <body>
     <div class="page-shell">
       <aside class="assets-directory" aria-label="Placeholder assets directory">
-        <h2 class="assets-title">assets</h2>
+        <div class="assets-title-row">
+          <h2 class="assets-title">assets</h2>
+          <button id="saveBillboardButton" type="button" class="assets-save-button">save</button>
+        </div>
+        <div id="savedBillboardsList" class="saved-billboards-list"></div>
         <div id="assetsList" class="assets-list"></div>
       </aside>
       <aside class="settings-panel" aria-label="Visual editor settings">
@@ -948,10 +1026,6 @@
           </div>
         </div>
         <div class="settings-row">
-          <label class="settings-label" for="showGuidesControl">guides</label>
-          <input id="showGuidesControl" type="checkbox" checked />
-        </div>
-        <div class="settings-row">
           <label class="settings-label" for="assetGapControl">asset gap</label>
           <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
         </div>
@@ -968,8 +1042,32 @@
             </label>
           </div>
         </div>
+        <div class="settings-row">
+          <label class="settings-label" for="showGuidesControl">guides</label>
+          <input id="showGuidesControl" type="checkbox" checked />
+        </div>
       </aside>
       <main class="editor-shell">
+        <section class="flat-billboard-wrap" aria-label="Original flat billboard">
+          <div class="flat-billboard-shell">
+            <div id="flatBillboard" class="flat-billboard">
+              <div id="flatBillboardTrack" class="flat-billboard-track"></div>
+              <div id="flatBillboardPartitionLayers" class="flat-billboard-partition-layers"></div>
+              <div id="flatBillboardSinglePartitionGuides" class="flat-billboard-single-partition-guides"></div>
+            </div>
+            <div class="flat-billboard-annotations" aria-hidden="true">
+              <div class="flat-anno-top-line"></div>
+              <div class="flat-anno-top-label">5900px width</div>
+              <div class="flat-anno-right-line"></div>
+              <div class="flat-anno-right-label">3480px height</div>
+              <div class="flat-anno-marker flat-anno-marker-1820"></div>
+              <div class="flat-anno-marker flat-anno-marker-2840"></div>
+              <div class="flat-anno-label flat-anno-label-1820">1820px</div>
+              <div class="flat-anno-label flat-anno-label-curve">curve</div>
+              <div class="flat-anno-label flat-anno-label-2840">2840px</div>
+            </div>
+          </div>
+        </section>
         <div id="editorStage" class="editor-stage">
           <div id="singleEditorCanvas" class="editor-canvas">
             <div id="visualEditorBlock" class="visual-editor-block" aria-label="Visual editor placeholder">
@@ -1007,34 +1105,18 @@
           <button id="assetRotateButton" type="button" class="asset-scale-button" aria-label="Rotate selected asset" title="Rotate selected asset">↻</button>
         </div>
         <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
-        <section class="flat-billboard-wrap" aria-label="Original flat billboard">
-          <div class="flat-billboard-shell">
-            <div id="flatBillboard" class="flat-billboard">
-              <div id="flatBillboardTrack" class="flat-billboard-track"></div>
-              <div id="flatBillboardPartitionLayers" class="flat-billboard-partition-layers"></div>
-              <div id="flatBillboardSinglePartitionGuides" class="flat-billboard-single-partition-guides"></div>
-            </div>
-            <div class="flat-billboard-annotations" aria-hidden="true">
-              <div class="flat-anno-top-line"></div>
-              <div class="flat-anno-top-label">5900px width</div>
-              <div class="flat-anno-right-line"></div>
-              <div class="flat-anno-right-label">3480px height</div>
-              <div class="flat-anno-marker flat-anno-marker-1820"></div>
-              <div class="flat-anno-marker flat-anno-marker-2840"></div>
-              <div class="flat-anno-label flat-anno-label-1820">1820px</div>
-              <div class="flat-anno-label flat-anno-label-curve">curve</div>
-              <div class="flat-anno-label flat-anno-label-2840">2840px</div>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
+      const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
       let assetIdCounter = 1;
       let availableAssets = [];
+      let savedBillboards = [];
 
       const assetsList = document.getElementById("assetsList");
+      const saveBillboardButton = document.getElementById("saveBillboardButton");
+      const savedBillboardsList = document.getElementById("savedBillboardsList");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
       const partitionsToggle = document.getElementById("partitionsToggle");
@@ -1336,6 +1418,216 @@
 
       function saveEditorState() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(editorState));
+      }
+
+      function cloneJsonValue(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function formatSnapshotTimestamp(date) {
+        const dt = date instanceof Date ? date : new Date();
+        const year = dt.getFullYear();
+        const month = String(dt.getMonth() + 1).padStart(2, "0");
+        const day = String(dt.getDate()).padStart(2, "0");
+        const hours = String(dt.getHours()).padStart(2, "0");
+        const minutes = String(dt.getMinutes()).padStart(2, "0");
+        const seconds = String(dt.getSeconds()).padStart(2, "0");
+        return year + "-" + month + "-" + day + " " + hours + ":" + minutes + ":" + seconds;
+      }
+
+      function loadSavedBillboards() {
+        try {
+          const raw = localStorage.getItem(SNAPSHOTS_STORAGE_KEY);
+          if (!raw) {
+            return [];
+          }
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) {
+            return [];
+          }
+          const normalized = parsed
+            .filter((entry) => entry && typeof entry === "object")
+            .map((entry) => ({
+              id: typeof entry.id === "string" ? entry.id : "",
+              name: typeof entry.name === "string" ? entry.name : "",
+              createdAt: typeof entry.createdAt === "string" ? entry.createdAt : "",
+              state: entry.state && typeof entry.state === "object" ? entry.state : null,
+              runtime: entry.runtime && typeof entry.runtime === "object" ? entry.runtime : {},
+            }))
+            .filter((entry) => !!entry.id && !!entry.state);
+          normalized.sort((a, b) => {
+            const aTime = Date.parse(a.createdAt || "") || 0;
+            const bTime = Date.parse(b.createdAt || "") || 0;
+            return bTime - aTime;
+          });
+          return normalized;
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function persistSavedBillboards() {
+        localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(savedBillboards));
+      }
+
+      function renderSavedBillboardsList() {
+        if (!(savedBillboardsList instanceof HTMLElement)) {
+          return;
+        }
+        savedBillboardsList.innerHTML = "";
+        const title = document.createElement("div");
+        title.className = "saved-billboards-title";
+        title.textContent = "saved billboards";
+        savedBillboardsList.appendChild(title);
+        if (!savedBillboards.length) {
+          const empty = document.createElement("div");
+          empty.className = "saved-billboards-empty";
+          empty.textContent = "none yet";
+          savedBillboardsList.appendChild(empty);
+          return;
+        }
+        for (const snapshot of savedBillboards) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "saved-billboard-button";
+          button.textContent = snapshot.name || "untitled snapshot";
+          button.title = snapshot.name || "untitled snapshot";
+          button.addEventListener("click", () => {
+            loadBillboardSnapshot(snapshot.id);
+          });
+          savedBillboardsList.appendChild(button);
+        }
+      }
+
+      function clearEditorAssetBlocks() {
+        const editors = [visualEditorBlock, partitionEditorLeft, partitionEditorCurve, partitionEditorRight];
+        for (const editor of editors) {
+          if (!(editor instanceof HTMLElement)) {
+            continue;
+          }
+          const blocks = editor.querySelectorAll(".fake-asset-block");
+          for (const block of blocks) {
+            block.remove();
+          }
+        }
+      }
+
+      function updateAssetIdCounterFromState() {
+        const allAssets = [
+          ...(Array.isArray(editorState.assets) ? editorState.assets : []),
+          ...(Array.isArray(editorState.partitionAssets?.left) ? editorState.partitionAssets.left : []),
+          ...(Array.isArray(editorState.partitionAssets?.curve) ? editorState.partitionAssets.curve : []),
+          ...(Array.isArray(editorState.partitionAssets?.right) ? editorState.partitionAssets.right : []),
+        ];
+        const existingMaxAssetId = allAssets.reduce((maxId, asset) => {
+          const numericPart = Number(String(asset?.id || "").replace("asset-", ""));
+          if (!Number.isFinite(numericPart)) {
+            return maxId;
+          }
+          return Math.max(maxId, numericPart);
+        }, 0);
+        assetIdCounter = existingMaxAssetId + 1;
+      }
+
+      function rebuildEditorFromState(runtime = {}) {
+        stopMarqueeAnimation();
+        clearAssetSelection();
+        endPartitionPlacement();
+        clearEditorAssetBlocks();
+
+        const initialPartitionsEnabled = !!editorState.settings.partitionsEnabled;
+        editorState.settings.partitionsEnabled = false;
+        updateFlatBillboardOrientationClass();
+        applyPartitionEditorRatios();
+        setVerticalAlignment(editorState.settings.verticalAlignment, false);
+        applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
+        applyAssetGap(editorState.settings.assetGap, false);
+        applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
+        applyGuidesVisibility(editorState.settings.showGuides !== false, false);
+        for (const savedAsset of editorState.assets) {
+          appendAssetBlock(savedAsset);
+        }
+        applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
+        applyPartitionsSetting(initialPartitionsEnabled, false);
+        updateAllAssetBlockSizes();
+        updateScaleControlsAnchorTop();
+        setScaleControlsVisible(false);
+        updateScaleControlButtons();
+        syncSettingsControlsFromState();
+
+        marqueeProgressPx = Number.isFinite(Number(runtime.marqueeProgressPx))
+          ? Number(runtime.marqueeProgressPx)
+          : 0;
+        const runtimePartitionProgress = runtime.partitionMarqueeProgressPx && typeof runtime.partitionMarqueeProgressPx === "object"
+          ? runtime.partitionMarqueeProgressPx
+          : {};
+        partitionMarqueeProgressPx = {
+          left: Number.isFinite(Number(runtimePartitionProgress.left)) ? Number(runtimePartitionProgress.left) : 0,
+          curve: Number.isFinite(Number(runtimePartitionProgress.curve)) ? Number(runtimePartitionProgress.curve) : 0,
+          right: Number.isFinite(Number(runtimePartitionProgress.right)) ? Number(runtimePartitionProgress.right) : 0,
+        };
+
+        if (editorState.settings.partitionsEnabled) {
+          applyFlatBillboardTrackTransform();
+        } else {
+          const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
+          if (editorState.settings.marqueeEnabled && cycle > 0) {
+            applyMarqueePhaseOffsets(cycle);
+            applyFlatBillboardTrackTransform();
+          }
+        }
+
+        if (editorStage instanceof HTMLElement && !editorState.settings.marqueeEnabled) {
+          const savedScrollLeft = Number(runtime.scrollLeft);
+          const savedScrollTop = Number(runtime.scrollTop);
+          editorStage.scrollLeft = Number.isFinite(savedScrollLeft) ? Math.max(0, savedScrollLeft) : 0;
+          editorStage.scrollTop = Number.isFinite(savedScrollTop) ? Math.max(0, savedScrollTop) : 0;
+          syncFlatBillboardViewportOffset();
+        }
+      }
+
+      function saveBillboardSnapshot() {
+        const now = new Date();
+        const snapshot = {
+          id: "snapshot-" + now.getTime() + "-" + Math.random().toString(16).slice(2),
+          name: formatSnapshotTimestamp(now),
+          createdAt: now.toISOString(),
+          state: cloneJsonValue(editorState),
+          runtime: {
+            scrollLeft: editorStage instanceof HTMLElement ? editorStage.scrollLeft : 0,
+            scrollTop: editorStage instanceof HTMLElement ? editorStage.scrollTop : 0,
+            marqueeProgressPx,
+            partitionMarqueeProgressPx: cloneJsonValue(partitionMarqueeProgressPx),
+          },
+        };
+        savedBillboards.unshift(snapshot);
+        persistSavedBillboards();
+        renderSavedBillboardsList();
+      }
+
+      function loadBillboardSnapshot(snapshotId) {
+        const snapshot = savedBillboards.find((entry) => entry.id === snapshotId);
+        if (!snapshot || !snapshot.state) {
+          return;
+        }
+        editorState.assets = Array.isArray(snapshot.state.assets) ? cloneJsonValue(snapshot.state.assets) : [];
+        const partitionAssets = snapshot.state.partitionAssets && typeof snapshot.state.partitionAssets === "object"
+          ? snapshot.state.partitionAssets
+          : { left: [], curve: [], right: [] };
+        editorState.partitionAssets = {
+          left: Array.isArray(partitionAssets.left) ? cloneJsonValue(partitionAssets.left) : [],
+          curve: Array.isArray(partitionAssets.curve) ? cloneJsonValue(partitionAssets.curve) : [],
+          right: Array.isArray(partitionAssets.right) ? cloneJsonValue(partitionAssets.right) : [],
+        };
+        editorState.settings = snapshot.state.settings && typeof snapshot.state.settings === "object"
+          ? cloneJsonValue(snapshot.state.settings)
+          : cloneJsonValue(loadEditorState().settings);
+
+        ensurePartitionSettingsState();
+        recoverLikelyScaleRegression();
+        updateAssetIdCounterFromState();
+        rebuildEditorFromState(snapshot.runtime || {});
+        saveEditorState();
       }
 
       function recoverLikelyScaleRegression() {
@@ -3960,14 +4252,9 @@
       }
 
       const editorState = loadEditorState();
-      const existingMaxAssetId = editorState.assets.reduce((maxId, asset) => {
-        const numericPart = Number(String(asset.id).replace("asset-", ""));
-        if (!Number.isFinite(numericPart)) {
-          return maxId;
-        }
-        return Math.max(maxId, numericPart);
-      }, 0);
-      assetIdCounter = existingMaxAssetId + 1;
+      savedBillboards = loadSavedBillboards();
+      renderSavedBillboardsList();
+      updateAssetIdCounterFromState();
       recoverLikelyScaleRegression();
 
       alignmentSettings.addEventListener("click", (event) => {
@@ -4059,6 +4346,12 @@
       if (showGuidesControl instanceof HTMLInputElement) {
         showGuidesControl.addEventListener("change", () => {
           applyGuidesVisibility(showGuidesControl.checked, true);
+        });
+      }
+
+      if (saveBillboardButton instanceof HTMLButtonElement) {
+        saveBillboardButton.addEventListener("click", () => {
+          saveBillboardSnapshot();
         });
       }
 
@@ -4349,24 +4642,7 @@
         stopMarqueeAnimation();
       });
 
-      const initialPartitionsEnabled = !!editorState.settings.partitionsEnabled;
-      editorState.settings.partitionsEnabled = false;
-      updateFlatBillboardOrientationClass();
-      applyPartitionEditorRatios();
-      setVerticalAlignment(editorState.settings.verticalAlignment, false);
-      applyPaddingGuides(editorState.settings.paddingTB, editorState.settings.paddingLR, false);
-      applyAssetGap(editorState.settings.assetGap, false);
-      applyColors(editorState.settings.backgroundColor, editorState.settings.assetColor, false);
-      applyGuidesVisibility(editorState.settings.showGuides !== false, false);
-      for (const savedAsset of editorState.assets) {
-        appendAssetBlock(savedAsset);
-      }
-      applyMarqueeSettings(editorState.settings.marqueeEnabled, editorState.settings.marqueeSpeed, editorState.settings.marqueeDirection, false);
-      applyPartitionsSetting(initialPartitionsEnabled, false);
-      updateAllAssetBlockSizes();
-      updateScaleControlsAnchorTop();
-      setScaleControlsVisible(false);
-      updateScaleControlButtons();
+      rebuildEditorFromState();
       loadAvailableAssets();
     </script>
   </body>
