@@ -2430,7 +2430,12 @@
           }
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "rtl") {
-          editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
+          const wrappedTravelPx = maxBillboardTravelPx > 0
+            ? (cycleProgressPx % maxBillboardTravelPx)
+            : 0;
+          // Vertical path: keep frame phase on the same wrapped run distance
+          // as the billboard so both timelines stay locked.
+          editorMarqueeOffsetX = -(maxBillboardTravelPx - wrappedTravelPx);
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           editorMarqueeOffsetX = -mappedTravelPx;
