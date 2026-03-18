@@ -2492,8 +2492,19 @@
       }
 
       function updatePartitionViewportFrames() {
-        const marqueeTrackX = billboardViewportOffsetX + editorMarqueeOffsetX;
-        const marqueeTrackY = billboardViewportOffsetY + editorMarqueeOffsetY;
+        const direction = editorState.settings.marqueeDirection;
+        const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
+        const cycleProgressPx = cycle > 0
+          ? (((marqueeProgressPx % cycle) + cycle) % cycle)
+          : 0;
+        const billboardSpan = Math.max(1, flatBillboard?.clientWidth || 1);
+        const maxBillboardTravelPx = cycle > 0 ? Math.max(0, cycle - billboardSpan) : 0;
+        const wrappedTravelPx = maxBillboardTravelPx > 0
+          ? (cycleProgressPx % maxBillboardTravelPx)
+          : 0;
+        const travelRatio = maxBillboardTravelPx > 0
+          ? (wrappedTravelPx / maxBillboardTravelPx)
+          : 0;
         for (const key of PARTITION_KEYS) {
           const frame = partitionViewportFrameForKey(key);
           const layout = PARTITION_LAYOUT[key];
@@ -2507,14 +2518,23 @@
             continue;
           }
           const editor = partitionEditorForSettingsKey(key);
-          const scale = billboardScaleFactor(editor);
-          if (!(scale > 0)) {
+          if (!(editor instanceof HTMLElement)) {
             frame.style.left = "0";
             frame.style.top = "0";
             continue;
           }
-          frame.style.left = (-marqueeTrackX / scale) + "px";
-          frame.style.top = (-marqueeTrackY / scale) + "px";
+          const editorWidth = Math.max(1, editor.clientWidth || 1);
+          const frameWidth = Math.max(1, editorWidth * layout.widthRatio);
+          const maxFrameTravelPx = Math.max(0, editorWidth - frameWidth);
+          let left = 0;
+          if (direction === "ltr") {
+            // "right to left" starts from the right-most edge.
+            left = maxFrameTravelPx * (1 - travelRatio);
+          } else {
+            left = maxFrameTravelPx * travelRatio;
+          }
+          frame.style.left = left + "px";
+          frame.style.top = "0";
         }
       }
 
