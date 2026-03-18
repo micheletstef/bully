@@ -2461,7 +2461,8 @@
           } else {
             // Vertical mode (UI label: right to left): start with the end of
             // the artboard top-aligned, then continue in the same direction.
-            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx;
+            // Shift by one full run so wrap stays inside duplicate content.
+            billboardMarqueeOffsetY = (maxBillboardTravelPx - cycleProgressPx) - cycle;
           }
         } else if (rawDirection === "rtl") {
           // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
