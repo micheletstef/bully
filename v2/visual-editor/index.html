@@ -407,6 +407,18 @@
         z-index: 6;
       }
 
+      .partition-editor-viewport-timer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translateX(-50%);
+        color: #d30000;
+        font-size: 10px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 6;
+      }
+
       .marquee-copy {
         pointer-events: none;
         user-select: none;
@@ -928,18 +940,21 @@
               <div class="partition-editor-title">facing 7th</div>
               <div id="partitionEditorLeft" data-partition-key="left" class="visual-editor-block partition-visual-editor-block">
                 <div id="partitionViewportFrameLeft" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+                <div id="partitionViewportTimerLeft" class="partition-editor-viewport-timer" aria-hidden="true"></div>
               </div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">curve</div>
               <div id="partitionEditorCurve" data-partition-key="curve" class="visual-editor-block partition-visual-editor-block">
                 <div id="partitionViewportFrameCurve" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+                <div id="partitionViewportTimerCurve" class="partition-editor-viewport-timer" aria-hidden="true"></div>
               </div>
             </div>
             <div class="partition-editor-card">
               <div class="partition-editor-title">facing 47th</div>
               <div id="partitionEditorRight" data-partition-key="right" class="visual-editor-block partition-visual-editor-block">
                 <div id="partitionViewportFrameRight" class="partition-editor-viewport-frame" aria-hidden="true"></div>
+                <div id="partitionViewportTimerRight" class="partition-editor-viewport-timer" aria-hidden="true"></div>
               </div>
             </div>
           </div>
@@ -999,6 +1014,9 @@
       const partitionViewportFrameLeft = document.getElementById("partitionViewportFrameLeft");
       const partitionViewportFrameCurve = document.getElementById("partitionViewportFrameCurve");
       const partitionViewportFrameRight = document.getElementById("partitionViewportFrameRight");
+      const partitionViewportTimerLeft = document.getElementById("partitionViewportTimerLeft");
+      const partitionViewportTimerCurve = document.getElementById("partitionViewportTimerCurve");
+      const partitionViewportTimerRight = document.getElementById("partitionViewportTimerRight");
       const visualEditorBlock = document.getElementById("visualEditorBlock");
       const billboardViewportFrame = document.getElementById("billboardViewportFrame");
       const billboardViewportTimer = document.getElementById("billboardViewportTimer");
@@ -1298,6 +1316,16 @@
             ? partitionViewportFrameCurve
             : key === "right"
               ? partitionViewportFrameRight
+              : null;
+      }
+
+      function partitionViewportTimerForKey(key) {
+        return key === "left"
+          ? partitionViewportTimerLeft
+          : key === "curve"
+            ? partitionViewportTimerCurve
+            : key === "right"
+              ? partitionViewportTimerRight
               : null;
       }
 
@@ -2057,18 +2085,9 @@
       }
 
       function getScaleLimits(block) {
-        const source = getSourceDimensions(block);
-        const crop = getCropValues(block);
-        const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
-        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
-        const isQuarterTurn = rotationTurns % 2 === 1;
-        const safeHeight = getSafeAssetHeight(block);
-        const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
-        const maxByHeight = Math.floor((safeHeight / Math.max(1, finalHeightAtHundred)) * 100);
-        const maxPercent = Math.max(10, Math.min(400, maxByHeight));
         return {
           minPercent: 10,
-          maxPercent,
+          maxPercent: 400,
         };
       }
 
@@ -2505,25 +2524,40 @@
         const travelRatio = maxBillboardTravelPx > 0
           ? (wrappedTravelPx / maxBillboardTravelPx)
           : 0;
+        const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
+        const totalSeconds = cycle > 0 ? (cycle / speed) : 0;
+        const currentSeconds = cycle > 0 ? (cycleProgressPx / speed) : 0;
+        const showTimers = editorState.settings.partitionsEnabled && editorState.settings.marqueeEnabled && totalSeconds > 0;
         for (const key of PARTITION_KEYS) {
           const frame = partitionViewportFrameForKey(key);
+          const timer = partitionViewportTimerForKey(key);
           const layout = PARTITION_LAYOUT[key];
           if (!(frame instanceof HTMLElement) || !layout) {
+            if (timer instanceof HTMLElement) {
+              timer.style.display = "none";
+            }
             continue;
           }
           frame.style.width = layout.widthRatio * 100 + "%";
           if (!editorState.settings.marqueeEnabled) {
             frame.style.left = "0";
             frame.style.top = "0";
+            if (timer instanceof HTMLElement) {
+              timer.style.display = "none";
+            }
             continue;
           }
           const editor = partitionEditorForSettingsKey(key);
           if (!(editor instanceof HTMLElement)) {
             frame.style.left = "0";
             frame.style.top = "0";
+            if (timer instanceof HTMLElement) {
+              timer.style.display = "none";
+            }
             continue;
           }
           const editorWidth = Math.max(1, editor.clientWidth || 1);
+          const editorHeight = Math.max(1, editor.clientHeight || 1);
           const frameWidth = Math.max(1, editorWidth * layout.widthRatio);
           const maxFrameTravelPx = Math.max(0, editorWidth - frameWidth);
           let left = 0;
@@ -2535,6 +2569,14 @@
           }
           frame.style.left = left + "px";
           frame.style.top = "0";
+          if (timer instanceof HTMLElement) {
+            timer.style.display = showTimers ? "block" : "none";
+            if (showTimers) {
+              timer.style.left = (left + (frameWidth / 2)) + "px";
+              timer.style.top = (editorHeight + 4) + "px";
+              timer.textContent = currentSeconds.toFixed(1) + "s / " + totalSeconds.toFixed(1) + "s";
+            }
+          }
         }
       }
 
