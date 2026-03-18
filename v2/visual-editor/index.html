@@ -1251,6 +1251,7 @@
       </main>
     </div>
     <script type="module" src="../assets/js/three-loader.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
       const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
@@ -1326,6 +1327,10 @@
       let previewMode = "flat";
       let preview3dRaf = null;
       let preview3dDragState = null;
+      let preview3dDomSnapshotCanvas = null;
+      let preview3dDomSnapshotPromise = null;
+      let preview3dDomSnapshotQueued = false;
+      let preview3dDomSnapshotLastMs = 0;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1361,6 +1366,7 @@
         targetZMax: 4500,
       };
       const PREVIEW3D_TEXTURE_HEIGHT = 1400;
+      const PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS = 120;
       const preview3dThreeState = {
         renderer: null,
         scene: null,
@@ -1404,6 +1410,7 @@
         }
         syncPreviewModeToggleStates();
         if (normalized === "3d") {
+          queueFlatBillboardSnapshot(true);
           startPreview3dLoop();
         } else {
           clearPreview3dDragState();
@@ -1479,6 +1486,57 @@
 
       function getThreeLib() {
         return typeof window !== "undefined" ? window.THREE || null : null;
+      }
+
+      function getHtml2CanvasLib() {
+        if (typeof window === "undefined") {
+          return null;
+        }
+        return typeof window.html2canvas === "function" ? window.html2canvas : null;
+      }
+
+      function queueFlatBillboardSnapshot(force = false) {
+        if (!(flatBillboard instanceof HTMLElement)) {
+          return;
+        }
+        const html2canvas = getHtml2CanvasLib();
+        if (!html2canvas) {
+          return;
+        }
+        const now = (typeof performance !== "undefined" && typeof performance.now === "function")
+          ? performance.now()
+          : Date.now();
+        if (!force && now - preview3dDomSnapshotLastMs < PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS) {
+          return;
+        }
+        if (preview3dDomSnapshotPromise) {
+          preview3dDomSnapshotQueued = true;
+          return;
+        }
+        preview3dDomSnapshotPromise = html2canvas(flatBillboard, {
+          backgroundColor: null,
+          scale: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          removeContainer: true,
+        })
+          .then((canvas) => {
+            if (canvas instanceof HTMLCanvasElement) {
+              preview3dDomSnapshotCanvas = canvas;
+              preview3dDomSnapshotLastMs = now;
+            }
+          })
+          .catch(() => {
+            // Keep manual fallback renderer active if DOM snapshot fails.
+          })
+          .finally(() => {
+            preview3dDomSnapshotPromise = null;
+            if (preview3dDomSnapshotQueued) {
+              preview3dDomSnapshotQueued = false;
+              queueFlatBillboardSnapshot(true);
+            }
+          });
       }
 
       function clampPreview3dCamera() {
@@ -1749,6 +1807,11 @@
         sourceCtx.clearRect(0, 0, width, height);
         sourceCtx.imageSmoothingEnabled = true;
         sourceCtx.imageSmoothingQuality = "high";
+        queueFlatBillboardSnapshot();
+        if (preview3dDomSnapshotCanvas instanceof HTMLCanvasElement) {
+          sourceCtx.drawImage(preview3dDomSnapshotCanvas, 0, 0, width, height);
+          return true;
+        }
 
         const computed = window.getComputedStyle(flatBillboard);
         sourceCtx.fillStyle = computed.backgroundColor || editorState.settings.backgroundColor || "#ff00ff";
