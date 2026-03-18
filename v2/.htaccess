@@ -4,3 +4,4 @@ RewriteEngine On
 RewriteRule ^api/outputs/?$ api/outputs.php [QSA,L]
 RewriteRule ^api/outputs/(.+)$ api/outputs.php?id=$1 [QSA,L]
 RewriteRule ^api/assets/?$ api/assets.php [QSA,L]
+RewriteRule ^api/asset-preview/?$ api/asset-preview.php [QSA,L]

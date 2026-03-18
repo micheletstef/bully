@@ -444,6 +444,14 @@
         background: transparent;
       }
 
+      .fake-asset-block.no-preview.no-preview-no-fill::after {
+        content: attr(data-no-preview-label);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(0, 0, 0, 0.72);
+      }
+
       .fake-asset-block.is-selected {
         outline: 2px solid rgba(0, 255, 255, 0.95);
         outline-offset: -2px;
@@ -701,6 +709,14 @@
 
       .flat-billboard-asset.no-preview.no-preview-no-fill {
         background: transparent;
+      }
+
+      .flat-billboard-asset.no-preview.no-preview-no-fill::after {
+        content: attr(data-no-preview-label);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(0, 0, 0, 0.72);
       }
 
       .flat-billboard-asset-image {
@@ -1561,6 +1577,10 @@
       }
 
       async function resolvePreviewUrl(src, group, colorOverride) {
+        const ext = extensionOf(src);
+        if (ext === "eps" || ext === "pdf") {
+          return apiPath("api/asset-preview?src=" + encodeURIComponent(String(src || "")));
+        }
         if (!isGraphicsSvgAsset(src, group)) {
           return resolveAssetUrlFromSrc(src);
         }
@@ -1582,8 +1602,10 @@
         }
         if (shouldUseNoPreviewFill(src)) {
           block.classList.remove("no-preview-no-fill");
+          delete block.dataset.noPreviewLabel;
         } else {
           block.classList.add("no-preview-no-fill");
+          block.dataset.noPreviewLabel = extensionOf(src).toUpperCase();
         }
         let frame = block.querySelector(".asset-preview-frame");
         if (!(frame instanceof HTMLElement)) {
@@ -1635,7 +1657,10 @@
 
         const thumb = document.createElement("img");
         thumb.className = "asset-thumb";
-        thumb.src = asset.url;
+        const thumbExtension = extensionOf(asset.src);
+        thumb.src = (thumbExtension === "eps" || thumbExtension === "pdf")
+          ? apiPath("api/asset-preview?src=" + encodeURIComponent(String(asset.src || "")))
+          : asset.url;
         thumb.alt = "";
         thumb.decoding = "async";
         thumb.loading = "lazy";
@@ -1747,11 +1772,8 @@
       }
 
       async function resolveAssetDimensions(asset) {
-        const ext = extensionOf(asset.src);
-        if (ext === "pdf" || ext === "eps") {
-          return fallbackDimensionsForAsset(asset);
-        }
         try {
+          const previewUrl = await resolvePreviewUrl(asset.src, asset.group);
           const dims = await new Promise((resolve, reject) => {
             const image = new Image();
             image.onload = () => {
@@ -1761,7 +1783,7 @@
               });
             };
             image.onerror = () => reject(new Error("image load failed"));
-            image.src = asset.url;
+            image.src = previewUrl;
           });
           if (dims.width > 0 && dims.height > 0) {
             return dims;
@@ -3526,6 +3548,9 @@
             if (sourceBlock.classList.contains("no-preview-no-fill")) {
               targetBlock.classList.add("no-preview-no-fill");
             }
+            if (sourceBlock.dataset.noPreviewLabel) {
+              targetBlock.dataset.noPreviewLabel = sourceBlock.dataset.noPreviewLabel;
+            }
             targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
             targetBlock.dataset.marqueeOriginal = "true";
             targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * renderScale) + "px";
@@ -3678,6 +3703,9 @@
           targetBlock.className = "flat-billboard-asset";
           if (sourceBlock.classList.contains("no-preview-no-fill")) {
             targetBlock.classList.add("no-preview-no-fill");
+          }
+          if (sourceBlock.dataset.noPreviewLabel) {
+            targetBlock.dataset.noPreviewLabel = sourceBlock.dataset.noPreviewLabel;
           }
           targetBlock.dataset.assetId = sourceBlock.dataset.assetId || "";
           targetBlock.style.width = Math.max(1, editorMetrics.scaledWidth * scaleFactor) + "px";
