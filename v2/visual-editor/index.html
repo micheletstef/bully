@@ -2440,10 +2440,15 @@
           editorMarqueeOffsetX = 0;
         }
         if (rotatedBillboard && (rawDirection === "rtl" || rawDirection === "ltr")) {
-          // In rotated billboard mode, mirror the editor-frame phase so the
-          // projected billboard slice matches the red frame selection.
           billboardMarqueeOffsetX = 0;
-          billboardMarqueeOffsetY = -editorMarqueeOffsetX;
+          if (rawDirection === "rtl") {
+            // Vertical RTL keeps its current start anchor, but wraps by cycle
+            // distance so it lands on an equivalent duplicate run.
+            billboardMarqueeOffsetY = maxBillboardTravelPx - cycleProgressPx;
+          } else {
+            // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
+            billboardMarqueeOffsetY = -cycleProgressPx;
+          }
         } else if (rawDirection === "rtl") {
           // Keep current RTL start anchor (left-aligned) and wrap by full cycle.
           billboardMarqueeOffsetX = -cycleProgressPx;
