@@ -2437,9 +2437,8 @@
           const adjustedTravelPx = maxBillboardTravelPx > 0
             ? (((wrappedTravelPx - boundaryGapPx) % maxBillboardTravelPx) + maxBillboardTravelPx) % maxBillboardTravelPx
             : 0;
-          // Vertical path: keep frame phase on the same wrapped run distance
-          // as the billboard so both timelines stay locked.
-          editorMarqueeOffsetX = -(maxBillboardTravelPx - adjustedTravelPx);
+          // Vertical mode (UI label: left to right): move frame left->right.
+          editorMarqueeOffsetX = -adjustedTravelPx;
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
           editorMarqueeOffsetX = -mappedTravelPx;
