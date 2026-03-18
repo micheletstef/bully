@@ -3077,7 +3077,10 @@
           artboard.style.left = "0";
           artboard.style.top = "0";
           if (partitionSettings.orientation === "vertical") {
-            const orientationScale = Math.max(0.1, ARTBOARD_HEIGHT / Math.max(1, partitionWidthUnits));
+            // After rotate(-90deg), projected width comes from artboard height.
+            // Scale by partitionWidth/ARTBOARD_HEIGHT so each partition fits
+            // its own layer instead of being oversized and clipped.
+            const orientationScale = Math.max(0.1, partitionWidthUnits / Math.max(1, ARTBOARD_HEIGHT));
             artboard.style.transformOrigin = "top left";
             artboard.style.transform = "translateY(" + billboardHeight + "px) rotate(-90deg) scale(" + orientationScale + ")";
           } else {
