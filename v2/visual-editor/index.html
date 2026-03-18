@@ -427,6 +427,12 @@
         padding: 1px 3px;
       }
 
+      .settings-range-readout {
+        min-width: 34px;
+        text-align: right;
+        color: #5d5d5d;
+      }
+
       .settings-color-input {
         width: 14px;
         height: 14px;
@@ -1188,6 +1194,16 @@
           <label class="settings-label" for="showGuidesControl">guides</label>
           <input id="showGuidesControl" type="checkbox" checked />
         </div>
+        <div class="settings-row">
+          <label class="settings-label" for="preview3dShadowControl">3d shadow</label>
+          <input id="preview3dShadowControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.35" />
+          <span id="preview3dShadowValue" class="settings-range-readout">0.35</span>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="preview3dGlareControl">3d glare</label>
+          <input id="preview3dGlareControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.25" />
+          <span id="preview3dGlareValue" class="settings-range-readout">0.25</span>
+        </div>
       </aside>
       <main class="editor-shell">
         <section class="flat-billboard-wrap" aria-label="Original flat billboard">
@@ -1305,6 +1321,10 @@
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const showGuidesControl = document.getElementById("showGuidesControl");
+      const preview3dShadowControl = document.getElementById("preview3dShadowControl");
+      const preview3dShadowValue = document.getElementById("preview3dShadowValue");
+      const preview3dGlareControl = document.getElementById("preview3dGlareControl");
+      const preview3dGlareValue = document.getElementById("preview3dGlareValue");
       const assetGapControl = document.getElementById("assetGapControl");
       const backgroundColorControl = document.getElementById("backgroundColorControl");
       const assetColorControl = document.getElementById("assetColorControl");
@@ -1369,6 +1389,10 @@
         targetZMin: -4500,
         targetZMax: 4500,
       };
+      const PREVIEW3D_FX_DEFAULTS = {
+        shadow: 0.35,
+        glare: 0.25,
+      };
       const PREVIEW3D_TEXTURE_HEIGHT = 960;
       const PREVIEW3D_DOM_SNAPSHOT_INTERVAL_MS = 180;
       const PREVIEW3D_USE_DOM_SNAPSHOT = true;
@@ -1383,6 +1407,10 @@
         initFailed: false,
         renderCssWidth: 0,
         renderCssHeight: 0,
+        ambientLight: null,
+        keyLight: null,
+        fillLight: null,
+        material: null,
       };
       const preview3dSourceCanvas = document.createElement("canvas");
       const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
@@ -1718,7 +1746,29 @@
         preview3dThreeState.scene = scene;
         preview3dThreeState.camera = camera;
         preview3dThreeState.mesh = mesh;
+        preview3dThreeState.ambientLight = ambientLight;
+        preview3dThreeState.keyLight = keyLight;
+        preview3dThreeState.fillLight = fillLight;
+        preview3dThreeState.material = material;
         return true;
+      }
+
+      function applyPreview3dFxToScene() {
+        const ambientLight = preview3dThreeState.ambientLight;
+        const keyLight = preview3dThreeState.keyLight;
+        const fillLight = preview3dThreeState.fillLight;
+        const material = preview3dThreeState.material;
+        if (!ambientLight || !keyLight || !fillLight || !material) {
+          return;
+        }
+        const shadow = Math.max(0, Math.min(1, Number(editorState?.settings?.preview3dShadow) || PREVIEW3D_FX_DEFAULTS.shadow));
+        const glare = Math.max(0, Math.min(1, Number(editorState?.settings?.preview3dGlare) || PREVIEW3D_FX_DEFAULTS.glare));
+        ambientLight.intensity = Math.max(0.15, 1.0 - shadow * 0.45);
+        keyLight.intensity = 0.75 + glare * 0.5 + shadow * 0.1;
+        fillLight.intensity = Math.max(0.05, 0.18 + glare * 0.3 - shadow * 0.12);
+        material.roughness = Math.max(0.05, Math.min(0.95, 0.72 - glare * 0.52 + shadow * 0.18));
+        material.metalness = Math.max(0, Math.min(0.45, 0.03 + glare * 0.24));
+        material.emissiveIntensity = Math.max(0, Math.min(2, 0.78 + glare * 0.42 - shadow * 0.24));
       }
 
       function syncThreeTextureFromFlatSource() {
@@ -1736,7 +1786,7 @@
           const texture = new THREE.CanvasTexture(preview3dSourceCanvas);
           texture.wrapS = THREE.ClampToEdgeWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
-          texture.flipY = false;
+          texture.flipY = true;
           texture.center.set(0, 0);
           texture.rotation = 0;
           texture.repeat.set(1, 1);
@@ -1755,6 +1805,7 @@
           }
           mesh.material.needsUpdate = true;
         } else {
+          preview3dThreeState.texture.flipY = true;
           preview3dThreeState.texture.wrapS = THREE.ClampToEdgeWrapping;
           preview3dThreeState.texture.wrapT = THREE.ClampToEdgeWrapping;
           preview3dThreeState.texture.center.set(0, 0);
@@ -2034,6 +2085,7 @@
         }
         camera.aspect = cssWidth / cssHeight;
         syncThreeCameraTransform();
+        applyPreview3dFxToScene();
         camera.updateProjectionMatrix();
         const now = (typeof performance !== "undefined" && typeof performance.now === "function")
           ? performance.now()
@@ -2222,6 +2274,8 @@
           settings: {
             verticalAlignment: "top",
             previewMode: "flat",
+            preview3dShadow: PREVIEW3D_FX_DEFAULTS.shadow,
+            preview3dGlare: PREVIEW3D_FX_DEFAULTS.glare,
             partitionsEnabled: false,
             activePartitionKey: "left",
             partitionOrientations: {
@@ -2317,6 +2371,14 @@
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
           const previewMode = normalizePreviewMode(parsed?.settings?.previewMode);
+          const savedPreview3dShadow = Number(parsed?.settings?.preview3dShadow);
+          const preview3dShadow = Number.isFinite(savedPreview3dShadow)
+            ? Math.max(0, Math.min(1, savedPreview3dShadow))
+            : PREVIEW3D_FX_DEFAULTS.shadow;
+          const savedPreview3dGlare = Number(parsed?.settings?.preview3dGlare);
+          const preview3dGlare = Number.isFinite(savedPreview3dGlare)
+            ? Math.max(0, Math.min(1, savedPreview3dGlare))
+            : PREVIEW3D_FX_DEFAULTS.glare;
           const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
           const activePartitionKeyRaw = String(parsed?.settings?.activePartitionKey || "left");
           const activePartitionKey = PARTITION_KEYS.includes(activePartitionKeyRaw) ? activePartitionKeyRaw : "left";
@@ -2396,6 +2458,8 @@
             settings: {
               verticalAlignment,
               previewMode,
+              preview3dShadow,
+              preview3dGlare,
               partitionsEnabled,
               activePartitionKey,
               partitionOrientations,
@@ -2915,6 +2979,14 @@
 
       function ensurePartitionSettingsState() {
         editorState.settings.previewMode = normalizePreviewMode(editorState.settings.previewMode);
+        const preview3dShadow = Number(editorState.settings.preview3dShadow);
+        const preview3dGlare = Number(editorState.settings.preview3dGlare);
+        editorState.settings.preview3dShadow = Number.isFinite(preview3dShadow)
+          ? Math.max(0, Math.min(1, preview3dShadow))
+          : PREVIEW3D_FX_DEFAULTS.shadow;
+        editorState.settings.preview3dGlare = Number.isFinite(preview3dGlare)
+          ? Math.max(0, Math.min(1, preview3dGlare))
+          : PREVIEW3D_FX_DEFAULTS.glare;
         if (!editorState.settings.partitionSettings || typeof editorState.settings.partitionSettings !== "object") {
           editorState.settings.partitionSettings = {
             left: defaultPartitionSettings(),
@@ -3006,6 +3078,18 @@
         }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.value = target.partitioned ? target.key : "left";
+        }
+        if (preview3dShadowControl instanceof HTMLInputElement) {
+          preview3dShadowControl.value = String(editorState.settings.preview3dShadow ?? PREVIEW3D_FX_DEFAULTS.shadow);
+        }
+        if (preview3dShadowValue instanceof HTMLElement) {
+          preview3dShadowValue.textContent = Number(editorState.settings.preview3dShadow ?? PREVIEW3D_FX_DEFAULTS.shadow).toFixed(2);
+        }
+        if (preview3dGlareControl instanceof HTMLInputElement) {
+          preview3dGlareControl.value = String(editorState.settings.preview3dGlare ?? PREVIEW3D_FX_DEFAULTS.glare);
+        }
+        if (preview3dGlareValue instanceof HTMLElement) {
+          preview3dGlareValue.textContent = Number(editorState.settings.preview3dGlare ?? PREVIEW3D_FX_DEFAULTS.glare).toFixed(2);
         }
       }
 
@@ -5059,6 +5143,35 @@
         }
       }
 
+      function applyPreview3dFxSettings(shadowValue, glareValue, shouldPersist) {
+        const normalizedShadow = Math.max(0, Math.min(1, Number(shadowValue)));
+        const normalizedGlare = Math.max(0, Math.min(1, Number(glareValue)));
+        editorState.settings.preview3dShadow = Number.isFinite(normalizedShadow)
+          ? normalizedShadow
+          : PREVIEW3D_FX_DEFAULTS.shadow;
+        editorState.settings.preview3dGlare = Number.isFinite(normalizedGlare)
+          ? normalizedGlare
+          : PREVIEW3D_FX_DEFAULTS.glare;
+        if (preview3dShadowControl instanceof HTMLInputElement) {
+          preview3dShadowControl.value = String(editorState.settings.preview3dShadow);
+        }
+        if (preview3dGlareControl instanceof HTMLInputElement) {
+          preview3dGlareControl.value = String(editorState.settings.preview3dGlare);
+        }
+        if (preview3dShadowValue instanceof HTMLElement) {
+          preview3dShadowValue.textContent = editorState.settings.preview3dShadow.toFixed(2);
+        }
+        if (preview3dGlareValue instanceof HTMLElement) {
+          preview3dGlareValue.textContent = editorState.settings.preview3dGlare.toFixed(2);
+        }
+        if (previewMode === "3d") {
+          drawCurvedBillboard3dFrame();
+        }
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
       function syncBillboardPaddingFromEditorPreview() {
         const target = currentSettingsTarget();
         const referenceEditor = target.partitioned
@@ -5618,6 +5731,22 @@
       if (showGuidesControl instanceof HTMLInputElement) {
         showGuidesControl.addEventListener("change", () => {
           applyGuidesVisibility(showGuidesControl.checked, true);
+        });
+      }
+      if (preview3dShadowControl instanceof HTMLInputElement) {
+        preview3dShadowControl.addEventListener("input", () => {
+          const glareValue = preview3dGlareControl instanceof HTMLInputElement
+            ? preview3dGlareControl.value
+            : editorState.settings.preview3dGlare;
+          applyPreview3dFxSettings(preview3dShadowControl.value, glareValue, true);
+        });
+      }
+      if (preview3dGlareControl instanceof HTMLInputElement) {
+        preview3dGlareControl.addEventListener("input", () => {
+          const shadowValue = preview3dShadowControl instanceof HTMLInputElement
+            ? preview3dShadowControl.value
+            : editorState.settings.preview3dShadow;
+          applyPreview3dFxSettings(shadowValue, preview3dGlareControl.value, true);
         });
       }
 
