@@ -2451,8 +2451,8 @@
           billboardMarqueeOffsetX = 0;
           if (rawDirection === "rtl") {
             // Vertical mode (UI label: left to right): start with the
-            // beginning of the artboard bottom-aligned, then move upward.
-            billboardMarqueeOffsetY = -cycleProgressPx;
+            // beginning of the artboard bottom-aligned, then move downward.
+            billboardMarqueeOffsetY = cycleProgressPx;
           } else {
             // Vertical LTR uses full-cycle phase for seamless duplicate wrap.
             billboardMarqueeOffsetY = -cycleProgressPx;
