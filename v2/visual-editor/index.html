@@ -1291,6 +1291,16 @@
         return partitionEditorForKey(key);
       }
 
+      function partitionViewportFrameForKey(key) {
+        return key === "left"
+          ? partitionViewportFrameLeft
+          : key === "curve"
+            ? partitionViewportFrameCurve
+            : key === "right"
+              ? partitionViewportFrameRight
+              : null;
+      }
+
       function partitionArtboardWidth(partitionKey) {
         const layout = PARTITION_LAYOUT[partitionKey];
         if (!layout) {
@@ -1307,17 +1317,14 @@
           }
           // Partition editors keep full billboard ratio for editing context.
           editor.style.setProperty("--partition-width", String(ARTBOARD_WIDTH));
-          const frame = key === "left"
-            ? partitionViewportFrameLeft
-            : key === "curve"
-              ? partitionViewportFrameCurve
-              : partitionViewportFrameRight;
+          const frame = partitionViewportFrameForKey(key);
           const layout = PARTITION_LAYOUT[key];
           if (frame instanceof HTMLElement && layout) {
             frame.style.left = "0";
             frame.style.width = layout.widthRatio * 100 + "%";
           }
         }
+        updatePartitionViewportFrames();
       }
 
       function ensurePartitionSettingsState() {
@@ -2432,6 +2439,7 @@
       }
 
       function updateEditorViewportFrame() {
+        updatePartitionViewportFrames();
         if (!(billboardViewportFrame instanceof HTMLElement)) {
           return;
         }
@@ -2480,6 +2488,33 @@
           if (shouldShowTimer) {
             billboardViewportTimer.textContent = currentSeconds.toFixed(1) + "s / " + totalSeconds.toFixed(1) + "s";
           }
+        }
+      }
+
+      function updatePartitionViewportFrames() {
+        const marqueeTrackX = billboardViewportOffsetX + editorMarqueeOffsetX;
+        const marqueeTrackY = billboardViewportOffsetY + editorMarqueeOffsetY;
+        for (const key of PARTITION_KEYS) {
+          const frame = partitionViewportFrameForKey(key);
+          const layout = PARTITION_LAYOUT[key];
+          if (!(frame instanceof HTMLElement) || !layout) {
+            continue;
+          }
+          frame.style.width = layout.widthRatio * 100 + "%";
+          if (!editorState.settings.marqueeEnabled) {
+            frame.style.left = "0";
+            frame.style.top = "0";
+            continue;
+          }
+          const editor = partitionEditorForSettingsKey(key);
+          const scale = billboardScaleFactor(editor);
+          if (!(scale > 0)) {
+            frame.style.left = "0";
+            frame.style.top = "0";
+            continue;
+          }
+          frame.style.left = (-marqueeTrackX / scale) + "px";
+          frame.style.top = (-marqueeTrackY / scale) + "px";
         }
       }
 
