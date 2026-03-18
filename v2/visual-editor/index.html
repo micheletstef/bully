@@ -3061,6 +3061,11 @@
           const partitionSettings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
+          const verticalAlignForRotated = partitionSettings.verticalAlignment === "top"
+            ? "flex-end"
+            : partitionSettings.verticalAlignment === "bottom"
+              ? "flex-start"
+              : "center";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
           const previewEditorHeight = Math.max(
             1,
@@ -3120,8 +3125,11 @@
           track.style.paddingRight = paddingLR + "px";
           track.style.gap = gap + "px";
           if (partitionSettings.orientation === "vertical") {
-            track.style.alignItems = "flex-start";
-            track.style.justifyContent = align;
+            // Rotated track axes:
+            // - justify-content controls screen vertical position (inverted)
+            // - align-items controls screen horizontal position
+            track.style.alignItems = "center";
+            track.style.justifyContent = verticalAlignForRotated;
           } else {
             track.style.alignItems = align;
             track.style.justifyContent = "flex-start";
