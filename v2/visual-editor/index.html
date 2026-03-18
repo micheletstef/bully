@@ -1064,6 +1064,7 @@
       let marqueeAnimationRaf = null;
       let marqueeLastTimestamp = 0;
       let marqueeProgressPx = 0;
+      let partitionMarqueeProgressPx = { left: 0, curve: 0, right: 0 };
       let marqueeCyclePx = 0;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
@@ -1090,6 +1091,9 @@
         return {
           verticalAlignment: "top",
           orientation: "horizontal",
+          marqueeEnabled: false,
+          marqueeSpeed: 80,
+          marqueeDirection: "rtl",
           paddingTB: 0,
           paddingLR: 0,
           assetGap: 8,
@@ -1220,6 +1224,11 @@
           const savedPartitionSettings = parsed?.settings?.partitionSettings && typeof parsed.settings.partitionSettings === "object"
             ? parsed.settings.partitionSettings
             : {};
+          const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
+          const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
+          const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
+          const marqueeDirection = savedMarqueeDirection === "ltr" ? "ltr" : "rtl";
+          const marqueeSpeed = Number.isFinite(savedMarqueeSpeed) ? Math.max(5, Math.min(600, savedMarqueeSpeed)) : 80;
           const sanitizePartitionSettingsEntry = (entry, partitionKey) => {
             const fallback = defaultPartitionSettings();
             const src = entry && typeof entry === "object" ? entry : {};
@@ -1237,9 +1246,19 @@
             const assetColor = typeof src.assetColor === "string" && /^#[0-9a-f]{6}$/i.test(src.assetColor)
               ? src.assetColor
               : fallback.assetColor;
+            const marqueeEnabled = typeof src.marqueeEnabled === "boolean" ? src.marqueeEnabled : savedMarqueeEnabled;
+            const srcMarqueeSpeed = Number(src.marqueeSpeed);
+            const normalizedMarqueeSpeed = Number.isFinite(srcMarqueeSpeed)
+              ? Math.max(5, Math.min(600, srcMarqueeSpeed))
+              : marqueeSpeed;
+            const srcMarqueeDirection = String(src.marqueeDirection || marqueeDirection).toLowerCase();
+            const normalizedMarqueeDirection = srcMarqueeDirection === "ltr" ? "ltr" : "rtl";
             return {
               verticalAlignment: alignment,
               orientation,
+              marqueeEnabled,
+              marqueeSpeed: normalizedMarqueeSpeed,
+              marqueeDirection: normalizedMarqueeDirection,
               paddingTB: Number.isFinite(paddingTBValue) ? Math.max(0, paddingTBValue) : fallback.paddingTB,
               paddingLR: Number.isFinite(paddingLRValue) ? Math.max(0, paddingLRValue) : fallback.paddingLR,
               assetGap: Number.isFinite(gapValue) ? Math.max(0, gapValue) : fallback.assetGap,
@@ -1257,13 +1276,8 @@
             curve: partitionSettings.curve.orientation,
             right: partitionSettings.right.orientation,
           };
-          const savedMarqueeEnabled = !!parsed?.settings?.marqueeEnabled;
-          const savedMarqueeSpeed = Number(parsed?.settings?.marqueeSpeed);
-          const savedMarqueeDirection = String(parsed?.settings?.marqueeDirection || "rtl").toLowerCase();
-          const marqueeDirection = savedMarqueeDirection === "ltr" ? "ltr" : "rtl";
           const savedOrientation = String(parsed?.settings?.orientation || "horizontal").toLowerCase();
           const orientation = savedOrientation === "vertical" ? "vertical" : "horizontal";
-          const marqueeSpeed = Number.isFinite(savedMarqueeSpeed) ? Math.max(5, Math.min(600, savedMarqueeSpeed)) : 80;
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
           const savedPaddingLR = Number(parsed?.settings?.paddingLR);
           const savedAssetGap = Number(parsed?.settings?.assetGap);
@@ -1404,6 +1418,13 @@
           } else {
             editorState.settings.partitionOrientations[key] = editorState.settings.partitionSettings[key].orientation;
           }
+          editorState.settings.partitionSettings[key].marqueeEnabled = !!editorState.settings.partitionSettings[key].marqueeEnabled;
+          const speed = Number(editorState.settings.partitionSettings[key].marqueeSpeed);
+          editorState.settings.partitionSettings[key].marqueeSpeed = Number.isFinite(speed)
+            ? Math.max(5, Math.min(600, speed))
+            : 80;
+          const direction = String(editorState.settings.partitionSettings[key].marqueeDirection || "rtl").toLowerCase();
+          editorState.settings.partitionSettings[key].marqueeDirection = direction === "ltr" ? "ltr" : "rtl";
         }
         if (!PARTITION_KEYS.includes(editorState.settings.activePartitionKey)) {
           editorState.settings.activePartitionKey = "left";
@@ -1417,6 +1438,14 @@
           return { key, settings: editorState.settings.partitionSettings[key], partitioned: true };
         }
         return { key: "single", settings: editorState.settings, partitioned: false };
+      }
+
+      function isMarqueeEnabledForCurrentMode() {
+        if (!editorState.settings.partitionsEnabled) {
+          return !!editorState.settings.marqueeEnabled;
+        }
+        ensurePartitionSettingsState();
+        return PARTITION_KEYS.some((key) => !!editorState.settings.partitionSettings[key].marqueeEnabled);
       }
 
       function syncSettingsControlsFromState() {
@@ -1435,6 +1464,20 @@
         assetColorControl.value = source.assetColor || "#1e6cff";
         if (orientationControl instanceof HTMLSelectElement) {
           orientationControl.value = source.orientation === "vertical" ? "vertical" : "horizontal";
+        }
+        const marqueeEnabled = !!source.marqueeEnabled;
+        const marqueeSpeed = Math.max(5, Math.min(600, Number(source.marqueeSpeed) || 80));
+        const marqueeDirection = source.marqueeDirection === "ltr" ? "ltr" : "rtl";
+        marqueeSpeedControl.value = String(marqueeSpeed);
+        marqueeDirectionControl.value = marqueeDirection;
+        marqueeSpeedRow.hidden = !marqueeEnabled;
+        marqueeDirectionRow.hidden = !marqueeEnabled;
+        const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
+        for (const button of toggleButtons) {
+          const isOn = button.dataset.value === "on";
+          const isSelected = marqueeEnabled ? isOn : !isOn;
+          button.classList.toggle("inactive", !isSelected);
+          button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
           partitionSettingsSelect.value = target.partitioned ? target.key : "left";
@@ -2531,8 +2574,6 @@
         if (!(flatBillboardPartitionLayers instanceof HTMLElement)) {
           return;
         }
-        const direction = editorState.settings.marqueeDirection === "ltr" ? "ltr" : "rtl";
-        const marqueeEnabled = !!editorState.settings.marqueeEnabled;
         const layers = flatBillboardPartitionLayers.querySelectorAll(".flat-billboard-partition-layer");
         for (const layer of layers) {
           const track = layer.querySelector(".flat-billboard-partition-track");
@@ -2540,6 +2581,13 @@
           if (!(track instanceof HTMLElement) || !(artboard instanceof HTMLElement)) {
             continue;
           }
+          const partitionKey = layer.dataset.partitionKey || "";
+          const partitionSettings = PARTITION_KEYS.includes(partitionKey)
+            ? (editorState.settings.partitionSettings?.[partitionKey] || defaultPartitionSettings())
+            : defaultPartitionSettings();
+          const direction = partitionSettings.marqueeDirection === "ltr" ? "ltr" : "rtl";
+          const marqueeEnabled = !!partitionSettings.marqueeEnabled;
+          const progressPx = PARTITION_KEYS.includes(partitionKey) ? (Number(partitionMarqueeProgressPx[partitionKey]) || 0) : 0;
           const orientation = track.dataset.partitionOrientation === "vertical" ? "vertical" : "horizontal";
           const alignKey = track.dataset.partitionAlignment || "top";
           const originalMainSpan = Math.max(1, Number(track.dataset.originalMainSpan) || 1);
@@ -2560,7 +2608,7 @@
           if (marqueeEnabled) {
             const cycle = Math.max(0, Number(track.dataset.marqueeCyclePx) || 0);
             if (cycle > 0) {
-              const cycleProgressPx = ((marqueeProgressPx % cycle) + cycle) % cycle;
+              const cycleProgressPx = ((progressPx % cycle) + cycle) % cycle;
               const viewportSpan = Math.max(1, artboard.clientWidth || 1);
               const maxTravelPx = Math.max(0, cycle - viewportSpan);
               marqueeOffset = direction === "ltr"
@@ -2673,12 +2721,15 @@
       }
 
       function updatePartitionViewportFrames() {
-        const direction = editorState.settings.marqueeDirection === "ltr" ? "ltr" : "rtl";
-        const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
         for (const key of PARTITION_KEYS) {
           const frame = partitionViewportFrameForKey(key);
           const timer = partitionViewportTimerForKey(key);
           const layout = PARTITION_LAYOUT[key];
+          const partitionSettings = editorState.settings.partitionSettings?.[key] || defaultPartitionSettings();
+          const marqueeEnabled = !!partitionSettings.marqueeEnabled;
+          const direction = partitionSettings.marqueeDirection === "ltr" ? "ltr" : "rtl";
+          const speed = Math.max(5, Number(partitionSettings.marqueeSpeed) || 80);
+          const progressPx = Number(partitionMarqueeProgressPx[key]) || 0;
           if (!(frame instanceof HTMLElement) || !layout) {
             if (timer instanceof HTMLElement) {
               timer.style.display = "none";
@@ -2686,7 +2737,7 @@
             continue;
           }
           frame.style.width = layout.widthRatio * 100 + "%";
-          if (!editorState.settings.marqueeEnabled) {
+          if (!marqueeEnabled) {
             frame.style.left = "0";
             frame.style.top = "0";
             if (timer instanceof HTMLElement) {
@@ -2715,7 +2766,7 @@
             : null;
           const cycle = Math.max(0, Number(partitionTrack?.dataset?.marqueeCyclePx) || 0);
           const cycleProgressPx = cycle > 0
-            ? (((marqueeProgressPx % cycle) + cycle) % cycle)
+            ? (((progressPx % cycle) + cycle) % cycle)
             : 0;
           const maxBillboardTravelPx = cycle > 0 ? Math.max(0, cycle - partitionBillboardSpan) : 0;
           const wrappedTravelPx = maxBillboardTravelPx > 0
@@ -2726,7 +2777,7 @@
             : 0;
           const totalSeconds = cycle > 0 ? (cycle / speed) : 0;
           const currentSeconds = cycle > 0 ? (cycleProgressPx / speed) : 0;
-          const showTimers = editorState.settings.partitionsEnabled && editorState.settings.marqueeEnabled && totalSeconds > 0;
+          const showTimers = editorState.settings.partitionsEnabled && marqueeEnabled && totalSeconds > 0;
           let left = 0;
           if (direction === "ltr") {
             // "right to left" starts from the right-most edge.
@@ -2833,7 +2884,8 @@
       }
 
       function stepMarquee(now) {
-        if (!editorState.settings.marqueeEnabled) {
+        if (!isMarqueeEnabledForCurrentMode()) {
+          stopMarqueeAnimation();
           return;
         }
         if (!marqueeLastTimestamp) {
@@ -2841,15 +2893,29 @@
         }
         const dt = Math.max(0, (now - marqueeLastTimestamp) / 1000);
         marqueeLastTimestamp = now;
-        const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
-        const delta = speed * dt;
-        const cycle = editorState.settings.partitionsEnabled
-          ? partitionMaxMarqueeCycleLength()
-          : (marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength());
         if (editorState.settings.partitionsEnabled) {
-          marqueeProgressPx += delta;
-          applyFlatBillboardTrackTransform();
-        } else if (cycle > 0) {
+          ensurePartitionSettingsState();
+          let hasMovingPartition = false;
+          for (const key of PARTITION_KEYS) {
+            const partitionSettings = editorState.settings.partitionSettings[key];
+            if (!partitionSettings?.marqueeEnabled) {
+              continue;
+            }
+            const speed = Math.max(5, Number(partitionSettings.marqueeSpeed) || 80);
+            partitionMarqueeProgressPx[key] = (Number(partitionMarqueeProgressPx[key]) || 0) + (speed * dt);
+            hasMovingPartition = true;
+          }
+          if (hasMovingPartition) {
+            applyFlatBillboardTrackTransform();
+          }
+        } else {
+          const speed = Math.max(5, Number(editorState.settings.marqueeSpeed) || 80);
+          const delta = speed * dt;
+          const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
+          if (!(cycle > 0)) {
+            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+            return;
+          }
           marqueeProgressPx += delta;
           applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
@@ -2874,16 +2940,26 @@
 
       function applyMarqueeSettings(enabled, speed, direction, shouldPersist, options = {}) {
         const syncControls = options.syncControls !== false;
+        const target = currentSettingsTarget();
+        const sourceSettings = target.settings;
         const normalizedEnabled = !!enabled;
         const parsedSpeed = Number(speed);
         const normalizedSpeed = Number.isFinite(parsedSpeed)
           ? Math.max(5, Math.min(600, parsedSpeed))
-          : Math.max(5, Math.min(600, Number(editorState.settings.marqueeSpeed) || 80));
+          : Math.max(5, Math.min(600, Number(sourceSettings.marqueeSpeed) || 80));
         const normalizedDirection = direction === "ltr" ? "ltr" : "rtl";
 
-        editorState.settings.marqueeEnabled = normalizedEnabled;
-        editorState.settings.marqueeSpeed = normalizedSpeed;
-        editorState.settings.marqueeDirection = normalizedDirection;
+        sourceSettings.marqueeEnabled = normalizedEnabled;
+        sourceSettings.marqueeSpeed = normalizedSpeed;
+        sourceSettings.marqueeDirection = normalizedDirection;
+        if (!target.partitioned) {
+          editorState.settings.marqueeEnabled = normalizedEnabled;
+          editorState.settings.marqueeSpeed = normalizedSpeed;
+          editorState.settings.marqueeDirection = normalizedDirection;
+        }
+        if (target.partitioned && PARTITION_KEYS.includes(target.key)) {
+          partitionMarqueeProgressPx[target.key] = 0;
+        }
 
         if (syncControls) {
           marqueeSpeedControl.value = String(normalizedSpeed);
@@ -2907,19 +2983,23 @@
         editorMarqueeOffsetY = 0;
         marqueeProgressPx = 0;
 
-        if (!normalizedEnabled) {
+        if (!isMarqueeEnabledForCurrentMode()) {
           stopMarqueeAnimation();
         }
         syncFlatBillboardArtworks();
-        const cycle = editorState.settings.partitionsEnabled
-          ? partitionMaxMarqueeCycleLength()
-          : (marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength());
-        if (normalizedEnabled && cycle > 0) {
-          if (!editorState.settings.partitionsEnabled) {
+        if (!editorState.settings.partitionsEnabled) {
+          const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
+          if (normalizedEnabled && cycle > 0) {
             applyMarqueePhaseOffsets(cycle);
+            applyFlatBillboardTrackTransform();
+            startMarqueeAnimation();
           }
+        } else if (isMarqueeEnabledForCurrentMode()) {
           applyFlatBillboardTrackTransform();
-          startMarqueeAnimation();
+          if (!marqueeAnimationRaf) {
+            marqueeLastTimestamp = 0;
+            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+          }
         }
         if (shouldPersist) {
           saveEditorState();
@@ -2970,19 +3050,21 @@
           updateAllAssetBlockSizes();
         }
         syncFlatBillboardArtworks();
-        const cycle = normalizedEnabled
-          ? partitionMaxMarqueeCycleLength()
-          : (marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength());
-        if (editorState.settings.marqueeEnabled && cycle > 0) {
-          if (!normalizedEnabled) {
-            applyMarqueePhaseOffsets(cycle);
-          }
+        const cycle = marqueeCyclePx > 0 ? marqueeCyclePx : marqueeCycleLength();
+        if (!normalizedEnabled && editorState.settings.marqueeEnabled && cycle > 0) {
+          applyMarqueePhaseOffsets(cycle);
           applyFlatBillboardTrackTransform();
           if (!marqueeAnimationRaf) {
             marqueeLastTimestamp = 0;
             marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
           }
-        } else if (marqueeAnimationRaf && !(editorState.settings.marqueeEnabled && cycle > 0)) {
+        } else if (normalizedEnabled && isMarqueeEnabledForCurrentMode()) {
+          applyFlatBillboardTrackTransform();
+          if (!marqueeAnimationRaf) {
+            marqueeLastTimestamp = 0;
+            marqueeAnimationRaf = window.requestAnimationFrame(stepMarquee);
+          }
+        } else if (marqueeAnimationRaf && !isMarqueeEnabledForCurrentMode()) {
           stopMarqueeAnimation();
         }
         if (shouldPersist) {
@@ -3494,13 +3576,13 @@
 
         ensurePartitionSettingsState();
         const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
-        const marqueeEnabled = !!editorState.settings.marqueeEnabled;
-        const direction = editorState.settings.marqueeDirection === "ltr" ? "ltr" : "rtl";
 
         for (const partitionKey of PARTITION_KEYS) {
           const layout = PARTITION_LAYOUT[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
           const partitionSettings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
+          const marqueeEnabled = !!partitionSettings.marqueeEnabled;
+          const direction = partitionSettings.marqueeDirection === "ltr" ? "ltr" : "rtl";
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
@@ -3547,6 +3629,7 @@
 
           const track = document.createElement("div");
           track.className = "flat-billboard-partition-track";
+          track.dataset.partitionKey = partitionKey;
           track.dataset.partitionOrientation = partitionSettings.orientation === "vertical" ? "vertical" : "horizontal";
           track.dataset.partitionAlignment = partitionSettings.verticalAlignment || "top";
           track.style.paddingTop = paddingTB + "px";
@@ -3899,15 +3982,18 @@
         if (!Number.isFinite(parsed)) {
           return;
         }
-        applyMarqueeSettings(editorState.settings.marqueeEnabled, parsed, marqueeDirectionControl.value, true, { syncControls: false });
+        const target = currentSettingsTarget();
+        applyMarqueeSettings(!!target.settings.marqueeEnabled, parsed, marqueeDirectionControl.value, true, { syncControls: false });
       });
 
       marqueeSpeedControl.addEventListener("blur", () => {
-        applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+        const target = currentSettingsTarget();
+        applyMarqueeSettings(!!target.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
       });
 
       marqueeDirectionControl.addEventListener("change", () => {
-        applyMarqueeSettings(editorState.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
+        const target = currentSettingsTarget();
+        applyMarqueeSettings(!!target.settings.marqueeEnabled, marqueeSpeedControl.value, marqueeDirectionControl.value, true);
       });
 
       orientationControl.addEventListener("change", () => {
