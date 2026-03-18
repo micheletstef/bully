@@ -19,7 +19,7 @@
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding: 18px;
+        padding: 24px;
         background: #fff;
         font-family: "Courier New", Courier, monospace;
         font-size: 12px;
@@ -29,11 +29,14 @@
 
       .page-shell {
         width: 100%;
+        box-sizing: border-box;
         display: grid;
         grid-template-columns: 320px 320px 1fr;
         align-items: stretch;
         min-height: calc(100vh - 36px);
       }
+      .assets-directory{ padding-right: 12px;}
+      .settings-panel { padding-left: 12px;}
 
       .assets-directory,
       .settings-panel {
@@ -2935,8 +2938,9 @@
               const viewportSpan = Math.max(1, artboard.clientWidth || 1);
               const maxTravelPx = Math.max(0, cycle - viewportSpan);
               marqueeOffset = direction === "ltr"
-                // Keep LTR anchored to equivalent duplicate content.
-                ? -((maxTravelPx + cycle) - cycleProgressPx)
+                // Mirror RTL motion across the full run so wrap occurs at an
+                // equivalent cycle boundary (prevents early duplicate reveal).
+                ? -(cycle - cycleProgressPx)
                 // Move across full cycle so partitions still animate when
                 // a single run is shorter than the partition viewport.
                 : -cycleProgressPx;
