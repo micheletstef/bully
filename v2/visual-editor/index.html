@@ -321,7 +321,7 @@
       .partition-editor-grid {
         display: none;
         grid-template-columns: 1fr;
-        gap: 8px;
+        gap: 28px;
         width: max-content;
       }
 
@@ -478,7 +478,7 @@
 
       .asset-scale-controls {
         position: absolute;
-        top: calc(var(--asset-controls-top) + 6px);
+        top: 0;
         left: 0;
         transform: translateX(-50%);
         display: none;
@@ -1960,8 +1960,14 @@
         if (!selectedBlock) {
           return;
         }
-        const centerX = selectedBlock.offsetLeft - editorStage.scrollLeft + selectedBlock.offsetWidth / 2;
+        const selectedEditor = selectedBlock.closest(".visual-editor-block");
+        if (!(selectedEditor instanceof HTMLElement)) {
+          return;
+        }
+        const centerX = selectedEditor.offsetLeft + selectedBlock.offsetLeft - editorStage.scrollLeft + selectedBlock.offsetWidth / 2;
+        const controlsTop = editorStage.offsetTop + selectedEditor.offsetTop - editorStage.scrollTop + selectedEditor.offsetHeight + 6;
         assetScaleControls.style.left = centerX + "px";
+        assetScaleControls.style.top = controlsTop + "px";
       }
 
       function updateScaleControlsValue() {
@@ -3113,7 +3119,13 @@
           track.style.paddingLeft = paddingLR + "px";
           track.style.paddingRight = paddingLR + "px";
           track.style.gap = gap + "px";
-          track.style.alignItems = align;
+          if (partitionSettings.orientation === "vertical") {
+            track.style.alignItems = "flex-start";
+            track.style.justifyContent = align;
+          } else {
+            track.style.alignItems = align;
+            track.style.justifyContent = "flex-start";
+          }
           track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
