@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Visual Editor</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
     <style>
       :root {
         color-scheme: light;
@@ -802,7 +803,8 @@
       }
 
       body.preview-mode-3d .flat-billboard {
-        visibility: hidden;
+        /* Keep flat billboard paintable for DOM snapshot capture. */
+        visibility: visible;
       }
 
       body.preview-mode-3d .flat-billboard-annotations {
@@ -1600,28 +1602,15 @@
 
         let renderer = null;
         try {
-          if (flatBillboard3dCanvas instanceof HTMLCanvasElement) {
-            renderer = new THREE.WebGLRenderer({
-              canvas: flatBillboard3dCanvas,
-              antialias: true,
-              alpha: true,
-            });
-          } else {
-            renderer = new THREE.WebGLRenderer({
-              antialias: true,
-              alpha: true,
-            });
-          }
+          // Always let Three create/manage its own canvas to avoid
+          // mixed 2D/WebGL context collisions on pre-existing nodes.
+          renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+          });
         } catch (error) {
-          try {
-            renderer = new THREE.WebGLRenderer({
-              antialias: true,
-              alpha: true,
-            });
-          } catch (fallbackError) {
-            preview3dThreeState.initFailed = true;
-            return false;
-          }
+          preview3dThreeState.initFailed = true;
+          return false;
         }
         if (!(renderer && renderer.domElement instanceof HTMLCanvasElement)) {
           preview3dThreeState.initFailed = true;
@@ -1860,10 +1849,16 @@
         sourceCtx.clearRect(0, 0, width, height);
         sourceCtx.imageSmoothingEnabled = true;
         sourceCtx.imageSmoothingQuality = "high";
-        queueFlatBillboardSnapshot();
-        if (preview3dDomSnapshotCanvas instanceof HTMLCanvasElement) {
-          sourceCtx.drawImage(preview3dDomSnapshotCanvas, 0, 0, width, height);
-          return true;
+        const html2canvas = getHtml2CanvasLib();
+        if (html2canvas) {
+          queueFlatBillboardSnapshot();
+          if (preview3dDomSnapshotCanvas instanceof HTMLCanvasElement) {
+            sourceCtx.drawImage(preview3dDomSnapshotCanvas, 0, 0, width, height);
+            return true;
+          }
+          // DOM snapshot is the source of truth when available.
+          // Skip manual rebuild to avoid orientation drift.
+          return false;
         }
 
         const computed = window.getComputedStyle(flatBillboard);
