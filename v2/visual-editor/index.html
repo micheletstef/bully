@@ -518,7 +518,7 @@
         width: 0;
         height: 0;
         border: 1px solid #d30000;
-        pointer-events: auto;
+        pointer-events: none;
         cursor: ew-resize;
         z-index: 6;
       }
@@ -2783,6 +2783,15 @@
         const y = event.clientY;
         const insideFrame = x >= frameRect.left && x <= frameRect.right && y >= frameRect.top && y <= frameRect.bottom;
         if (!insideFrame) {
+          return false;
+        }
+        const borderHitThreshold = 6;
+        const nearLeft = Math.abs(x - frameRect.left) <= borderHitThreshold;
+        const nearRight = Math.abs(x - frameRect.right) <= borderHitThreshold;
+        const nearTop = Math.abs(y - frameRect.top) <= borderHitThreshold;
+        const nearBottom = Math.abs(y - frameRect.bottom) <= borderHitThreshold;
+        const onFrameOutline = nearLeft || nearRight || nearTop || nearBottom;
+        if (!onFrameOutline) {
           return false;
         }
         viewportFrameDragState = {
