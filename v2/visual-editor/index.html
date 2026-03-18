@@ -57,7 +57,7 @@
       .assets-title-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 8px;
         margin-bottom: 6px;
       }
@@ -66,11 +66,17 @@
         margin: 0;
       }
 
-      .assets-save-button {
+      .assets-actions {
         position: fixed;
         top: 12px;
         right: 12px;
         z-index: 1000;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .assets-save-button {
         border: 1px solid #1f1f1f;
         background: #fff;
         color: #1f1f1f;
@@ -83,6 +89,38 @@
 
       .assets-save-button:hover,
       .assets-save-button:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
+      .preview-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid #1f1f1f;
+        background: #fff;
+        padding: 1px 6px;
+      }
+
+      .preview-mode-button {
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 0;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+        line-height: 1.25;
+        text-transform: lowercase;
+      }
+
+      .preview-mode-button.inactive {
+        color: #5d5d5d;
+        text-decoration: line-through;
+      }
+
+      .preview-mode-button:hover,
+      .preview-mode-button:focus {
         text-decoration: underline;
         outline: none;
       }
@@ -748,6 +786,33 @@
         overflow: hidden;
       }
 
+      .flat-billboard-3d {
+        position: absolute;
+        inset: 0;
+        display: none;
+        background: #0f1117;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .flat-billboard-3d-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      body.preview-mode-3d .flat-billboard {
+        visibility: hidden;
+      }
+
+      body.preview-mode-3d .flat-billboard-annotations {
+        display: none;
+      }
+
+      body.preview-mode-3d .flat-billboard-3d {
+        display: block;
+      }
+
       .flat-billboard-track {
         position: absolute;
         left: 0;
@@ -1008,7 +1073,14 @@
       <aside class="assets-directory" aria-label="Placeholder assets directory">
         <div class="assets-title-row">
           <h2 class="assets-title">saved</h2>
+        </div>
+        <div class="assets-actions">
           <button id="saveBillboardButton" type="button" class="assets-save-button">save</button>
+          <div id="previewModeToggle" class="preview-mode-toggle" role="radiogroup" aria-label="Preview mode">
+            <button id="previewModeFlatButton" type="button" class="preview-mode-button" data-value="flat" role="radio" aria-checked="true">flat</button>
+            <span>/</span>
+            <button id="previewMode3dButton" type="button" class="preview-mode-button inactive" data-value="3d" role="radio" aria-checked="false">3d</button>
+          </div>
         </div>
         <div id="savedBillboardsList" class="saved-billboards-list"></div>
         <div id="toolsList" class="tools-list">
@@ -1123,6 +1195,9 @@
               <div id="flatBillboardPartitionLayers" class="flat-billboard-partition-layers"></div>
               <div id="flatBillboardSinglePartitionGuides" class="flat-billboard-single-partition-guides"></div>
             </div>
+            <div id="flatBillboard3d" class="flat-billboard-3d" aria-hidden="true">
+              <canvas id="flatBillboard3dCanvas" class="flat-billboard-3d-canvas" aria-label="3D curved billboard preview"></canvas>
+            </div>
             <div class="flat-billboard-annotations" aria-hidden="true">
               <div class="flat-anno-top-line"></div>
               <div class="flat-anno-top-label">5900px width</div>
@@ -1186,6 +1261,9 @@
 
       const assetsList = document.getElementById("assetsList");
       const saveBillboardButton = document.getElementById("saveBillboardButton");
+      const previewModeToggle = document.getElementById("previewModeToggle");
+      const previewModeFlatButton = document.getElementById("previewModeFlatButton");
+      const previewMode3dButton = document.getElementById("previewMode3dButton");
       const savedBillboardsList = document.getElementById("savedBillboardsList");
       const billboardMakerButton = document.getElementById("billboardMakerButton");
       const alignmentSettings = document.getElementById("alignmentSettings");
@@ -1215,6 +1293,8 @@
       const billboardViewportFrame = document.getElementById("billboardViewportFrame");
       const billboardViewportTimer = document.getElementById("billboardViewportTimer");
       const flatBillboard = document.getElementById("flatBillboard");
+      const flatBillboard3d = document.getElementById("flatBillboard3d");
+      const flatBillboard3dCanvas = document.getElementById("flatBillboard3dCanvas");
       const flatBillboardTrack = document.getElementById("flatBillboardTrack");
       const flatBillboardPartitionLayers = document.getElementById("flatBillboardPartitionLayers");
       const flatBillboardSinglePartitionGuides = document.getElementById("flatBillboardSinglePartitionGuides");
@@ -1242,6 +1322,8 @@
       const PARTITION_VIEWPORT_UI_INTERVAL_MS = 100;
       let marqueeTargetVisible = true;
       let marqueeVisibilityObserver = null;
+      let previewMode = "flat";
+      let preview3dRaf = null;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -1253,11 +1335,337 @@
       const PARTITION_KEYS = ["left", "curve", "right"];
       const ARTBOARD_WIDTH = 5900;
       const ARTBOARD_HEIGHT = 3480;
+      const PREVIEW3D_STRIP_COUNT = 180;
+      const PREVIEW3D_FRAME_FIT = 0.86;
+      const PREVIEW3D_FIXED_CAMERA = {
+        yaw: -0.72,
+        pitch: 0.1,
+        perspective: 1.32,
+        targetX: 250,
+        targetDepth: 2920,
+        targetZ: 0,
+      };
+      const preview3dSourceCanvas = document.createElement("canvas");
+      const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
       const PARTITION_LAYOUT = {
         left: { offsetRatio: 0, widthRatio: 1820 / ARTBOARD_WIDTH },
         curve: { offsetRatio: 1820 / ARTBOARD_WIDTH, widthRatio: 1020 / ARTBOARD_WIDTH },
         right: { offsetRatio: 2840 / ARTBOARD_WIDTH, widthRatio: 3060 / ARTBOARD_WIDTH },
       };
+      const PREVIEW3D_CURVE_CENTER = computePreview3dCurveCenter();
+
+      function normalizePreviewMode(value) {
+        return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
+      }
+
+      function syncPreviewModeToggleStates() {
+        if (!(previewModeToggle instanceof HTMLElement)) {
+          return;
+        }
+        const buttons = previewModeToggle.querySelectorAll(".preview-mode-button");
+        for (const button of buttons) {
+          const value = normalizePreviewMode(button.dataset.value);
+          const isActive = previewMode === value;
+          button.classList.toggle("inactive", !isActive);
+          button.setAttribute("aria-checked", isActive ? "true" : "false");
+        }
+      }
+
+      function setPreviewMode(value, options = {}) {
+        const normalized = normalizePreviewMode(value);
+        const persist = options.persist !== false;
+        previewMode = normalized;
+        document.body.classList.toggle("preview-mode-3d", normalized === "3d");
+        if (flatBillboard3d instanceof HTMLElement) {
+          flatBillboard3d.setAttribute("aria-hidden", normalized === "3d" ? "false" : "true");
+        }
+        syncPreviewModeToggleStates();
+        if (normalized === "3d") {
+          startPreview3dLoop();
+        } else {
+          stopPreview3dLoop();
+        }
+        if (persist && editorState && editorState.settings) {
+          editorState.settings.previewMode = normalized;
+          saveEditorState();
+        }
+      }
+
+      function computePreview3dCurveSample(distanceAlongWidth) {
+        const leftLength = 1820;
+        const curveLength = 1020;
+        const rightLength = 3060;
+        const totalLength = leftLength + curveLength + rightLength;
+        const s = Math.max(0, Math.min(totalLength, Number(distanceAlongWidth) || 0));
+        const radius = curveLength / (Math.PI / 2);
+
+        if (s <= leftLength) {
+          return { x: s, depth: 0 };
+        }
+        if (s <= leftLength + curveLength) {
+          const t = (s - leftLength) / curveLength;
+          const theta = (Math.PI / 2) * (1 - t);
+          return {
+            x: leftLength + radius * Math.cos(theta),
+            depth: -radius + radius * Math.sin(theta),
+          };
+        }
+        const rightDistance = s - leftLength - curveLength;
+        return {
+          x: leftLength + radius,
+          depth: -radius - Math.min(rightLength, rightDistance),
+        };
+      }
+
+      function computePreview3dCurveCenter() {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minDepth = Infinity;
+        let maxDepth = -Infinity;
+        const sampleCount = 320;
+        for (let i = 0; i <= sampleCount; i += 1) {
+          const s = (i / sampleCount) * ARTBOARD_WIDTH;
+          const sample = computePreview3dCurveSample(s);
+          minX = Math.min(minX, sample.x);
+          maxX = Math.max(maxX, sample.x);
+          minDepth = Math.min(minDepth, sample.depth);
+          maxDepth = Math.max(maxDepth, sample.depth);
+        }
+        return {
+          x: (minX + maxX) * 0.5,
+          depth: (minDepth + maxDepth) * 0.5,
+        };
+      }
+
+      function projectPreview3dVertex(worldX, worldDepth, worldZ) {
+        const cosYaw = Math.cos(PREVIEW3D_FIXED_CAMERA.yaw);
+        const sinYaw = Math.sin(PREVIEW3D_FIXED_CAMERA.yaw);
+        const cosPitch = Math.cos(PREVIEW3D_FIXED_CAMERA.pitch);
+        const sinPitch = Math.sin(PREVIEW3D_FIXED_CAMERA.pitch);
+        const x = worldX - PREVIEW3D_FIXED_CAMERA.targetX;
+        const depth = worldDepth - PREVIEW3D_FIXED_CAMERA.targetDepth;
+        const z = worldZ - PREVIEW3D_FIXED_CAMERA.targetZ;
+        const x1 = x * cosYaw - depth * sinYaw;
+        const y1 = x * sinYaw + depth * cosYaw;
+        const z1 = z;
+        const y2 = y1 * cosPitch - z1 * sinPitch;
+        const z2 = y1 * sinPitch + z1 * cosPitch;
+        const cameraDepth = 6400;
+        const focal = 4600 * PREVIEW3D_FIXED_CAMERA.perspective;
+        const denom = Math.max(320, cameraDepth + y2);
+        const perspective = focal / denom;
+        return {
+          x: x1 * perspective,
+          y: -z2 * perspective,
+          depth: y2,
+        };
+      }
+
+      function ensurePreview3dCanvasSize() {
+        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+          return { width: 0, height: 0 };
+        }
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const cssWidth = Math.max(1, flatBillboard3dCanvas.clientWidth || 1);
+        const cssHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+        const width = Math.max(1, Math.round(cssWidth * dpr));
+        const height = Math.max(1, Math.round(cssHeight * dpr));
+        if (flatBillboard3dCanvas.width !== width || flatBillboard3dCanvas.height !== height) {
+          flatBillboard3dCanvas.width = width;
+          flatBillboard3dCanvas.height = height;
+        }
+        return { width, height };
+      }
+
+      function drawFlatBillboardSourceCanvas(targetWidth, targetHeight) {
+        if (!(flatBillboard instanceof HTMLElement) || !preview3dSourceCtx) {
+          return false;
+        }
+        const width = Math.max(1, Math.round(targetWidth));
+        const height = Math.max(1, Math.round(targetHeight));
+        if (preview3dSourceCanvas.width !== width || preview3dSourceCanvas.height !== height) {
+          preview3dSourceCanvas.width = width;
+          preview3dSourceCanvas.height = height;
+        }
+        const sourceCtx = preview3dSourceCtx;
+        sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+        sourceCtx.clearRect(0, 0, width, height);
+        sourceCtx.imageSmoothingEnabled = true;
+        sourceCtx.imageSmoothingQuality = "high";
+
+        const computed = window.getComputedStyle(flatBillboard);
+        sourceCtx.fillStyle = computed.backgroundColor || editorState.settings.backgroundColor || "#ff00ff";
+        sourceCtx.fillRect(0, 0, width, height);
+
+        const boardRect = flatBillboard.getBoundingClientRect();
+        const boardWidth = Math.max(1, boardRect.width);
+        const boardHeight = Math.max(1, boardRect.height);
+        const sx = width / boardWidth;
+        const sy = height / boardHeight;
+        const assets = flatBillboard.querySelectorAll(".flat-billboard-asset");
+        for (const asset of assets) {
+          if (!(asset instanceof HTMLElement)) {
+            continue;
+          }
+          const rect = asset.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) {
+            continue;
+          }
+          const x = (rect.left - boardRect.left) * sx;
+          const y = (rect.top - boardRect.top) * sy;
+          const w = rect.width * sx;
+          const h = rect.height * sy;
+          if (x + w < 0 || y + h < 0 || x > width || y > height) {
+            continue;
+          }
+          const image = asset.querySelector(".flat-billboard-asset-image");
+          if (image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0) {
+            sourceCtx.drawImage(image, x, y, w, h);
+            continue;
+          }
+          const fill = window.getComputedStyle(asset).backgroundColor;
+          sourceCtx.fillStyle = fill && fill !== "rgba(0, 0, 0, 0)" ? fill : (editorState.settings.assetColor || "#1e6cff");
+          sourceCtx.fillRect(x, y, w, h);
+        }
+        return true;
+      }
+
+      function drawCurvedBillboard3dFrame() {
+        if (previewMode !== "3d") {
+          return;
+        }
+        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+          return;
+        }
+        const ctx = flatBillboard3dCanvas.getContext("2d");
+        if (!ctx) {
+          return;
+        }
+        const { width, height } = ensurePreview3dCanvasSize();
+        if (!width || !height) {
+          return;
+        }
+        if (!drawFlatBillboardSourceCanvas(width, height)) {
+          return;
+        }
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#0f1117";
+        ctx.fillRect(0, 0, width, height);
+
+        const rawBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+        for (let i = 0; i <= PREVIEW3D_STRIP_COUNT; i += 1) {
+          const s = (i / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
+          const sample = computePreview3dCurveSample(s);
+          const worldX = sample.x - PREVIEW3D_CURVE_CENTER.x;
+          const worldDepth = sample.depth - PREVIEW3D_CURVE_CENTER.depth;
+          const top = projectPreview3dVertex(worldX, worldDepth, 0);
+          const bottom = projectPreview3dVertex(worldX, worldDepth, -ARTBOARD_HEIGHT);
+          rawBounds.minX = Math.min(rawBounds.minX, top.x, bottom.x);
+          rawBounds.maxX = Math.max(rawBounds.maxX, top.x, bottom.x);
+          rawBounds.minY = Math.min(rawBounds.minY, top.y, bottom.y);
+          rawBounds.maxY = Math.max(rawBounds.maxY, top.y, bottom.y);
+        }
+
+        const projectedWidth = Math.max(1, rawBounds.maxX - rawBounds.minX);
+        const projectedHeight = Math.max(1, rawBounds.maxY - rawBounds.minY);
+        const fitScale = Math.min((width * PREVIEW3D_FRAME_FIT) / projectedWidth, (height * PREVIEW3D_FRAME_FIT) / projectedHeight);
+        const offsetX = (width - projectedWidth * fitScale) * 0.5 - rawBounds.minX * fitScale;
+        const offsetY = (height - projectedHeight * fitScale) * 0.5 - rawBounds.minY * fitScale;
+
+        for (let i = 0; i < PREVIEW3D_STRIP_COUNT; i += 1) {
+          const s0 = (i / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
+          const s1 = ((i + 1) / PREVIEW3D_STRIP_COUNT) * ARTBOARD_WIDTH;
+          const sample0 = computePreview3dCurveSample(s0);
+          const sample1 = computePreview3dCurveSample(s1);
+          const x0 = sample0.x - PREVIEW3D_CURVE_CENTER.x;
+          const x1 = sample1.x - PREVIEW3D_CURVE_CENTER.x;
+          const depth0 = sample0.depth - PREVIEW3D_CURVE_CENTER.depth;
+          const depth1 = sample1.depth - PREVIEW3D_CURVE_CENTER.depth;
+          const topLeft = projectPreview3dVertex(x0, depth0, 0);
+          const topRight = projectPreview3dVertex(x1, depth1, 0);
+          const bottomRight = projectPreview3dVertex(x1, depth1, -ARTBOARD_HEIGHT);
+          const bottomLeft = projectPreview3dVertex(x0, depth0, -ARTBOARD_HEIGHT);
+
+          const p0 = { x: topLeft.x * fitScale + offsetX, y: topLeft.y * fitScale + offsetY };
+          const p1 = { x: topRight.x * fitScale + offsetX, y: topRight.y * fitScale + offsetY };
+          const p2 = { x: bottomRight.x * fitScale + offsetX, y: bottomRight.y * fitScale + offsetY };
+          const p3 = { x: bottomLeft.x * fitScale + offsetX, y: bottomLeft.y * fitScale + offsetY };
+          const sx0 = (s0 / ARTBOARD_WIDTH) * preview3dSourceCanvas.width;
+          const sx1 = (s1 / ARTBOARD_WIDTH) * preview3dSourceCanvas.width;
+          const sw = Math.max(1, sx1 - sx0);
+          const dw = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+          const dh = Math.max(1, Math.hypot(p3.x - p0.x, p3.y - p0.y));
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineTo(p3.x, p3.y);
+          ctx.closePath();
+          ctx.clip();
+          ctx.setTransform(
+            (p1.x - p0.x) / dw,
+            (p1.y - p0.y) / dw,
+            (p3.x - p0.x) / dh,
+            (p3.y - p0.y) / dh,
+            p0.x,
+            p0.y
+          );
+          ctx.drawImage(preview3dSourceCanvas, sx0, 0, sw, preview3dSourceCanvas.height, 0, 0, dw, dh);
+          ctx.restore();
+
+          const depthDelta = Math.abs(depth1 - depth0);
+          const shadeAlpha = Math.max(0, Math.min(0.24, depthDelta / 1200));
+          if (shadeAlpha > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(0, 0, 0, " + shadeAlpha.toFixed(3) + ")";
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        const gradient = ctx.createLinearGradient(0, 0, width, height * 0.85);
+        gradient.addColorStop(0, "rgba(255,255,255,0.08)");
+        gradient.addColorStop(0.45, "rgba(255,255,255,0)");
+        gradient.addColorStop(1, "rgba(0,0,0,0.24)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      function tickPreview3d() {
+        if (previewMode !== "3d") {
+          preview3dRaf = null;
+          return;
+        }
+        drawCurvedBillboard3dFrame();
+        preview3dRaf = window.requestAnimationFrame(tickPreview3d);
+      }
+
+      function startPreview3dLoop() {
+        if (preview3dRaf !== null) {
+          return;
+        }
+        drawCurvedBillboard3dFrame();
+        preview3dRaf = window.requestAnimationFrame(tickPreview3d);
+      }
+
+      function stopPreview3dLoop() {
+        if (preview3dRaf !== null) {
+          window.cancelAnimationFrame(preview3dRaf);
+          preview3dRaf = null;
+        }
+      }
 
       function isVerticalOrientation() {
         return editorState?.settings?.orientation === "vertical";
@@ -1404,6 +1812,7 @@
           },
           settings: {
             verticalAlignment: "top",
+            previewMode: "flat",
             partitionsEnabled: false,
             activePartitionKey: "left",
             partitionOrientations: {
@@ -1498,6 +1907,7 @@
           };
           const savedAlignment = parsed?.settings?.verticalAlignment;
           const verticalAlignment = alignmentMap[savedAlignment] ? savedAlignment : "top";
+          const previewMode = normalizePreviewMode(parsed?.settings?.previewMode);
           const partitionsEnabled = !!parsed?.settings?.partitionsEnabled;
           const activePartitionKeyRaw = String(parsed?.settings?.activePartitionKey || "left");
           const activePartitionKey = PARTITION_KEYS.includes(activePartitionKeyRaw) ? activePartitionKeyRaw : "left";
@@ -1576,6 +1986,7 @@
             partitionAssets: sanitizedPartitionAssets,
             settings: {
               verticalAlignment,
+              previewMode,
               partitionsEnabled,
               activePartitionKey,
               partitionOrientations,
@@ -1881,6 +2292,7 @@
         setScaleControlsVisible(false);
         updateScaleControlButtons();
         syncSettingsControlsFromState();
+        setPreviewMode(editorState.settings.previewMode, { persist: false });
 
         marqueeProgressPx = Number.isFinite(Number(runtime.marqueeProgressPx))
           ? Number(runtime.marqueeProgressPx)
@@ -2093,6 +2505,7 @@
       }
 
       function ensurePartitionSettingsState() {
+        editorState.settings.previewMode = normalizePreviewMode(editorState.settings.previewMode);
         if (!editorState.settings.partitionSettings || typeof editorState.settings.partitionSettings !== "object") {
           editorState.settings.partitionSettings = {
             left: defaultPartitionSettings(),
@@ -4804,6 +5217,16 @@
         });
       }
 
+      const previewModeButtons = [previewModeFlatButton, previewMode3dButton];
+      for (const button of previewModeButtons) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        button.addEventListener("click", () => {
+          setPreviewMode(button.dataset.value, { persist: true });
+        });
+      }
+
       if (billboardMakerButton instanceof HTMLButtonElement) {
         billboardMakerButton.addEventListener("click", () => {
           loadBillboardMakerState({ updatePath: true, replaceHistory: false });
@@ -5080,6 +5503,9 @@
         syncBillboardPaddingFromEditorPreview();
         positionScaleControls();
         refreshMarqueeTargetVisibility();
+        if (previewMode === "3d") {
+          drawCurvedBillboard3dFrame();
+        }
       });
 
       window.addEventListener("keydown", (event) => {
@@ -5106,6 +5532,7 @@
           marqueeVisibilityObserver = null;
         }
         stopMarqueeAnimation();
+        stopPreview3dLoop();
       });
 
       initMarqueeVisibilityTracking();
