@@ -1130,6 +1130,7 @@
       let assetIdCounter = 1;
       let availableAssets = [];
       let savedBillboards = [];
+      let activeSnapshotId = null;
 
       const assetsList = document.getElementById("assetsList");
       const saveBillboardButton = document.getElementById("saveBillboardButton");
@@ -1530,6 +1531,9 @@
       }
 
       function saveEditorState() {
+        if (activeSnapshotId) {
+          return;
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(editorState));
       }
 
@@ -1721,6 +1725,7 @@
         if (!snapshot || !snapshot.state) {
           return;
         }
+        activeSnapshotId = snapshot.id;
         editorState.assets = Array.isArray(snapshot.state.assets) ? cloneJsonValue(snapshot.state.assets) : [];
         const partitionAssets = snapshot.state.partitionAssets && typeof snapshot.state.partitionAssets === "object"
           ? snapshot.state.partitionAssets
@@ -1755,6 +1760,33 @@
         }
         loadBillboardSnapshot(snapshot.id, { updatePath: true, replaceHistory: true });
         return true;
+      }
+
+      function loadBillboardMakerState(options = {}) {
+        const shouldUpdatePath = !!options.updatePath;
+        const shouldReplaceHistory = !!options.replaceHistory;
+        activeSnapshotId = null;
+        const makerState = loadEditorState();
+        editorState.assets = Array.isArray(makerState.assets) ? cloneJsonValue(makerState.assets) : [];
+        const partitionAssets = makerState.partitionAssets && typeof makerState.partitionAssets === "object"
+          ? makerState.partitionAssets
+          : { left: [], curve: [], right: [] };
+        editorState.partitionAssets = {
+          left: Array.isArray(partitionAssets.left) ? cloneJsonValue(partitionAssets.left) : [],
+          curve: Array.isArray(partitionAssets.curve) ? cloneJsonValue(partitionAssets.curve) : [],
+          right: Array.isArray(partitionAssets.right) ? cloneJsonValue(partitionAssets.right) : [],
+        };
+        editorState.settings = makerState.settings && typeof makerState.settings === "object"
+          ? cloneJsonValue(makerState.settings)
+          : cloneJsonValue(loadEditorState().settings);
+
+        ensurePartitionSettingsState();
+        recoverLikelyScaleRegression();
+        updateAssetIdCounterFromState();
+        rebuildEditorFromState({});
+        if (shouldUpdatePath) {
+          setPathToToolRoot(shouldReplaceHistory);
+        }
       }
 
       function recoverLikelyScaleRegression() {
@@ -4492,12 +4524,14 @@
 
       if (billboardMakerButton instanceof HTMLButtonElement) {
         billboardMakerButton.addEventListener("click", () => {
-          setPathToToolRoot(false);
+          loadBillboardMakerState({ updatePath: true, replaceHistory: false });
         });
       }
 
       window.addEventListener("popstate", () => {
-        loadSnapshotFromPathIfPresent();
+        if (!loadSnapshotFromPathIfPresent()) {
+          loadBillboardMakerState({ updatePath: false, replaceHistory: true });
+        }
       });
 
       assetGapControl.addEventListener("input", () => {
@@ -4788,7 +4822,7 @@
       });
 
       if (!loadSnapshotFromPathIfPresent()) {
-        rebuildEditorFromState();
+        loadBillboardMakerState({ updatePath: false, replaceHistory: true });
       }
       loadAvailableAssets();
     </script>
