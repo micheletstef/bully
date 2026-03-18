@@ -2441,7 +2441,8 @@
           editorMarqueeOffsetX = -adjustedTravelPx;
           editorMarqueeOffsetY = 0;
         } else if (rawDirection === "ltr") {
-          editorMarqueeOffsetX = -mappedTravelPx;
+          // Vertical mode (UI label: right to left): move frame right->left.
+          editorMarqueeOffsetX = -(maxEditorTravelPx - mappedTravelPx);
           editorMarqueeOffsetY = 0;
         } else {
           editorMarqueeOffsetY = 0;
