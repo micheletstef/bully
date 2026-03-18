@@ -2260,8 +2260,9 @@
         }
         const direction = editorState.settings.marqueeDirection;
         const horizontal = direction === "rtl" || direction === "ltr";
+        const rotatedBillboard = !editorState.settings.partitionsEnabled && editorState.settings.orientation === "vertical";
         const viewportLength = horizontal
-          ? Math.max(1, flatBillboard.clientWidth || 1)
+          ? Math.max(1, (rotatedBillboard ? flatBillboard.clientHeight : flatBillboard.clientWidth) || 1)
           : Math.max(1, flatBillboard.clientHeight || 1);
         const runLength = marqueeCycleLength();
         const duplicateSets = Math.max(1, Math.ceil((viewportLength + runLength) / Math.max(1, runLength)));
