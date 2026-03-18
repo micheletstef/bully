@@ -601,6 +601,43 @@
         display: block;
       }
 
+      .flat-billboard-single-partition-guides {
+        position: absolute;
+        inset: 0;
+        display: none;
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      .flat-billboard-single-partition-guides.is-visible {
+        display: block;
+      }
+
+      .flat-billboard-single-partition-guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+      }
+
+      .flat-billboard-single-partition-guide-line {
+        position: absolute;
+        background: var(--safe-guide-color);
+      }
+
+      .flat-billboard-single-partition-guide-line[data-edge="left"],
+      .flat-billboard-single-partition-guide-line[data-edge="right"] {
+        top: 0;
+        bottom: 0;
+        width: 1px;
+      }
+
+      .flat-billboard-single-partition-guide-line[data-edge="top"],
+      .flat-billboard-single-partition-guide-line[data-edge="bottom"] {
+        left: 0;
+        right: 0;
+        height: 1px;
+      }
+
       .flat-billboard-partition-layer {
         position: absolute;
         top: 0;
@@ -902,6 +939,7 @@
             <div id="flatBillboard" class="flat-billboard">
               <div id="flatBillboardTrack" class="flat-billboard-track"></div>
               <div id="flatBillboardPartitionLayers" class="flat-billboard-partition-layers"></div>
+              <div id="flatBillboardSinglePartitionGuides" class="flat-billboard-single-partition-guides"></div>
             </div>
             <div class="flat-billboard-annotations" aria-hidden="true">
               <div class="flat-anno-top-line"></div>
@@ -947,6 +985,7 @@
       const flatBillboard = document.getElementById("flatBillboard");
       const flatBillboardTrack = document.getElementById("flatBillboardTrack");
       const flatBillboardPartitionLayers = document.getElementById("flatBillboardPartitionLayers");
+      const flatBillboardSinglePartitionGuides = document.getElementById("flatBillboardSinglePartitionGuides");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const assetGapControl = document.getElementById("assetGapControl");
@@ -3044,9 +3083,76 @@
         }
       }
 
+      function partitionPaddingRatios(partitionKey) {
+        ensurePartitionSettingsState();
+        const settings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
+        const editor = partitionEditorForSettingsKey(partitionKey);
+        const editorHeight = Math.max(
+          1,
+          (editor instanceof HTMLElement
+            ? (editor.clientHeight || parseFloat(window.getComputedStyle(editor).getPropertyValue("--editor-height")) || 200)
+            : 200)
+        );
+        const topRatio = Math.max(0, Math.min(0.49, (Number(settings.paddingTB) || 0) / editorHeight));
+        const widthFromHeight = Math.max(1, (editorHeight * partitionArtboardWidth(partitionKey)) / ARTBOARD_HEIGHT);
+        const sideRatio = Math.max(0, Math.min(0.49, (Number(settings.paddingLR) || 0) / widthFromHeight));
+        return { topRatio, sideRatio };
+      }
+
+      function syncSinglePartitionPaddingGuides() {
+        if (!(flatBillboardSinglePartitionGuides instanceof HTMLElement)) {
+          return;
+        }
+        if (editorState.settings.partitionsEnabled) {
+          flatBillboardSinglePartitionGuides.classList.remove("is-visible");
+          flatBillboardSinglePartitionGuides.innerHTML = "";
+          return;
+        }
+        flatBillboardSinglePartitionGuides.classList.add("is-visible");
+        flatBillboardSinglePartitionGuides.innerHTML = "";
+        for (const partitionKey of PARTITION_KEYS) {
+          const layout = PARTITION_LAYOUT[partitionKey];
+          const { topRatio, sideRatio } = partitionPaddingRatios(partitionKey);
+          const guide = document.createElement("div");
+          guide.className = "flat-billboard-single-partition-guide";
+          guide.style.left = layout.offsetRatio * 100 + "%";
+          guide.style.width = layout.widthRatio * 100 + "%";
+
+          const leftLine = document.createElement("div");
+          leftLine.className = "flat-billboard-single-partition-guide-line";
+          leftLine.dataset.edge = "left";
+          leftLine.style.left = sideRatio * 100 + "%";
+
+          const rightLine = document.createElement("div");
+          rightLine.className = "flat-billboard-single-partition-guide-line";
+          rightLine.dataset.edge = "right";
+          rightLine.style.right = sideRatio * 100 + "%";
+
+          const topLine = document.createElement("div");
+          topLine.className = "flat-billboard-single-partition-guide-line";
+          topLine.dataset.edge = "top";
+          topLine.style.top = topRatio * 100 + "%";
+
+          const bottomLine = document.createElement("div");
+          bottomLine.className = "flat-billboard-single-partition-guide-line";
+          bottomLine.dataset.edge = "bottom";
+          bottomLine.style.bottom = topRatio * 100 + "%";
+
+          guide.appendChild(leftLine);
+          guide.appendChild(rightLine);
+          guide.appendChild(topLine);
+          guide.appendChild(bottomLine);
+          flatBillboardSinglePartitionGuides.appendChild(guide);
+        }
+      }
+
       function syncFlatBillboardPartitioned() {
         if (!(flatBillboardPartitionLayers instanceof HTMLElement)) {
           return;
+        }
+        if (flatBillboardSinglePartitionGuides instanceof HTMLElement) {
+          flatBillboardSinglePartitionGuides.classList.remove("is-visible");
+          flatBillboardSinglePartitionGuides.innerHTML = "";
         }
         flatBillboardTrack.style.display = "none";
         flatBillboardPartitionLayers.classList.add("is-visible");
@@ -3062,22 +3168,8 @@
           const baseScaleFactor = billboardScaleFactor(editor);
           const align = alignmentMap[partitionSettings.verticalAlignment] || "flex-start";
           const partitionWidthUnits = partitionArtboardWidth(partitionKey);
-          const previewEditorHeight = Math.max(
-            1,
-            editor instanceof HTMLElement
-              ? (editor.clientHeight || parseFloat(window.getComputedStyle(editor).getPropertyValue("--editor-height")) || 200)
-              : 200
-          );
-          const previewEditorWidth = Math.max(
-            1,
-            editor instanceof HTMLElement
-              ? (editor.clientWidth || ((previewEditorHeight * partitionWidthUnits) / ARTBOARD_HEIGHT))
-              : ((previewEditorHeight * partitionWidthUnits) / ARTBOARD_HEIGHT)
-          );
-          // Scale from the actual partition editor preview box, not raw design
-          // units, so billboard partition artboards match expected dimensions.
-          const logicalArtboardWidth = previewEditorWidth * baseScaleFactor;
-          const logicalArtboardHeight = previewEditorHeight * baseScaleFactor;
+          const logicalArtboardWidth = partitionWidthUnits * baseScaleFactor;
+          const logicalArtboardHeight = ARTBOARD_HEIGHT * baseScaleFactor;
           const renderScale = baseScaleFactor;
           const paddingTB = (Number(partitionSettings.paddingTB) || 0) * renderScale;
           const paddingLR = (Number(partitionSettings.paddingLR) || 0) * renderScale;
@@ -3097,19 +3189,19 @@
           artboard.style.left = "0";
           artboard.style.top = "0";
           if (partitionSettings.orientation === "vertical") {
-            // After rotate(-90deg), projected width comes from artboard height.
-            // Scale by partitionWidth/ARTBOARD_HEIGHT so each partition fits
-            // its own layer instead of being oversized and clipped.
-            const orientationScale = Math.max(0.1, partitionWidthUnits / Math.max(1, ARTBOARD_HEIGHT));
             artboard.style.transformOrigin = "top left";
-            artboard.style.transform = "translateY(" + billboardHeight + "px) rotate(-90deg) scale(" + orientationScale + ")";
+            artboard.style.transform = "translateY(" + billboardHeight + "px) rotate(-90deg)";
+            // Swap logical dimensions in vertical mode so rotated main-axis span
+            // maps to billboard height (enabling top/center/bottom movement).
+            artboard.style.width = Math.max(1, logicalArtboardHeight) + "px";
+            artboard.style.height = Math.max(1, logicalArtboardWidth) + "px";
           } else {
             artboard.style.transformOrigin = "top left";
             artboard.style.transform = "none";
+            artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
+            artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
           }
           artboard.style.overflow = "hidden";
-          artboard.style.width = Math.max(1, logicalArtboardWidth) + "px";
-          artboard.style.height = Math.max(1, logicalArtboardHeight) + "px";
           artboard.style.backgroundColor = partitionSettings.backgroundColor || "#ff00ff";
 
           const track = document.createElement("div");
@@ -3185,7 +3277,7 @@
           }
 
           if (partitionSettings.orientation === "vertical") {
-            const containerMainSpan = Math.max(1, logicalArtboardWidth);
+            const containerMainSpan = Math.max(1, logicalArtboardHeight);
             const alignmentSpan = containerMainSpan - contentMainSpan;
             // Because of rotate(-90deg), main-axis start renders at the bottom.
             // Use signed span delta so overflow and underflow cases move in the
@@ -3222,6 +3314,7 @@
           flatBillboardPartitionLayers.classList.remove("is-visible");
           flatBillboardPartitionLayers.innerHTML = "";
         }
+        syncSinglePartitionPaddingGuides();
         flatBillboardTrack.style.display = "";
         const scaleFactor = billboardScaleFactor();
         const align = alignmentMap[editorState.settings.verticalAlignment] || "flex-start";
