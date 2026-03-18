@@ -1250,7 +1250,7 @@
         <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
       </main>
     </div>
-    <script type="module" src="../assets/js/three-loader.js"></script>
+    <script type="module" src="../assets/js/three-basic-loader.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
@@ -1373,6 +1373,7 @@
         camera: null,
         mesh: null,
         texture: null,
+        initFailed: false,
       };
       const preview3dSourceCanvas = document.createElement("canvas");
       const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
@@ -1469,23 +1470,34 @@
       }
 
       function ensurePreview3dCanvasSize() {
-        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+        const canvas = preview3dCanvasElement();
+        if (!(canvas instanceof HTMLCanvasElement)) {
           return { width: 0, height: 0 };
         }
         const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        const cssWidth = Math.max(1, flatBillboard3dCanvas.clientWidth || 1);
-        const cssHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+        const cssWidth = Math.max(1, canvas.clientWidth || 1);
+        const cssHeight = Math.max(1, canvas.clientHeight || 1);
         const width = Math.max(1, Math.round(cssWidth * dpr));
         const height = Math.max(1, Math.round(cssHeight * dpr));
-        if (flatBillboard3dCanvas.width !== width || flatBillboard3dCanvas.height !== height) {
-          flatBillboard3dCanvas.width = width;
-          flatBillboard3dCanvas.height = height;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
         }
         return { width, height };
       }
 
       function getThreeLib() {
         return typeof window !== "undefined" ? window.THREE || null : null;
+      }
+
+      function preview3dCanvasElement() {
+        if (
+          preview3dThreeState.renderer &&
+          preview3dThreeState.renderer.domElement instanceof HTMLCanvasElement
+        ) {
+          return preview3dThreeState.renderer.domElement;
+        }
+        return flatBillboard3dCanvas instanceof HTMLCanvasElement ? flatBillboard3dCanvas : null;
       }
 
       function getHtml2CanvasLib() {
@@ -1570,11 +1582,11 @@
       }
 
       function ensureThreePreviewSetup() {
-        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+        if (!(flatBillboard3d instanceof HTMLElement)) {
           return false;
         }
         const THREE = getThreeLib();
-        if (!THREE) {
+        if (!THREE || preview3dThreeState.initFailed) {
           return false;
         }
         if (
@@ -1586,11 +1598,40 @@
           return true;
         }
 
-        const renderer = new THREE.WebGLRenderer({
-          canvas: flatBillboard3dCanvas,
-          antialias: true,
-          alpha: true,
-        });
+        let renderer = null;
+        try {
+          if (flatBillboard3dCanvas instanceof HTMLCanvasElement) {
+            renderer = new THREE.WebGLRenderer({
+              canvas: flatBillboard3dCanvas,
+              antialias: true,
+              alpha: true,
+            });
+          } else {
+            renderer = new THREE.WebGLRenderer({
+              antialias: true,
+              alpha: true,
+            });
+          }
+        } catch (error) {
+          try {
+            renderer = new THREE.WebGLRenderer({
+              antialias: true,
+              alpha: true,
+            });
+          } catch (fallbackError) {
+            preview3dThreeState.initFailed = true;
+            return false;
+          }
+        }
+        if (!(renderer && renderer.domElement instanceof HTMLCanvasElement)) {
+          preview3dThreeState.initFailed = true;
+          return false;
+        }
+        if (flatBillboard3d.contains(renderer.domElement) === false) {
+          renderer.domElement.id = "flatBillboard3dCanvas";
+          renderer.domElement.className = "flat-billboard-3d-canvas";
+          flatBillboard3d.replaceChildren(renderer.domElement);
+        }
         renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio || 1)));
         renderer.setClearColor(0xffffff, 1);
 
@@ -1696,13 +1737,18 @@
 
       function clearPreview3dDragState() {
         preview3dDragState = null;
-        if (flatBillboard3dCanvas instanceof HTMLCanvasElement) {
-          flatBillboard3dCanvas.style.cursor = "grab";
+        const canvas = preview3dCanvasElement();
+        if (canvas instanceof HTMLCanvasElement) {
+          canvas.style.cursor = "grab";
+        }
+        if (flatBillboard3d instanceof HTMLElement) {
+          flatBillboard3d.style.cursor = "grab";
         }
       }
 
       function applyPreview3dDrag(clientX, clientY) {
-        if (!preview3dDragState || !(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+        const canvas = preview3dCanvasElement();
+        if (!preview3dDragState || !(canvas instanceof HTMLCanvasElement)) {
           return;
         }
         const dx = clientX - preview3dDragState.lastX;
@@ -1711,7 +1757,7 @@
         preview3dDragState.lastY = clientY;
 
         if (preview3dDragState.dragMode === "pan") {
-          const canvasHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+          const canvasHeight = Math.max(1, canvas.clientHeight || 1);
           const perspectiveFactor = Math.min(2.5, Math.max(0.1, PREVIEW3D_CAMERA.perspective));
           const radius = (4200 * PREVIEW3D_CAMERA.zoom) / perspectiveFactor;
           const panScale = (radius / canvasHeight) * 2.2;
@@ -1729,14 +1775,14 @@
       }
 
       function setupPreview3dCanvasInteraction() {
-        if (!(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+        if (!(flatBillboard3d instanceof HTMLElement)) {
           return;
         }
-        flatBillboard3dCanvas.style.cursor = "grab";
-        flatBillboard3dCanvas.addEventListener("contextmenu", (event) => {
+        flatBillboard3d.style.cursor = "grab";
+        flatBillboard3d.addEventListener("contextmenu", (event) => {
           event.preventDefault();
         });
-        flatBillboard3dCanvas.addEventListener("pointerdown", (event) => {
+        flatBillboard3d.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) {
             return;
           }
@@ -1749,30 +1795,37 @@
             lastY: event.clientY,
             dragMode,
           };
-          flatBillboard3dCanvas.style.cursor = "grabbing";
+          flatBillboard3d.style.cursor = "grabbing";
+          const currentCanvas = preview3dCanvasElement();
+          if (currentCanvas instanceof HTMLCanvasElement) {
+            currentCanvas.style.cursor = "grabbing";
+          }
           try {
-            flatBillboard3dCanvas.setPointerCapture(event.pointerId);
+            const targetCanvas = event.target instanceof HTMLCanvasElement ? event.target : currentCanvas;
+            if (targetCanvas instanceof HTMLCanvasElement) {
+              targetCanvas.setPointerCapture(event.pointerId);
+            }
           } catch (error) {
             // Ignore pointer capture failures.
           }
           event.preventDefault();
         });
-        flatBillboard3dCanvas.addEventListener("pointermove", (event) => {
+        flatBillboard3d.addEventListener("pointermove", (event) => {
           if (!preview3dDragState) {
             return;
           }
           applyPreview3dDrag(event.clientX, event.clientY);
         });
-        flatBillboard3dCanvas.addEventListener("pointerup", () => {
+        flatBillboard3d.addEventListener("pointerup", () => {
           clearPreview3dDragState();
         });
-        flatBillboard3dCanvas.addEventListener("pointercancel", () => {
+        flatBillboard3d.addEventListener("pointercancel", () => {
           clearPreview3dDragState();
         });
-        flatBillboard3dCanvas.addEventListener("pointerleave", () => {
+        flatBillboard3d.addEventListener("pointerleave", () => {
           clearPreview3dDragState();
         });
-        flatBillboard3dCanvas.addEventListener(
+        flatBillboard3d.addEventListener(
           "wheel",
           (event) => {
             if (previewMode !== "3d") {
@@ -1908,15 +1961,16 @@
         const renderer = preview3dThreeState.renderer;
         const scene = preview3dThreeState.scene;
         const camera = preview3dThreeState.camera;
-        if (!renderer || !scene || !camera || !(flatBillboard3dCanvas instanceof HTMLCanvasElement)) {
+        const canvas = preview3dCanvasElement();
+        if (!renderer || !scene || !camera || !(canvas instanceof HTMLCanvasElement)) {
           return;
         }
         const { width, height } = ensurePreview3dCanvasSize();
         if (!width || !height) {
           return;
         }
-        const cssWidth = Math.max(1, flatBillboard3dCanvas.clientWidth || 1);
-        const cssHeight = Math.max(1, flatBillboard3dCanvas.clientHeight || 1);
+        const cssWidth = Math.max(1, canvas.clientWidth || 1);
+        const cssHeight = Math.max(1, canvas.clientHeight || 1);
         renderer.setSize(cssWidth, cssHeight, false);
         camera.aspect = cssWidth / cssHeight;
         syncThreeCameraTransform();
