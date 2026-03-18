@@ -3224,7 +3224,6 @@
           track.style.setProperty("--asset-color", partitionSettings.assetColor || "#1e6cff");
 
           const blocks = editor instanceof HTMLElement ? Array.from(editor.querySelectorAll(".fake-asset-block")) : [];
-          let contentMainSpan = paddingLR * 2;
           for (const sourceBlock of blocks) {
             const editorMetrics = computeRenderedAssetMetrics(sourceBlock);
             if (!editorMetrics) {
@@ -3270,18 +3269,17 @@
               targetBlock.classList.add("no-preview");
             }
             track.appendChild(targetBlock);
-            contentMainSpan += Math.max(1, editorMetrics.scaledWidth * renderScale);
-            if (sourceBlock !== blocks[blocks.length - 1]) {
-              contentMainSpan += gap;
-            }
           }
 
+          artboard.appendChild(track);
+          layer.appendChild(artboard);
+          flatBillboardPartitionLayers.appendChild(layer);
+
           if (partitionSettings.orientation === "vertical") {
-            const containerMainSpan = Math.max(1, logicalArtboardHeight);
+            const containerMainSpan = Math.max(1, artboard.clientWidth || logicalArtboardHeight);
+            const contentMainSpan = Math.max(1, track.scrollWidth || track.clientWidth || 1);
             const alignmentSpan = containerMainSpan - contentMainSpan;
             // Because of rotate(-90deg), main-axis start renders at the bottom.
-            // Use signed span delta so overflow and underflow cases move in the
-            // correct direction for top/center/bottom alignment.
             let mainAxisOffset = 0;
             if (partitionSettings.verticalAlignment === "top") {
               mainAxisOffset = alignmentSpan;
@@ -3294,10 +3292,6 @@
           } else {
             track.style.transform = "none";
           }
-
-          artboard.appendChild(track);
-          layer.appendChild(artboard);
-          flatBillboardPartitionLayers.appendChild(layer);
         }
         syncFlatBillboardSelectionState();
       }
