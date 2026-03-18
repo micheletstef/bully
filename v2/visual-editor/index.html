@@ -1587,6 +1587,10 @@
           texture.wrapS = THREE.ClampToEdgeWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.flipY = false;
+          // Mesh orientation is flipped to show the visible front face from our default camera.
+          // Rotate UVs 180deg so projected artwork matches flat preview orientation.
+          texture.center.set(0.5, 0.5);
+          texture.rotation = Math.PI;
           texture.minFilter = THREE.LinearMipmapLinearFilter;
           texture.magFilter = THREE.LinearFilter;
           if ("colorSpace" in texture && "SRGBColorSpace" in THREE) {
@@ -1600,6 +1604,8 @@
           }
           mesh.material.needsUpdate = true;
         } else {
+          preview3dThreeState.texture.center.set(0.5, 0.5);
+          preview3dThreeState.texture.rotation = Math.PI;
           preview3dThreeState.texture.needsUpdate = true;
         }
       }
