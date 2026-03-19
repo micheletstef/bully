@@ -91,6 +91,36 @@
             </select>
           </div>
           <div class="settings-row">
+            <span class="settings-label">color</span>
+            <div class="color-inline-controls">
+              <label class="color-inline-field" for="backgroundColorControl">
+                <span>bg</span>
+                <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
+              </label>
+              <label class="color-inline-field" for="assetColorControl">
+                <span>asset</span>
+                <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">padding</span>
+            <div class="padding-inline-controls">
+              <label class="padding-inline-field" for="paddingTBControl">
+                <span>tb</span>
+                <input id="paddingTBControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
+              </label>
+              <label class="padding-inline-field" for="paddingLRControl">
+                <span>lr</span>
+                <input id="paddingLRControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="assetGapControl">asset gap</label>
+            <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
+          </div>
+          <div class="settings-row">
             <span class="settings-label">partitions</span>
             <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
               <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
@@ -143,36 +173,6 @@
               <option value="horizontal">horizontal</option>
               <option value="vertical">vertical</option>
             </select>
-          </div>
-          <div class="settings-row">
-            <span class="settings-label">color</span>
-            <div class="color-inline-controls">
-              <label class="color-inline-field" for="backgroundColorControl">
-                <span>bg</span>
-                <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
-              </label>
-              <label class="color-inline-field" for="assetColorControl">
-                <span>asset</span>
-                <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
-              </label>
-            </div>
-          </div>
-          <div class="settings-row">
-            <span class="settings-label">padding</span>
-            <div class="padding-inline-controls">
-              <label class="padding-inline-field" for="paddingTBControl">
-                <span>tb</span>
-                <input id="paddingTBControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
-              </label>
-              <label class="padding-inline-field" for="paddingLRControl">
-                <span>lr</span>
-                <input id="paddingLRControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
-              </label>
-            </div>
-          </div>
-          <div class="settings-row">
-            <label class="settings-label" for="assetGapControl">asset gap</label>
-            <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
           </div>
         </div>
         <div class="settings-section">

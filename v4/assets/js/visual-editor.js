@@ -2819,9 +2819,7 @@
         const rotatedHeight = isQuarterTurn ? croppedSourceWidth : sourceHeight;
         const widthScale = editorInner.width / Math.max(1, rotatedWidth);
         const heightScale = editorInner.height / Math.max(1, rotatedHeight);
-        const boardScale = Math.min(widthScale, heightScale);
-        const artboardScale = editorInner.height / Math.max(1, artboardHeight);
-        return Math.max(0.0001, Math.min(boardScale, artboardScale));
+        return Math.max(0.0001, Math.min(widthScale, heightScale));
       }
 
       function computeRenderedAssetMetrics(block) {
