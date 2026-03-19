@@ -299,7 +299,7 @@
         if (billboardCurvePositionControl instanceof HTMLInputElement) {
           billboardCurvePositionControl.value = String(curvePosition);
           billboardCurvePositionControl.disabled = !curveEnabled;
-          billboardCurvePositionControl.max = String(Math.max(0, artboardWidth));
+          billboardCurvePositionControl.max = String(Math.max(0, artboardWidth - curveWidth));
         }
         if (billboardCurveWidthRow instanceof HTMLElement) {
           billboardCurveWidthRow.hidden = !curveEnabled;
