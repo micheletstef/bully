@@ -259,9 +259,9 @@
       function sanitizeCurveSettings(enabledValue, widthValue, positionValue, boardWidth = artboardWidth) {
         const normalizedEnabled = enabledValue !== false;
         const maxSpan = Math.max(0, boardWidth);
-        const normalizedWidth = Math.max(0, Math.min(maxSpan, Math.round(Number(widthValue) || 0)));
-        const maxStart = Math.max(0, boardWidth - normalizedWidth);
-        const normalizedPosition = Math.max(0, Math.min(maxStart, Math.round(Number(positionValue) || 0)));
+        const normalizedPosition = Math.max(0, Math.min(maxSpan, Math.round(Number(positionValue) || 0)));
+        const maxWidthFromPosition = Math.max(0, maxSpan - normalizedPosition);
+        const normalizedWidth = Math.max(0, Math.min(maxWidthFromPosition, Math.round(Number(widthValue) || 0)));
         return {
           enabled: normalizedEnabled,
           width: normalizedWidth,
@@ -294,12 +294,12 @@
         if (billboardCurveWidthControl instanceof HTMLInputElement) {
           billboardCurveWidthControl.value = String(curveWidth);
           billboardCurveWidthControl.disabled = !curveEnabled;
-          billboardCurveWidthControl.max = String(artboardWidth);
+          billboardCurveWidthControl.max = String(Math.max(0, artboardWidth - curvePosition));
         }
         if (billboardCurvePositionControl instanceof HTMLInputElement) {
           billboardCurvePositionControl.value = String(curvePosition);
           billboardCurvePositionControl.disabled = !curveEnabled;
-          billboardCurvePositionControl.max = String(Math.max(0, artboardWidth - curveWidth));
+          billboardCurvePositionControl.max = String(Math.max(0, artboardWidth));
         }
         if (billboardCurveWidthRow instanceof HTMLElement) {
           billboardCurveWidthRow.hidden = !curveEnabled;
