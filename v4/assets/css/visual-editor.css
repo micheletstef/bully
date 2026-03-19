@@ -88,7 +88,7 @@
 
       .assets-section-toggle:hover,
       .assets-section-toggle:focus {
-        text-decoration: underline;
+        text-decoration: none;
         outline: none;
       }
 
@@ -220,6 +220,11 @@
       }
 
       .saved-billboards-list[hidden] {
+        display: none;
+      }
+
+      .tools-list[hidden],
+      .assets-list[hidden] {
         display: none;
       }
 
