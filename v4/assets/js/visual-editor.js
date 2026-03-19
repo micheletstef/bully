@@ -82,6 +82,7 @@
       let preview3dDomSnapshotLastMs = 0;
       let preview3dLastTextureUpdateMs = 0;
       let preview3dForceTextureUpdate = true;
+      let preview3dAutoFitPending = true;
       let billboardViewportOffsetX = 0;
       let billboardViewportOffsetY = 0;
       let billboardMarqueeOffsetX = 0;
@@ -175,6 +176,7 @@
         }
         syncPreviewModeToggleStates();
         if (normalized === "3d") {
+          preview3dAutoFitPending = true;
           queueFlatBillboardSnapshot(true);
           preview3dForceTextureUpdate = true;
           startPreview3dLoop();
@@ -380,6 +382,67 @@
         PREVIEW3D_CAMERA.targetX = Math.min(PREVIEW3D_CAMERA_LIMITS.targetXMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetXMin, PREVIEW3D_CAMERA.targetX));
         PREVIEW3D_CAMERA.targetY = Math.min(PREVIEW3D_CAMERA_LIMITS.targetYMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetYMin, PREVIEW3D_CAMERA.targetY));
         PREVIEW3D_CAMERA.targetZ = Math.min(PREVIEW3D_CAMERA_LIMITS.targetZMax, Math.max(PREVIEW3D_CAMERA_LIMITS.targetZMin, PREVIEW3D_CAMERA.targetZ));
+      }
+
+      function requiredDistanceForPreview3dSphere(radius, aspect, perspectiveFactor) {
+        const safeRadius = Math.max(1, Number(radius) || 1);
+        const safeAspect = Math.max(0.01, Number(aspect) || 1);
+        const safePerspective = Math.max(
+          PREVIEW3D_CAMERA_LIMITS.perspectiveMin,
+          Math.min(PREVIEW3D_CAMERA_LIMITS.perspectiveMax, Number(perspectiveFactor) || 1)
+        );
+        const fovDeg = Math.max(18, Math.min(72, 44 / safePerspective));
+        const vHalf = (fovDeg * Math.PI / 180) * 0.5;
+        const hHalf = Math.atan(Math.tan(vHalf) * safeAspect);
+        const limitingHalf = Math.max(0.01, Math.min(vHalf, hHalf));
+        const padding = 1.08;
+        return (safeRadius * padding) / Math.sin(limitingHalf);
+      }
+
+      function autoFitPreview3dCameraToCanvas(options = {}) {
+        const force = options.force === true;
+        if (!force && !preview3dAutoFitPending) {
+          return false;
+        }
+        const camera = preview3dThreeState.camera;
+        const mesh = preview3dThreeState.mesh;
+        const canvas = preview3dCanvasElement();
+        const THREE = getThreeLib();
+        if (!camera || !mesh || !(canvas instanceof HTMLCanvasElement) || !THREE) {
+          return false;
+        }
+        const cssWidth = Math.max(1, canvas.clientWidth || 1);
+        const cssHeight = Math.max(1, canvas.clientHeight || 1);
+        const aspect = cssWidth / cssHeight;
+        const bounds = new THREE.Box3().setFromObject(mesh);
+        const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+        if (!sphere || !Number.isFinite(sphere.radius) || sphere.radius <= 0) {
+          return false;
+        }
+        const maxDistance = 2200 * PREVIEW3D_CAMERA_LIMITS.zoomMax;
+        const minPerspective = PREVIEW3D_CAMERA_LIMITS.perspectiveMin;
+        const maxPerspective = PREVIEW3D_CAMERA_LIMITS.perspectiveMax;
+        let low = minPerspective;
+        let high = maxPerspective;
+        for (let i = 0; i < 22; i += 1) {
+          const mid = (low + high) * 0.5;
+          const requiredDistance = requiredDistanceForPreview3dSphere(sphere.radius, aspect, mid);
+          if (requiredDistance <= maxDistance) {
+            low = mid;
+          } else {
+            high = mid;
+          }
+        }
+        const chosenPerspective = Math.max(minPerspective, Math.min(maxPerspective, low));
+        const fitDistance = requiredDistanceForPreview3dSphere(sphere.radius, aspect, chosenPerspective);
+        PREVIEW3D_CAMERA.perspective = chosenPerspective;
+        PREVIEW3D_CAMERA.zoom = fitDistance / 2200;
+        PREVIEW3D_CAMERA.targetX = sphere.center.x;
+        PREVIEW3D_CAMERA.targetY = sphere.center.y;
+        PREVIEW3D_CAMERA.targetZ = sphere.center.z;
+        clampPreview3dCamera();
+        preview3dAutoFitPending = false;
+        return true;
       }
 
       function createCurvedBillboardGeometry(THREE) {
@@ -596,6 +659,7 @@
           PREVIEW3D_CAMERA.pitch -= dy * 0.004;
         }
 
+        preview3dAutoFitPending = false;
         clampPreview3dCamera();
         if (previewMode === "3d") {
           drawCurvedBillboard3dFrame();
@@ -665,6 +729,7 @@
             }
             const factor = Math.exp(delta * 0.0012);
             PREVIEW3D_CAMERA.zoom *= factor;
+            preview3dAutoFitPending = false;
             clampPreview3dCamera();
             drawCurvedBillboard3dFrame();
             event.preventDefault();
@@ -809,8 +874,10 @@
           renderer.setSize(cssWidth, cssHeight, false);
           preview3dThreeState.renderCssWidth = cssWidth;
           preview3dThreeState.renderCssHeight = cssHeight;
+          preview3dAutoFitPending = true;
         }
         camera.aspect = cssWidth / cssHeight;
+        autoFitPreview3dCameraToCanvas();
         syncThreeCameraTransform();
         applyPreview3dFxToScene();
         camera.updateProjectionMatrix();
@@ -4774,6 +4841,7 @@
         positionScaleControls();
         refreshMarqueeTargetVisibility();
         if (previewMode === "3d") {
+          preview3dAutoFitPending = true;
           drawCurvedBillboard3dFrame();
         }
       });
