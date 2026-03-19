@@ -10,9 +10,6 @@
   <body>
     <div class="page-shell">
       <aside class="assets-directory" aria-label="Placeholder assets directory">
-        <div class="assets-title-row">
-          <h2 class="assets-title">saved</h2>
-        </div>
         <div class="assets-actions">
           <button id="saveBillboardButton" type="button" class="assets-save-button">save</button>
           <div id="previewModeToggle" class="preview-mode-toggle" role="radiogroup" aria-label="Preview mode">
@@ -21,12 +18,29 @@
             <button id="previewMode3dButton" type="button" class="preview-mode-button inactive" data-value="3d" role="radio" aria-checked="false">3d</button>
           </div>
         </div>
-        <div id="savedBillboardsList" class="saved-billboards-list"></div>
-        <div id="toolsList" class="tools-list">
-          <div class="saved-billboards-title">tools</div>
-          <button id="billboardMakerButton" type="button" class="saved-billboard-button">billboard maker</button>
+        <div class="assets-section">
+          <div class="assets-section-title-row">
+            <h2 class="assets-title">saved</h2>
+            <button id="savedToggleButton" type="button" class="assets-section-toggle" aria-expanded="true" aria-controls="savedBillboardsList" aria-label="Collapse saved">-</button>
+          </div>
+          <div id="savedBillboardsList" class="saved-billboards-list"></div>
         </div>
-        <div id="assetsList" class="assets-list"></div>
+        <div class="assets-section">
+          <div class="assets-section-title-row">
+            <div class="saved-billboards-title">tools</div>
+            <button id="toolsToggleButton" type="button" class="assets-section-toggle" aria-expanded="true" aria-controls="toolsList" aria-label="Collapse tools">-</button>
+          </div>
+          <div id="toolsList" class="tools-list">
+            <button id="billboardMakerButton" type="button" class="saved-billboard-button">billboard maker</button>
+          </div>
+        </div>
+        <div class="assets-section">
+          <div class="assets-section-title-row">
+            <div class="saved-billboards-title">assets</div>
+            <button id="assetsToggleButton" type="button" class="assets-section-toggle" aria-expanded="true" aria-controls="assetsList" aria-label="Collapse assets">-</button>
+          </div>
+          <div id="assetsList" class="assets-list"></div>
+        </div>
       </aside>
       <aside class="settings-panel" aria-label="Visual editor settings">
         <div class="settings-section">
@@ -131,6 +145,19 @@
             </select>
           </div>
           <div class="settings-row">
+            <span class="settings-label">color</span>
+            <div class="color-inline-controls">
+              <label class="color-inline-field" for="backgroundColorControl">
+                <span>bg</span>
+                <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
+              </label>
+              <label class="color-inline-field" for="assetColorControl">
+                <span>asset</span>
+                <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
             <span class="settings-label">padding</span>
             <div class="padding-inline-controls">
               <label class="padding-inline-field" for="paddingTBControl">
@@ -146,19 +173,6 @@
           <div class="settings-row">
             <label class="settings-label" for="assetGapControl">asset gap</label>
             <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
-          </div>
-          <div class="settings-row">
-            <span class="settings-label">color</span>
-            <div class="color-inline-controls">
-              <label class="color-inline-field" for="backgroundColorControl">
-                <span>bg</span>
-                <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
-              </label>
-              <label class="color-inline-field" for="assetColorControl">
-                <span>asset</span>
-                <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
-              </label>
-            </div>
           </div>
         </div>
         <div class="settings-section">

@@ -12,6 +12,9 @@
       const previewModeFlatButton = document.getElementById("previewModeFlatButton");
       const previewMode3dButton = document.getElementById("previewMode3dButton");
       const savedBillboardsList = document.getElementById("savedBillboardsList");
+      const savedToggleButton = document.getElementById("savedToggleButton");
+      const toolsToggleButton = document.getElementById("toolsToggleButton");
+      const assetsToggleButton = document.getElementById("assetsToggleButton");
       const billboardMakerButton = document.getElementById("billboardMakerButton");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
@@ -177,11 +180,27 @@
       };
       const preview3dSourceCanvas = document.createElement("canvas");
       const preview3dSourceCtx = preview3dSourceCanvas.getContext("2d");
-      const PARTITION_LAYOUT = {
-        left: { offsetRatio: 0, widthRatio: 1820 / DEFAULT_ARTBOARD_WIDTH },
-        curve: { offsetRatio: 1820 / DEFAULT_ARTBOARD_WIDTH, widthRatio: 1020 / DEFAULT_ARTBOARD_WIDTH },
-        right: { offsetRatio: 2840 / DEFAULT_ARTBOARD_WIDTH, widthRatio: 3060 / DEFAULT_ARTBOARD_WIDTH },
-      };
+      function partitionLayout(boardWidth = artboardWidth) {
+        const normalizedBoardWidth = Math.max(1, Math.round(Number(boardWidth) || 1));
+        const normalizedCurve = sanitizeCurveSettings(true, curveWidth, curvePosition, normalizedBoardWidth);
+        const leftWidth = normalizedCurve.position;
+        const curveSpan = normalizedCurve.width;
+        const rightWidth = Math.max(0, normalizedBoardWidth - leftWidth - curveSpan);
+        return {
+          left: {
+            offsetRatio: 0,
+            widthRatio: leftWidth / normalizedBoardWidth,
+          },
+          curve: {
+            offsetRatio: leftWidth / normalizedBoardWidth,
+            widthRatio: curveSpan / normalizedBoardWidth,
+          },
+          right: {
+            offsetRatio: (leftWidth + curveSpan) / normalizedBoardWidth,
+            widthRatio: rightWidth / normalizedBoardWidth,
+          },
+        };
+      }
 
       function normalizePreviewMode(value) {
         return String(value || "").toLowerCase() === "3d" ? "3d" : "flat";
@@ -1541,6 +1560,62 @@
         localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(savedBillboards));
       }
 
+      const assetsSectionCollapsedState = {
+        saved: false,
+        tools: false,
+        assets: false,
+      };
+
+      function setAssetsSectionCollapsed(sectionKey, shouldCollapse) {
+        const sectionMap = {
+          saved: {
+            button: savedToggleButton,
+            content: savedBillboardsList,
+          },
+          tools: {
+            button: toolsToggleButton,
+            content: document.getElementById("toolsList"),
+          },
+          assets: {
+            button: assetsToggleButton,
+            content: assetsList,
+          },
+        };
+        const targetSection = sectionMap[sectionKey];
+        if (!targetSection) {
+          return;
+        }
+        const button = targetSection.button;
+        const content = targetSection.content;
+        if (!(button instanceof HTMLButtonElement) || !(content instanceof HTMLElement)) {
+          return;
+        }
+        const collapsed = !!shouldCollapse;
+        assetsSectionCollapsedState[sectionKey] = collapsed;
+        content.hidden = collapsed;
+        button.textContent = collapsed ? "+" : "-";
+        button.setAttribute("aria-expanded", String(!collapsed));
+        button.setAttribute("aria-label", (collapsed ? "expand " : "collapse ") + sectionKey);
+      }
+
+      function setupAssetsSectionToggles() {
+        const sections = [
+          { key: "saved", button: savedToggleButton },
+          { key: "tools", button: toolsToggleButton },
+          { key: "assets", button: assetsToggleButton },
+        ];
+        for (const section of sections) {
+          if (!(section.button instanceof HTMLButtonElement)) {
+            continue;
+          }
+          section.button.addEventListener("click", () => {
+            const nextState = !assetsSectionCollapsedState[section.key];
+            setAssetsSectionCollapsed(section.key, nextState);
+          });
+          setAssetsSectionCollapsed(section.key, false);
+        }
+      }
+
       function clearSavedBillboardDropIndicators() {
         if (!(savedBillboardsList instanceof HTMLElement)) {
           return;
@@ -1961,7 +2036,7 @@
       }
 
       function partitionArtboardWidth(partitionKey) {
-        const layout = PARTITION_LAYOUT[partitionKey];
+        const layout = partitionLayout()[partitionKey];
         if (!layout) {
           return artboardWidth;
         }
@@ -1969,6 +2044,7 @@
       }
 
       function applyPartitionEditorRatios() {
+        const layoutByKey = partitionLayout();
         for (const key of PARTITION_KEYS) {
           const editor = partitionEditorForSettingsKey(key);
           if (!(editor instanceof HTMLElement)) {
@@ -1977,7 +2053,7 @@
           // Partition editors keep full billboard ratio for editing context.
           editor.style.setProperty("--partition-width", String(artboardWidth));
           const frame = partitionViewportFrameForKey(key);
-          const layout = PARTITION_LAYOUT[key];
+          const layout = layoutByKey[key];
           if (frame instanceof HTMLElement && layout) {
             frame.style.left = "0";
             frame.style.width = layout.widthRatio * 100 + "%";
@@ -2450,10 +2526,6 @@
 
       function renderAssetList() {
         assetsList.innerHTML = "";
-        const rootTitle = document.createElement("div");
-        rootTitle.className = "saved-billboards-title";
-        rootTitle.textContent = "assets";
-        assetsList.appendChild(rootTitle);
         if (!availableAssets.length) {
           const empty = document.createElement("div");
           empty.className = "assets-status";
@@ -2716,6 +2788,42 @@
         syncBillboardPaddingFromEditorPreview();
       }
 
+      function getEditorInnerDimensions(editorEl) {
+        const fallbackWidth = Math.max(1, visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientWidth : 1);
+        const fallbackHeight = Math.max(1, visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientHeight : 1);
+        if (!(editorEl instanceof HTMLElement)) {
+          return { width: fallbackWidth, height: fallbackHeight };
+        }
+        const computed = window.getComputedStyle(editorEl);
+        const paddingLeft = Number.parseFloat(computed.paddingLeft) || 0;
+        const paddingRight = Number.parseFloat(computed.paddingRight) || 0;
+        const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
+        const paddingBottom = Number.parseFloat(computed.paddingBottom) || 0;
+        const innerWidth = Math.max(1, editorEl.clientWidth - paddingLeft - paddingRight);
+        const innerHeight = Math.max(1, editorEl.clientHeight - paddingTop - paddingBottom);
+        return {
+          width: innerWidth,
+          height: innerHeight,
+        };
+      }
+
+      function resolveFitScaleAtHundred(block, source, crop, rotationTurns) {
+        const blockEditor = block.closest(".visual-editor-block");
+        const editorInner = getEditorInnerDimensions(blockEditor);
+        const sourceWidth = Math.max(1, Number(source?.width) || 1);
+        const sourceHeight = Math.max(1, Number(source?.height) || 1);
+        const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
+        const croppedSourceWidth = sourceWidth * visibleWidthRatio;
+        const isQuarterTurn = rotationTurns % 2 === 1;
+        const rotatedWidth = isQuarterTurn ? sourceHeight : croppedSourceWidth;
+        const rotatedHeight = isQuarterTurn ? croppedSourceWidth : sourceHeight;
+        const widthScale = editorInner.width / Math.max(1, rotatedWidth);
+        const heightScale = editorInner.height / Math.max(1, rotatedHeight);
+        const boardScale = Math.min(widthScale, heightScale);
+        const artboardScale = editorInner.height / Math.max(1, artboardHeight);
+        return Math.max(0.0001, Math.min(boardScale, artboardScale));
+      }
+
       function computeRenderedAssetMetrics(block) {
         const source = resolveSourceDimensions(block);
         const crop = getCropValues(block);
@@ -2727,14 +2835,7 @@
         const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const rotationDegrees = rotationTurns * 90;
-        const blockEditor = block.closest(".visual-editor-block");
-        const editorHeight = Math.max(
-          1,
-          (blockEditor instanceof HTMLElement ? blockEditor.clientHeight : 0) ||
-            (visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientHeight : 0) ||
-            1
-        );
-        const fitScaleAtHundred = editorHeight / Math.max(1, artboardHeight);
+        const fitScaleAtHundred = resolveFitScaleAtHundred(block, source, crop, rotationTurns);
         const effectiveScale = userScale * fitScaleAtHundred;
 
         const baseSourceWidth = source.width * effectiveScale;
@@ -3381,10 +3482,11 @@
       }
 
       function updatePartitionViewportFrames() {
+        const layoutByKey = partitionLayout();
         for (const key of PARTITION_KEYS) {
           const frame = partitionViewportFrameForKey(key);
           const timer = partitionViewportTimerForKey(key);
-          const layout = PARTITION_LAYOUT[key];
+          const layout = layoutByKey[key];
           const partitionSettings = editorState.settings.partitionSettings?.[key] || defaultPartitionSettings();
           const marqueeEnabled = !!partitionSettings.marqueeEnabled;
           const direction = partitionSettings.marqueeDirection === "ltr" ? "ltr" : "rtl";
@@ -3838,14 +3940,8 @@
         const crop = getCropValues(block);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const blockEditor = block.closest(".visual-editor-block");
-        const editorHeight = Math.max(
-          1,
-          (blockEditor instanceof HTMLElement ? blockEditor.clientHeight : 0) ||
-            (visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientHeight : 0) ||
-            1
-        );
-        const fitScaleAtHundred = editorHeight / Math.max(1, artboardHeight);
+        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
+        const fitScaleAtHundred = resolveFitScaleAtHundred(block, source, crop, rotationTurns);
         const effectiveScale = userScale * fitScaleAtHundred;
         const fullTargetWidth = Math.max(1, source.width * effectiveScale);
         cropDragState = {
@@ -4449,8 +4545,9 @@
           return;
         }
         flatBillboardSinglePartitionGuides.innerHTML = "";
+        const layoutByKey = partitionLayout();
         for (const partitionKey of PARTITION_KEYS) {
-          const layout = PARTITION_LAYOUT[partitionKey];
+          const layout = layoutByKey[partitionKey];
           const ratios = partitionPaddingRatios(partitionKey);
           const guide = document.createElement("div");
           guide.className = "flat-billboard-single-partition-guide";
@@ -4487,9 +4584,10 @@
 
         ensurePartitionSettingsState();
         const billboardHeight = Math.max(1, flatBillboard.clientHeight || 1);
+        const layoutByKey = partitionLayout();
 
         for (const partitionKey of PARTITION_KEYS) {
-          const layout = PARTITION_LAYOUT[partitionKey];
+          const layout = layoutByKey[partitionKey];
           const editor = partitionEditorForSettingsKey(partitionKey);
           const partitionSettings = editorState.settings.partitionSettings[partitionKey] || defaultPartitionSettings();
           const marqueeEnabled = !!partitionSettings.marqueeEnabled;
@@ -4834,6 +4932,7 @@
       PREVIEW3D_CAMERA.targetY = editorState.settings.preview3dCamera.targetY;
       PREVIEW3D_CAMERA.targetZ = editorState.settings.preview3dCamera.targetZ;
       savedBillboards = loadSavedBillboards();
+      setupAssetsSectionToggles();
       renderSavedBillboardsList();
       updateAssetIdCounterFromState();
       recoverLikelyScaleRegression();
