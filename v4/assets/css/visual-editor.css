@@ -163,6 +163,27 @@
         margin: 0;
       }
 
+      .settings-new-billboard {
+        border: none;
+        background: none;
+        padding: 0;
+        margin: 0;
+        font: inherit;
+        font-size: 11px;
+        line-height: 1.2;
+        text-transform: lowercase;
+        color: #1e6cff;
+        cursor: pointer;
+        text-decoration: none;
+        flex-shrink: 0;
+      }
+
+      .settings-new-billboard:hover,
+      .settings-new-billboard:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
       .settings-section {
         margin-bottom: 12px;
       }
@@ -213,17 +234,10 @@
         gap: 2px;
       }
 
-      .tools-list {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-
       .saved-billboards-list[hidden] {
         display: none;
       }
 
-      .tools-list[hidden],
       .assets-list[hidden] {
         display: none;
       }

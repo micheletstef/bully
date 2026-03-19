@@ -13,9 +13,8 @@
       const previewMode3dButton = document.getElementById("previewMode3dButton");
       const savedBillboardsList = document.getElementById("savedBillboardsList");
       const savedToggleButton = document.getElementById("savedToggleButton");
-      const toolsToggleButton = document.getElementById("toolsToggleButton");
       const assetsToggleButton = document.getElementById("assetsToggleButton");
-      const billboardMakerButton = document.getElementById("billboardMakerButton");
+      const newBillboardButton = document.getElementById("newBillboardButton");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
       const partitionsToggle = document.getElementById("partitionsToggle");
@@ -1562,7 +1561,6 @@
 
       const assetsSectionCollapsedState = {
         saved: false,
-        tools: false,
         assets: false,
       };
 
@@ -1571,10 +1569,6 @@
           saved: {
             button: savedToggleButton,
             content: savedBillboardsList,
-          },
-          tools: {
-            button: toolsToggleButton,
-            content: document.getElementById("toolsList"),
           },
           assets: {
             button: assetsToggleButton,
@@ -1601,7 +1595,6 @@
       function setupAssetsSectionToggles() {
         const sections = [
           { key: "saved", button: savedToggleButton },
-          { key: "tools", button: toolsToggleButton },
           { key: "assets", button: assetsToggleButton },
         ];
         for (const section of sections) {
@@ -1955,6 +1948,44 @@
         }
         loadBillboardSnapshot(snapshot.id, { updatePath: true, replaceHistory: true });
         return true;
+      }
+
+      function startNewBlankBillboard(options = {}) {
+        const shouldUpdatePath = !!options.updatePath;
+        const shouldReplaceHistory = !!options.replaceHistory;
+        activeSnapshotId = null;
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (error) {
+          // ignore
+        }
+        const fresh = loadEditorState();
+        editorState.assets = Array.isArray(fresh.assets) ? cloneJsonValue(fresh.assets) : [];
+        const partitionAssets = fresh.partitionAssets && typeof fresh.partitionAssets === "object"
+          ? fresh.partitionAssets
+          : { left: [], curve: [], right: [] };
+        editorState.partitionAssets = {
+          left: Array.isArray(partitionAssets.left) ? cloneJsonValue(partitionAssets.left) : [],
+          curve: Array.isArray(partitionAssets.curve) ? cloneJsonValue(partitionAssets.curve) : [],
+          right: Array.isArray(partitionAssets.right) ? cloneJsonValue(partitionAssets.right) : [],
+        };
+        editorState.settings = fresh.settings && typeof fresh.settings === "object"
+          ? cloneJsonValue(fresh.settings)
+          : cloneJsonValue(loadEditorState().settings);
+        ensurePartitionSettingsState();
+        updateAssetIdCounterFromState();
+        rebuildEditorFromState({});
+        editorState.settings.preview3dCamera = sanitizePreview3dCameraSettings(editorState.settings.preview3dCamera);
+        preview3dAutoFitPending = true;
+        applyPreview3dCameraSettings(editorState.settings.preview3dCamera, {
+          persist: false,
+          redraw: previewMode === "3d",
+          markUserAdjusted: false,
+        });
+        saveEditorState();
+        if (shouldUpdatePath) {
+          setPathToToolRoot(shouldReplaceHistory);
+        }
       }
 
       function loadBillboardMakerState(options = {}) {
@@ -5299,9 +5330,9 @@
         });
       }
 
-      if (billboardMakerButton instanceof HTMLButtonElement) {
-        billboardMakerButton.addEventListener("click", () => {
-          loadBillboardMakerState({ updatePath: true, replaceHistory: false });
+      if (newBillboardButton instanceof HTMLButtonElement) {
+        newBillboardButton.addEventListener("click", () => {
+          startNewBlankBillboard({ updatePath: true, replaceHistory: false });
         });
       }
 
