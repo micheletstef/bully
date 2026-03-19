@@ -49,6 +49,9 @@
       const flatBillboardSinglePartitionGuides = document.getElementById("flatBillboardSinglePartitionGuides");
       const flatAnnoTopLabel = document.getElementById("flatAnnoTopLabel");
       const flatAnnoRightLabel = document.getElementById("flatAnnoRightLabel");
+      const flatAnnoLabel1820 = document.getElementById("flatAnnoLabel1820");
+      const flatAnnoLabelCurve = document.getElementById("flatAnnoLabelCurve");
+      const flatAnnoLabel2840 = document.getElementById("flatAnnoLabel2840");
       const paddingTBControl = document.getElementById("paddingTBControl");
       const paddingLRControl = document.getElementById("paddingLRControl");
       const showGuidesControl = document.getElementById("showGuidesControl");
@@ -234,6 +237,7 @@
         if (flatAnnoRightLabel instanceof HTMLElement) {
           flatAnnoRightLabel.textContent = artboardHeight + "px height";
         }
+        syncPartitionGuidelineLabels();
       }
 
       function syncBillboardDimensionControls() {
@@ -242,6 +246,21 @@
         }
         if (billboardHeightControl instanceof HTMLInputElement) {
           billboardHeightControl.value = String(artboardHeight);
+        }
+      }
+
+      function syncPartitionGuidelineLabels() {
+        const leftPx = Math.round(PARTITION_LAYOUT.left.widthRatio * artboardWidth);
+        const curvePx = Math.round(PARTITION_LAYOUT.curve.widthRatio * artboardWidth);
+        const rightEdgePx = leftPx + curvePx;
+        if (flatAnnoLabel1820 instanceof HTMLElement) {
+          flatAnnoLabel1820.textContent = leftPx + "px";
+        }
+        if (flatAnnoLabelCurve instanceof HTMLElement) {
+          flatAnnoLabelCurve.textContent = curvePx + "px curve";
+        }
+        if (flatAnnoLabel2840 instanceof HTMLElement) {
+          flatAnnoLabel2840.textContent = rightEdgePx + "px";
         }
       }
 
@@ -2578,19 +2597,6 @@
         return { width: fallbackWidth, height: fallbackHeight };
       }
 
-      function getSafeAssetHeight(block) {
-        const parent = block?.parentElement;
-        if (!(parent instanceof HTMLElement)) {
-          return 1;
-        }
-        const styles = window.getComputedStyle(parent);
-        const configuredEditorHeight = parseFloat(styles.getPropertyValue("--editor-height")) || 200;
-        const safeTop = parseFloat(styles.getPropertyValue("--safe-top")) || 0;
-        const safeBottom = parseFloat(styles.getPropertyValue("--safe-bottom")) || 0;
-        const safeHeight = configuredEditorHeight - safeTop - safeBottom;
-        return Math.max(1, safeHeight);
-      }
-
       function updateAssetBlockSize(block) {
         const metrics = computeRenderedAssetMetrics(block);
         if (!metrics) {
@@ -2624,10 +2630,9 @@
         const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const rotationDegrees = rotationTurns * 90;
-        const safeHeight = getSafeAssetHeight(block);
         const croppedWidthAtHundred = source.width * visibleWidthRatio;
         const finalHeightAtHundred = isQuarterTurn ? croppedWidthAtHundred : source.height;
-        const fitScaleAtHundred = Math.min(1, safeHeight / Math.max(1, finalHeightAtHundred));
+        const fitScaleAtHundred = 1;
         const effectiveScale = userScale * fitScaleAtHundred;
 
         const baseSourceWidth = source.width * effectiveScale;
@@ -3734,9 +3739,8 @@
         const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
         const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
-        const safeHeight = getSafeAssetHeight(block);
         const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
-        const fitScaleAtHundred = Math.min(1, safeHeight / Math.max(1, finalHeightAtHundred));
+        const fitScaleAtHundred = 1;
         const effectiveScale = userScale * fitScaleAtHundred;
         const fullTargetWidth = Math.max(1, source.width * effectiveScale);
         cropDragState = {
