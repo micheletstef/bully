@@ -324,11 +324,15 @@
 
       .settings-row {
         display: grid;
-        grid-template-columns: 72px 1fr;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
         align-items: center;
         gap: 8px;
         margin-bottom: 3px;
         padding-left: 10px;
+      }
+
+      .settings-row > :nth-child(2) {
+        min-width: 0;
       }
 
       .settings-row.marquee-advanced[hidden] {
@@ -469,6 +473,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        flex-wrap: nowrap;
       }
 
       .padding-inline-field {
@@ -848,6 +853,19 @@
 
       .flat-billboard-single-partition-guides.is-visible {
         display: block;
+      }
+
+      body.preview-mode-3d .settings-row {
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+      }
+
+      body.preview-mode-3d .settings-row .alignment-toggle,
+      body.preview-mode-3d .settings-row .marquee-toggle,
+      body.preview-mode-3d .settings-row .partition-tabs,
+      body.preview-mode-3d .settings-row .padding-inline-controls,
+      body.preview-mode-3d .settings-row .color-inline-controls {
+        white-space: nowrap;
+        flex-wrap: nowrap;
       }
 
       .flat-billboard-single-partition-guide {

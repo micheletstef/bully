@@ -184,6 +184,9 @@
           clearPreview3dDragState();
           stopPreview3dLoop();
         }
+        if (editorState && editorState.settings) {
+          syncSettingsControlsFromState();
+        }
         if (persist && editorState && editorState.settings) {
           editorState.settings.previewMode = normalized;
           saveEditorState();
@@ -1843,6 +1846,7 @@
       function syncSettingsControlsFromState() {
         const target = currentSettingsTarget();
         const source = target.settings;
+        const forceShowAllRows = previewMode === "3d";
         const buttons = alignmentSettings.querySelectorAll(".alignment-button");
         for (const button of buttons) {
           const isSelected = button.dataset.align === source.verticalAlignment;
@@ -1865,8 +1869,8 @@
         const marqueeDirection = source.marqueeDirection === "ltr" ? "ltr" : "rtl";
         marqueeSpeedControl.value = String(marqueeSpeed);
         marqueeDirectionControl.value = marqueeDirection;
-        marqueeSpeedRow.hidden = !marqueeEnabled;
-        marqueeDirectionRow.hidden = !marqueeEnabled;
+        marqueeSpeedRow.hidden = !forceShowAllRows && !marqueeEnabled;
+        marqueeDirectionRow.hidden = !forceShowAllRows && !marqueeEnabled;
         const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
         for (const button of toggleButtons) {
           const isOn = button.dataset.value === "on";
@@ -1875,7 +1879,11 @@
           button.setAttribute("aria-checked", isSelected ? "true" : "false");
         }
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
+          partitionSettingsSelect.hidden = !(forceShowAllRows || target.partitioned);
           partitionSettingsSelect.value = target.partitioned ? target.key : "left";
+        }
+        if (partitionTabsRow instanceof HTMLElement) {
+          partitionTabsRow.hidden = !(forceShowAllRows && editorState.settings.partitionsEnabled);
         }
         if (preview3dShadowControl instanceof HTMLInputElement) {
           preview3dShadowControl.value = String(editorState.settings.preview3dShadow ?? PREVIEW3D_FX_DEFAULTS.shadow);
@@ -3451,10 +3459,11 @@
         }
 
         if (syncControls) {
+          const forceShowAllRows = previewMode === "3d";
           marqueeSpeedControl.value = String(normalizedSpeed);
           marqueeDirectionControl.value = normalizedDirection;
-          marqueeSpeedRow.hidden = !normalizedEnabled;
-          marqueeDirectionRow.hidden = !normalizedEnabled;
+          marqueeSpeedRow.hidden = !forceShowAllRows && !normalizedEnabled;
+          marqueeDirectionRow.hidden = !forceShowAllRows && !normalizedEnabled;
 
           const toggleButtons = marqueeToggle.querySelectorAll(".marquee-choice");
           for (const button of toggleButtons) {
@@ -3510,11 +3519,11 @@
         }
         updateFlatBillboardOrientationClass();
         if (partitionSettingsSelect instanceof HTMLSelectElement) {
-          partitionSettingsSelect.hidden = !normalizedEnabled;
+          partitionSettingsSelect.hidden = !(normalizedEnabled || previewMode === "3d");
           partitionSettingsSelect.value = editorState.settings.activePartitionKey || "left";
         }
         if (partitionTabsRow instanceof HTMLElement) {
-          partitionTabsRow.hidden = true;
+          partitionTabsRow.hidden = !(previewMode === "3d" && normalizedEnabled);
         }
         if (billboardViewportFrame instanceof HTMLElement && normalizedEnabled) {
           billboardViewportFrame.style.display = "none";
