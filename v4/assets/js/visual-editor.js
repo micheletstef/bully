@@ -23,6 +23,11 @@
       const marqueeDirectionRow = document.getElementById("marqueeDirectionRow");
       const billboardWidthControl = document.getElementById("billboardWidthControl");
       const billboardHeightControl = document.getElementById("billboardHeightControl");
+      const billboardCurveToggle = document.getElementById("billboardCurveToggle");
+      const billboardCurveWidthRow = document.getElementById("billboardCurveWidthRow");
+      const billboardCurvePositionRow = document.getElementById("billboardCurvePositionRow");
+      const billboardCurveWidthControl = document.getElementById("billboardCurveWidthControl");
+      const billboardCurvePositionControl = document.getElementById("billboardCurvePositionControl");
       const marqueeSpeedControl = document.getElementById("marqueeSpeedControl");
       const marqueeDirectionControl = document.getElementById("marqueeDirectionControl");
       const orientationControl = document.getElementById("orientationControl");
@@ -49,6 +54,8 @@
       const flatBillboardSinglePartitionGuides = document.getElementById("flatBillboardSinglePartitionGuides");
       const flatAnnoTopLabel = document.getElementById("flatAnnoTopLabel");
       const flatAnnoRightLabel = document.getElementById("flatAnnoRightLabel");
+      const flatAnnoMarkerStart = document.getElementById("flatAnnoMarkerStart");
+      const flatAnnoMarkerEnd = document.getElementById("flatAnnoMarkerEnd");
       const flatAnnoLabel1820 = document.getElementById("flatAnnoLabel1820");
       const flatAnnoLabelCurve = document.getElementById("flatAnnoLabelCurve");
       const flatAnnoLabel2840 = document.getElementById("flatAnnoLabel2840");
@@ -118,6 +125,9 @@
       const ARTBOARD_DIMENSION_MAX = 30000;
       let artboardWidth = DEFAULT_ARTBOARD_WIDTH;
       let artboardHeight = DEFAULT_ARTBOARD_HEIGHT;
+      let curveEnabled = true;
+      let curveWidth = 1020;
+      let curvePosition = 1820;
       const PREVIEW3D_CAMERA_DEFAULTS = {
         yaw: -0.7,
         pitch: 0.11,
@@ -228,6 +238,19 @@
         );
       }
 
+      function sanitizeCurveSettings(enabledValue, widthValue, positionValue, boardWidth = artboardWidth) {
+        const normalizedEnabled = enabledValue !== false;
+        const maxSpan = Math.max(0, boardWidth);
+        const normalizedWidth = Math.max(0, Math.min(maxSpan, Math.round(Number(widthValue) || 0)));
+        const maxStart = Math.max(0, boardWidth - normalizedWidth);
+        const normalizedPosition = Math.max(0, Math.min(maxStart, Math.round(Number(positionValue) || 0)));
+        return {
+          enabled: normalizedEnabled,
+          width: normalizedWidth,
+          position: normalizedPosition,
+        };
+      }
+
       function applyArtboardCssVariables() {
         document.documentElement.style.setProperty("--billboard-width", String(artboardWidth));
         document.documentElement.style.setProperty("--billboard-height", String(artboardHeight));
@@ -237,7 +260,7 @@
         if (flatAnnoRightLabel instanceof HTMLElement) {
           flatAnnoRightLabel.textContent = artboardHeight + "px height";
         }
-        syncPartitionGuidelineLabels();
+        syncCurveGuidelineDisplay();
       }
 
       function syncBillboardDimensionControls() {
@@ -249,27 +272,76 @@
         }
       }
 
-      function syncPartitionGuidelineLabels() {
-        const leftPx = Math.round(PARTITION_LAYOUT.left.widthRatio * artboardWidth);
-        const curvePx = Math.round(PARTITION_LAYOUT.curve.widthRatio * artboardWidth);
-        const rightEdgePx = leftPx + curvePx;
+      function syncBillboardCurveControls() {
+        if (billboardCurveWidthControl instanceof HTMLInputElement) {
+          billboardCurveWidthControl.value = String(curveWidth);
+          billboardCurveWidthControl.disabled = !curveEnabled;
+          billboardCurveWidthControl.max = String(artboardWidth);
+        }
+        if (billboardCurvePositionControl instanceof HTMLInputElement) {
+          billboardCurvePositionControl.value = String(curvePosition);
+          billboardCurvePositionControl.disabled = !curveEnabled;
+          billboardCurvePositionControl.max = String(Math.max(0, artboardWidth - curveWidth));
+        }
+        if (billboardCurveWidthRow instanceof HTMLElement) {
+          billboardCurveWidthRow.hidden = !curveEnabled;
+        }
+        if (billboardCurvePositionRow instanceof HTMLElement) {
+          billboardCurvePositionRow.hidden = !curveEnabled;
+        }
+        if (billboardCurveToggle instanceof HTMLElement) {
+          const buttons = billboardCurveToggle.querySelectorAll(".marquee-choice");
+          for (const button of buttons) {
+            const isOn = button.dataset.value === "on";
+            const isSelected = curveEnabled ? isOn : !isOn;
+            button.classList.toggle("inactive", !isSelected);
+            button.setAttribute("aria-checked", isSelected ? "true" : "false");
+          }
+        }
+      }
+
+      function syncCurveGuidelineDisplay() {
+        if (!(flatBillboard instanceof HTMLElement)) {
+          return;
+        }
+        const curveStart = curvePosition;
+        const curveEnd = curvePosition + curveWidth;
+        const startRatio = artboardWidth > 0 ? curveStart / artboardWidth : 0;
+        const endRatio = artboardWidth > 0 ? curveEnd / artboardWidth : 0;
+        const midRatio = artboardWidth > 0 ? ((curveStart + curveEnd) * 0.5) / artboardWidth : 0;
+        flatBillboard.style.setProperty("--curve-start-ratio", String(startRatio));
+        flatBillboard.style.setProperty("--curve-end-ratio", String(endRatio));
+        flatBillboard.style.setProperty("--curve-mid-ratio", String(midRatio));
+        const showCurveGuides = curveEnabled && curveWidth > 0;
+        if (flatAnnoMarkerStart instanceof HTMLElement) {
+          flatAnnoMarkerStart.style.display = showCurveGuides ? "block" : "none";
+        }
+        if (flatAnnoMarkerEnd instanceof HTMLElement) {
+          flatAnnoMarkerEnd.style.display = showCurveGuides ? "block" : "none";
+        }
         if (flatAnnoLabel1820 instanceof HTMLElement) {
-          flatAnnoLabel1820.textContent = leftPx + "px";
+          flatAnnoLabel1820.textContent = curveStart + "px";
+          flatAnnoLabel1820.style.display = showCurveGuides ? "block" : "none";
         }
         if (flatAnnoLabelCurve instanceof HTMLElement) {
-          flatAnnoLabelCurve.textContent = curvePx + "px curve";
+          flatAnnoLabelCurve.textContent = curveWidth + "px curve";
+          flatAnnoLabelCurve.style.display = showCurveGuides ? "block" : "none";
         }
         if (flatAnnoLabel2840 instanceof HTMLElement) {
-          flatAnnoLabel2840.textContent = rightEdgePx + "px";
+          flatAnnoLabel2840.textContent = curveEnd + "px";
+          flatAnnoLabel2840.style.display = showCurveGuides ? "block" : "none";
         }
       }
 
       function computePreview3dCurveSample(distanceAlongWidth) {
-        const leftLength = PARTITION_LAYOUT.left.widthRatio * artboardWidth;
-        const curveLength = PARTITION_LAYOUT.curve.widthRatio * artboardWidth;
+        const leftLength = curveEnabled ? curvePosition : artboardWidth;
+        const curveLength = curveEnabled ? curveWidth : 0;
         const rightLength = Math.max(0, artboardWidth - leftLength - curveLength);
         const totalLength = artboardWidth;
         const s = Math.max(0, Math.min(totalLength, Number(distanceAlongWidth) || 0));
+        if (!curveEnabled || curveLength <= 0) {
+          return { x: s, depth: 0 };
+        }
         const radius = curveLength / (Math.PI / 2);
 
         if (s <= leftLength) {
@@ -1187,6 +1259,9 @@
           settings: {
             billboardWidth: DEFAULT_ARTBOARD_WIDTH,
             billboardHeight: DEFAULT_ARTBOARD_HEIGHT,
+            billboardCurveEnabled: true,
+            billboardCurveWidth: 1020,
+            billboardCurvePosition: 1820,
             verticalAlignment: "top",
             previewMode: "flat",
             preview3dShadow: PREVIEW3D_FX_DEFAULTS.shadow,
@@ -1363,6 +1438,12 @@
           const savedBillboardHeight = Number(parsed?.settings?.billboardHeight);
           const billboardWidth = normalizeArtboardDimension(savedBillboardWidth, DEFAULT_ARTBOARD_WIDTH);
           const billboardHeight = normalizeArtboardDimension(savedBillboardHeight, DEFAULT_ARTBOARD_HEIGHT);
+          const normalizedCurveSettings = sanitizeCurveSettings(
+            parsed?.settings?.billboardCurveEnabled !== false,
+            parsed?.settings?.billboardCurveWidth,
+            parsed?.settings?.billboardCurvePosition,
+            billboardWidth
+          );
           const savedPaddingTB = Number(parsed?.settings?.paddingTB);
           const savedPaddingLR = Number(parsed?.settings?.paddingLR);
           const savedShowGuides = parsed?.settings?.showGuides;
@@ -1379,6 +1460,9 @@
             settings: {
               billboardWidth,
               billboardHeight,
+              billboardCurveEnabled: normalizedCurveSettings.enabled,
+              billboardCurveWidth: normalizedCurveSettings.width,
+              billboardCurvePosition: normalizedCurveSettings.position,
               verticalAlignment,
               previewMode,
               preview3dShadow,
@@ -1915,8 +1999,21 @@
         editorState.settings.billboardHeight = normalizedBillboardHeight;
         artboardWidth = normalizedBillboardWidth;
         artboardHeight = normalizedBillboardHeight;
+        const normalizedCurve = sanitizeCurveSettings(
+          editorState.settings.billboardCurveEnabled,
+          editorState.settings.billboardCurveWidth,
+          editorState.settings.billboardCurvePosition,
+          normalizedBillboardWidth
+        );
+        editorState.settings.billboardCurveEnabled = normalizedCurve.enabled;
+        editorState.settings.billboardCurveWidth = normalizedCurve.width;
+        editorState.settings.billboardCurvePosition = normalizedCurve.position;
+        curveEnabled = normalizedCurve.enabled;
+        curveWidth = normalizedCurve.width;
+        curvePosition = normalizedCurve.position;
         applyArtboardCssVariables();
         syncBillboardDimensionControls();
+        syncBillboardCurveControls();
         editorState.settings.previewMode = normalizePreviewMode(editorState.settings.previewMode);
         const preview3dShadow = Number(editorState.settings.preview3dShadow);
         const preview3dGlare = Number(editorState.settings.preview3dGlare);
@@ -4022,6 +4119,29 @@
         }
       }
 
+      function applyBillboardCurveSettings(nextEnabled, nextWidth, nextPosition, shouldPersist) {
+        const normalized = sanitizeCurveSettings(nextEnabled, nextWidth, nextPosition, artboardWidth);
+        curveEnabled = normalized.enabled;
+        curveWidth = normalized.width;
+        curvePosition = normalized.position;
+        if (editorState && editorState.settings) {
+          editorState.settings.billboardCurveEnabled = curveEnabled;
+          editorState.settings.billboardCurveWidth = curveWidth;
+          editorState.settings.billboardCurvePosition = curvePosition;
+        }
+        syncBillboardCurveControls();
+        syncCurveGuidelineDisplay();
+        preview3dForceTextureUpdate = true;
+        preview3dAutoFitPending = true;
+        refreshPreview3dGeometry();
+        if (previewMode === "3d") {
+          drawCurvedBillboard3dFrame();
+        }
+        if (shouldPersist) {
+          saveEditorState();
+        }
+      }
+
       function applyBillboardDimensions(nextWidth, nextHeight, shouldPersist) {
         const normalizedWidth = normalizeArtboardDimension(nextWidth, artboardWidth);
         const normalizedHeight = normalizeArtboardDimension(nextHeight, artboardHeight);
@@ -4031,8 +4151,18 @@
           editorState.settings.billboardWidth = normalizedWidth;
           editorState.settings.billboardHeight = normalizedHeight;
         }
+        const normalizedCurve = sanitizeCurveSettings(curveEnabled, curveWidth, curvePosition, artboardWidth);
+        curveEnabled = normalizedCurve.enabled;
+        curveWidth = normalizedCurve.width;
+        curvePosition = normalizedCurve.position;
+        if (editorState && editorState.settings) {
+          editorState.settings.billboardCurveEnabled = curveEnabled;
+          editorState.settings.billboardCurveWidth = curveWidth;
+          editorState.settings.billboardCurvePosition = curvePosition;
+        }
         applyArtboardCssVariables();
         syncBillboardDimensionControls();
+        syncBillboardCurveControls();
         applyPartitionEditorRatios();
         updateAllAssetBlockSizes();
         syncBillboardPaddingFromEditorPreview();
@@ -4762,6 +4892,41 @@
         billboardHeightControl.addEventListener("input", applyFromBillboardControls);
         billboardWidthControl.addEventListener("blur", applyFromBillboardControls);
         billboardHeightControl.addEventListener("blur", applyFromBillboardControls);
+      }
+      if (billboardCurveToggle instanceof HTMLElement) {
+        billboardCurveToggle.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLButtonElement)) {
+            return;
+          }
+          const value = target.dataset.value;
+          if (value !== "on" && value !== "off") {
+            return;
+          }
+          applyBillboardCurveSettings(
+            value === "on",
+            billboardCurveWidthControl instanceof HTMLInputElement ? billboardCurveWidthControl.value : curveWidth,
+            billboardCurvePositionControl instanceof HTMLInputElement ? billboardCurvePositionControl.value : curvePosition,
+            true
+          );
+        });
+      }
+      if (billboardCurveWidthControl instanceof HTMLInputElement && billboardCurvePositionControl instanceof HTMLInputElement) {
+        const applyBillboardCurveFromControls = () => {
+          if (!billboardCurveWidthControl.value.trim() || !billboardCurvePositionControl.value.trim()) {
+            return;
+          }
+          applyBillboardCurveSettings(
+            curveEnabled,
+            billboardCurveWidthControl.value,
+            billboardCurvePositionControl.value,
+            true
+          );
+        };
+        billboardCurveWidthControl.addEventListener("input", applyBillboardCurveFromControls);
+        billboardCurvePositionControl.addEventListener("input", applyBillboardCurveFromControls);
+        billboardCurveWidthControl.addEventListener("blur", applyBillboardCurveFromControls);
+        billboardCurvePositionControl.addEventListener("blur", applyBillboardCurveFromControls);
       }
 
       marqueeSpeedControl.addEventListener("input", () => {

@@ -43,157 +43,181 @@
             <input id="billboardHeightControl" class="settings-input" type="number" min="1" max="30000" step="1" value="3480" />
             <span>px</span>
           </div>
+          <div class="settings-row">
+            <span class="settings-label">curve</span>
+            <div id="billboardCurveToggle" class="marquee-toggle" role="radiogroup" aria-label="Billboard curve mode">
+              <button type="button" class="marquee-choice inactive" data-value="off" role="radio" aria-checked="false">off</button>
+              <span>/</span>
+              <button type="button" class="marquee-choice" data-value="on" role="radio" aria-checked="true">on</button>
+            </div>
+            <span></span>
+          </div>
+          <div id="billboardCurveWidthRow" class="settings-row">
+            <label class="settings-label" for="billboardCurveWidthControl">curve width</label>
+            <input id="billboardCurveWidthControl" class="settings-input" type="number" min="0" max="30000" step="1" value="1020" />
+            <span>px</span>
+          </div>
+          <div id="billboardCurvePositionRow" class="settings-row">
+            <label class="settings-label" for="billboardCurvePositionControl">curve position</label>
+            <input id="billboardCurvePositionControl" class="settings-input" type="number" min="0" max="30000" step="1" value="1820" />
+            <span>px</span>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="showGuidesControl">guides</label>
+            <input id="showGuidesControl" type="checkbox" checked />
+          </div>
         </div>
         <div class="settings-section">
-        <div class="settings-title-row">
-          <h2 class="settings-title">settings</h2>
-          <select id="partitionSettingsSelect" class="settings-partition-select" hidden aria-label="Partition settings target">
-            <option value="left">7th</option>
-            <option value="curve">curve</option>
-            <option value="right">47th</option>
-          </select>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">partitions</span>
-          <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
-            <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
-            <span>/</span>
-            <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
+          <div class="settings-title-row">
+            <h2 class="settings-title">layout</h2>
+            <select id="partitionSettingsSelect" class="settings-partition-select" hidden aria-label="Partition settings target">
+              <option value="left">7th</option>
+              <option value="curve">curve</option>
+              <option value="right">47th</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">partitions</span>
+            <div id="partitionsToggle" class="marquee-toggle" role="radiogroup" aria-label="Partitions mode">
+              <button type="button" class="marquee-choice" data-value="off" role="radio" aria-checked="true">off</button>
+              <span>/</span>
+              <button type="button" class="marquee-choice inactive" data-value="on" role="radio" aria-checked="false">on</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">alignment</span>
+            <div id="alignmentSettings" class="alignment-toggle" role="radiogroup" aria-label="Asset vertical alignment">
+              <button type="button" class="alignment-button" data-align="top" role="radio" aria-checked="true">top</button>
+              <span>/</span>
+              <button type="button" class="alignment-button inactive" data-align="center" role="radio" aria-checked="false">center</button>
+              <span>/</span>
+              <button type="button" class="alignment-button inactive" data-align="bottom" role="radio" aria-checked="false">bottom</button>
+            </div>
+          </div>
+          <div id="partitionTabsRow" class="settings-row partition-tabs-row" hidden>
+            <span class="settings-label">partition</span>
+            <div id="partitionTabs" class="partition-tabs" role="tablist" aria-label="Partition settings tabs">
+              <button type="button" class="marquee-choice" data-partition-key="left" role="tab" aria-selected="true">7th</button>
+              <span>/</span>
+              <button type="button" class="marquee-choice inactive" data-partition-key="curve" role="tab" aria-selected="false">curve</button>
+              <span>/</span>
+              <button type="button" class="marquee-choice inactive" data-partition-key="right" role="tab" aria-selected="false">47th</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">marquee</span>
+            <div id="marqueeToggle" class="marquee-toggle" role="radiogroup" aria-label="Marquee mode">
+              <button type="button" class="marquee-choice inactive" data-value="off" role="radio" aria-checked="false">off</button>
+              <span>/</span>
+              <button type="button" class="marquee-choice" data-value="on" role="radio" aria-checked="true">on</button>
+            </div>
+          </div>
+          <div id="marqueeSpeedRow" class="settings-row marquee-advanced">
+            <label class="settings-label" for="marqueeSpeedControl">speed</label>
+            <input id="marqueeSpeedControl" class="settings-input settings-input-compact" type="number" min="5" max="600" step="1" value="80" />
+          </div>
+          <div id="marqueeDirectionRow" class="settings-row marquee-advanced">
+            <label class="settings-label" for="marqueeDirectionControl">direction</label>
+            <select id="marqueeDirectionControl" class="settings-input">
+              <option value="rtl">left to right</option>
+              <option value="ltr">right to left</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="orientationControl">orientation</label>
+            <select id="orientationControl" class="settings-input">
+              <option value="horizontal">horizontal</option>
+              <option value="vertical">vertical</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">padding</span>
+            <div class="padding-inline-controls">
+              <label class="padding-inline-field" for="paddingTBControl">
+                <span>tb</span>
+                <input id="paddingTBControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
+              </label>
+              <label class="padding-inline-field" for="paddingLRControl">
+                <span>lr</span>
+                <input id="paddingLRControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="assetGapControl">asset gap</label>
+            <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">color</span>
+            <div class="color-inline-controls">
+              <label class="color-inline-field" for="backgroundColorControl">
+                <span>bg</span>
+                <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
+              </label>
+              <label class="color-inline-field" for="assetColorControl">
+                <span>asset</span>
+                <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
+              </label>
+            </div>
           </div>
         </div>
-        <div class="settings-row">
-          <span class="settings-label">alignment</span>
-          <div id="alignmentSettings" class="alignment-toggle" role="radiogroup" aria-label="Asset vertical alignment">
-            <button type="button" class="alignment-button" data-align="top" role="radio" aria-checked="true">top</button>
-            <span>/</span>
-            <button type="button" class="alignment-button inactive" data-align="center" role="radio" aria-checked="false">center</button>
-            <span>/</span>
-            <button type="button" class="alignment-button inactive" data-align="bottom" role="radio" aria-checked="false">bottom</button>
+        <div class="settings-section">
+          <div class="settings-title-row">
+            <h2 class="settings-title">camera</h2>
           </div>
-        </div>
-        <div id="partitionTabsRow" class="settings-row partition-tabs-row" hidden>
-          <span class="settings-label">partition</span>
-          <div id="partitionTabs" class="partition-tabs" role="tablist" aria-label="Partition settings tabs">
-            <button type="button" class="marquee-choice" data-partition-key="left" role="tab" aria-selected="true">7th</button>
-            <span>/</span>
-            <button type="button" class="marquee-choice inactive" data-partition-key="curve" role="tab" aria-selected="false">curve</button>
-            <span>/</span>
-            <button type="button" class="marquee-choice inactive" data-partition-key="right" role="tab" aria-selected="false">47th</button>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dShadowControl">3d shadow</label>
+            <input id="preview3dShadowControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.35" />
+            <span id="preview3dShadowValue" class="settings-range-readout">0.35</span>
           </div>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">marquee</span>
-          <div id="marqueeToggle" class="marquee-toggle" role="radiogroup" aria-label="Marquee mode">
-            <button type="button" class="marquee-choice inactive" data-value="off" role="radio" aria-checked="false">off</button>
-            <span>/</span>
-            <button type="button" class="marquee-choice" data-value="on" role="radio" aria-checked="true">on</button>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dGlareControl">3d glare</label>
+            <input id="preview3dGlareControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.25" />
+            <span id="preview3dGlareValue" class="settings-range-readout">0.25</span>
           </div>
-        </div>
-        <div id="marqueeSpeedRow" class="settings-row marquee-advanced">
-          <label class="settings-label" for="marqueeSpeedControl">speed</label>
-          <input id="marqueeSpeedControl" class="settings-input settings-input-compact" type="number" min="5" max="600" step="1" value="80" />
-        </div>
-        <div id="marqueeDirectionRow" class="settings-row marquee-advanced">
-          <label class="settings-label" for="marqueeDirectionControl">direction</label>
-          <select id="marqueeDirectionControl" class="settings-input">
-            <option value="rtl">left to right</option>
-            <option value="ltr">right to left</option>
-          </select>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="orientationControl">orientation</label>
-          <select id="orientationControl" class="settings-input">
-            <option value="horizontal">horizontal</option>
-            <option value="vertical">vertical</option>
-          </select>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">padding</span>
-          <div class="padding-inline-controls">
-            <label class="padding-inline-field" for="paddingTBControl">
-              <span>tb</span>
-              <input id="paddingTBControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
-            </label>
-            <label class="padding-inline-field" for="paddingLRControl">
-              <span>lr</span>
-              <input id="paddingLRControl" class="settings-input settings-input-compact" type="number" min="0" max="4000" step="1" value="0" />
-            </label>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dYawControl">3d yaw</label>
+            <input id="preview3dYawControl" class="settings-input" type="range" min="-3.14" max="3.14" step="0.01" value="-0.70" />
+            <span id="preview3dYawValue" class="settings-range-readout">-0.70</span>
           </div>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="assetGapControl">asset gap</label>
-          <input id="assetGapControl" class="settings-input" type="number" min="0" max="4000" step="1" value="8" />
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">color</span>
-          <div class="color-inline-controls">
-            <label class="color-inline-field" for="backgroundColorControl">
-              <span>bg</span>
-              <input id="backgroundColorControl" class="settings-color-input" type="color" value="#ff00ff" />
-            </label>
-            <label class="color-inline-field" for="assetColorControl">
-              <span>asset</span>
-              <input id="assetColorControl" class="settings-color-input" type="color" value="#1e6cff" />
-            </label>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dPitchControl">3d pitch</label>
+            <input id="preview3dPitchControl" class="settings-input" type="range" min="-0.60" max="1.40" step="0.01" value="0.11" />
+            <span id="preview3dPitchValue" class="settings-range-readout">0.11</span>
           </div>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="showGuidesControl">guides</label>
-          <input id="showGuidesControl" type="checkbox" checked />
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dShadowControl">3d shadow</label>
-          <input id="preview3dShadowControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.35" />
-          <span id="preview3dShadowValue" class="settings-range-readout">0.35</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dGlareControl">3d glare</label>
-          <input id="preview3dGlareControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.25" />
-          <span id="preview3dGlareValue" class="settings-range-readout">0.25</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dYawControl">3d yaw</label>
-          <input id="preview3dYawControl" class="settings-input" type="range" min="-3.14" max="3.14" step="0.01" value="-0.70" />
-          <span id="preview3dYawValue" class="settings-range-readout">-0.70</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dPitchControl">3d pitch</label>
-          <input id="preview3dPitchControl" class="settings-input" type="range" min="-0.60" max="1.40" step="0.01" value="0.11" />
-          <span id="preview3dPitchValue" class="settings-range-readout">0.11</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dPerspectiveControl">3d depth</label>
-          <input id="preview3dPerspectiveControl" class="settings-input" type="range" min="0.10" max="2.50" step="0.01" value="1.33" />
-          <span id="preview3dPerspectiveValue" class="settings-range-readout">1.33</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dZoomControl">3d zoom</label>
-          <input id="preview3dZoomControl" class="settings-input" type="range" min="0.12" max="4.80" step="0.01" value="2.68" />
-          <span id="preview3dZoomValue" class="settings-range-readout">2.68</span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dTargetXControl">target x</label>
-          <input id="preview3dTargetXControl" class="settings-input" type="number" min="-3500" max="3500" step="1" value="0" />
-          <span></span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dTargetYControl">target y</label>
-          <input id="preview3dTargetYControl" class="settings-input" type="number" min="-5000" max="6000" step="1" value="0" />
-          <span></span>
-        </div>
-        <div class="settings-row">
-          <label class="settings-label" for="preview3dTargetZControl">target z</label>
-          <input id="preview3dTargetZControl" class="settings-input" type="number" min="-4500" max="4500" step="1" value="0" />
-          <span></span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">camera</span>
-          <div class="camera-inline-controls">
-            <button id="preview3dAutoFitButton" type="button" class="settings-inline-button">auto-fit</button>
-            <button id="preview3dResetButton" type="button" class="settings-inline-button">reset</button>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dPerspectiveControl">3d depth</label>
+            <input id="preview3dPerspectiveControl" class="settings-input" type="range" min="0.10" max="2.50" step="0.01" value="1.33" />
+            <span id="preview3dPerspectiveValue" class="settings-range-readout">1.33</span>
           </div>
-          <span></span>
-        </div>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dZoomControl">3d zoom</label>
+            <input id="preview3dZoomControl" class="settings-input" type="range" min="0.12" max="4.80" step="0.01" value="2.68" />
+            <span id="preview3dZoomValue" class="settings-range-readout">2.68</span>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dTargetXControl">target x</label>
+            <input id="preview3dTargetXControl" class="settings-input" type="number" min="-3500" max="3500" step="1" value="0" />
+            <span></span>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dTargetYControl">target y</label>
+            <input id="preview3dTargetYControl" class="settings-input" type="number" min="-5000" max="6000" step="1" value="0" />
+            <span></span>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="preview3dTargetZControl">target z</label>
+            <input id="preview3dTargetZControl" class="settings-input" type="number" min="-4500" max="4500" step="1" value="0" />
+            <span></span>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">camera</span>
+            <div class="camera-inline-controls">
+              <button id="preview3dAutoFitButton" type="button" class="settings-inline-button">auto-fit</button>
+              <button id="preview3dResetButton" type="button" class="settings-inline-button">reset</button>
+            </div>
+            <span></span>
+          </div>
         </div>
       </aside>
       <main class="editor-shell">
@@ -212,8 +236,8 @@
               <div id="flatAnnoTopLabel" class="flat-anno-top-label">5900px width</div>
               <div class="flat-anno-right-line"></div>
               <div id="flatAnnoRightLabel" class="flat-anno-right-label">3480px height</div>
-              <div class="flat-anno-marker flat-anno-marker-1820"></div>
-              <div class="flat-anno-marker flat-anno-marker-2840"></div>
+              <div id="flatAnnoMarkerStart" class="flat-anno-marker flat-anno-marker-1820"></div>
+              <div id="flatAnnoMarkerEnd" class="flat-anno-marker flat-anno-marker-2840"></div>
               <div id="flatAnnoLabel1820" class="flat-anno-label flat-anno-label-1820">1820px</div>
               <div id="flatAnnoLabelCurve" class="flat-anno-label flat-anno-label-curve">1020px curve</div>
               <div id="flatAnnoLabel2840" class="flat-anno-label flat-anno-label-2840">2840px</div>
