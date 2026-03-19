@@ -2727,9 +2727,14 @@
         const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
         const isQuarterTurn = rotationTurns % 2 === 1;
         const rotationDegrees = rotationTurns * 90;
-        const croppedWidthAtHundred = source.width * visibleWidthRatio;
-        const finalHeightAtHundred = isQuarterTurn ? croppedWidthAtHundred : source.height;
-        const fitScaleAtHundred = 1;
+        const blockEditor = block.closest(".visual-editor-block");
+        const editorHeight = Math.max(
+          1,
+          (blockEditor instanceof HTMLElement ? blockEditor.clientHeight : 0) ||
+            (visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientHeight : 0) ||
+            1
+        );
+        const fitScaleAtHundred = editorHeight / Math.max(1, artboardHeight);
         const effectiveScale = userScale * fitScaleAtHundred;
 
         const baseSourceWidth = source.width * effectiveScale;
@@ -3833,11 +3838,14 @@
         const crop = getCropValues(block);
         const scalePercent = Number(block.dataset.scalePercent) || 100;
         const userScale = Math.max(0.1, scalePercent / 100);
-        const visibleWidthRatio = Math.max(0.05, 1 - crop.left - crop.right);
-        const rotationTurns = ((Number(block.dataset.rotationTurns) || 0) % 4 + 4) % 4;
-        const isQuarterTurn = rotationTurns % 2 === 1;
-        const finalHeightAtHundred = isQuarterTurn ? source.width * visibleWidthRatio : source.height;
-        const fitScaleAtHundred = 1;
+        const blockEditor = block.closest(".visual-editor-block");
+        const editorHeight = Math.max(
+          1,
+          (blockEditor instanceof HTMLElement ? blockEditor.clientHeight : 0) ||
+            (visualEditorBlock instanceof HTMLElement ? visualEditorBlock.clientHeight : 0) ||
+            1
+        );
+        const fitScaleAtHundred = editorHeight / Math.max(1, artboardHeight);
         const effectiveScale = userScale * fitScaleAtHundred;
         const fullTargetWidth = Math.max(1, source.width * effectiveScale);
         cropDragState = {

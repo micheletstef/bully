@@ -27,11 +27,19 @@
         box-sizing: border-box;
         display: grid;
         grid-template-columns: 280px 280px 1fr;
+        grid-template-areas: "settings assets editor";
         align-items: stretch;
         min-height: calc(100vh - 36px);
       }
-      .assets-directory{ padding-right: 12px;}
-      .settings-panel { padding-left: 12px; padding-right: 12px;}
+      .assets-directory {
+        grid-area: assets;
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+      .settings-panel {
+        grid-area: settings;
+        padding-right: 12px;
+      }
 
       .assets-directory,
       .settings-panel {
@@ -514,6 +522,7 @@
       }
 
       .editor-shell {
+        grid-area: editor;
         padding-left: 24px;
         position: relative;
         --asset-controls-top: 0px;
