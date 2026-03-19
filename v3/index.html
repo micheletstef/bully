@@ -1268,7 +1268,7 @@
         <div id="billboardViewportTimer" class="billboard-viewport-timer" aria-hidden="true"></div>
       </main>
     </div>
-    <script type="module" src="../assets/js/three-basic-loader.js"></script>
+    <script type="module" src="../v2/assets/js/three-basic-loader.js"></script>
     <script>
       const STORAGE_KEY = "v2VisualEditorState";
       const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
@@ -2153,22 +2153,26 @@
 
       function resolveToolBasePathname() {
         const pathname = window.location.pathname || "/";
-        const marker = "/visual-editor";
-        const markerIndex = pathname.indexOf(marker);
-        if (markerIndex === -1) {
-          return pathname.replace(/\/+$/, "") || "/";
+        if (pathname.endsWith("/index.html")) {
+          return pathname;
         }
-        const prefix = pathname.slice(0, markerIndex + marker.length);
-        const afterMarker = pathname.slice(markerIndex + marker.length);
-        if (afterMarker.startsWith("/index.html")) {
-          return prefix + "/index.html";
+        return pathname.endsWith("/") ? pathname + "index.html" : pathname + "/index.html";
+      }
+
+      function resolveAppBasePathname() {
+        const pathname = window.location.pathname || "/";
+        const match = pathname.match(/^(.*)\/v3(?:\/index\.html|\/)?$/i);
+        if (match) {
+          const prefix = match[1] || "";
+          return (prefix + "/v2/").replace(/\/{2,}/g, "/");
         }
-        return prefix + "/";
+        const fallbackToolUrl = new URL(resolveToolBasePathname(), window.location.origin);
+        return new URL("../v2/", fallbackToolUrl).pathname;
       }
 
       const TOOL_BASE_PATHNAME = resolveToolBasePathname();
       const TOOL_BASE_URL = new URL(TOOL_BASE_PATHNAME, window.location.origin).toString();
-      const APP_BASE_URL = new URL("../", TOOL_BASE_URL).toString();
+      const APP_BASE_URL = new URL(resolveAppBasePathname(), window.location.origin).toString();
 
       function apiPath(path) {
         const cleanPath = String(path || "").replace(/^\/+/, "");
