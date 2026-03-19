@@ -1,5 +1,7 @@
       :root {
         color-scheme: light;
+        --billboard-width: 5900;
+        --billboard-height: 3480;
       }
 
       * {
@@ -128,6 +130,10 @@
 
       .settings-title-row .settings-title {
         margin: 0;
+      }
+
+      .settings-section {
+        margin-bottom: 12px;
       }
 
       .settings-partition-select {
@@ -483,6 +489,30 @@
         white-space: nowrap;
       }
 
+      .camera-inline-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+      }
+
+      .settings-inline-button {
+        border: 1px solid #1f1f1f;
+        background: #fff;
+        color: #1f1f1f;
+        padding: 1px 6px;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 11px;
+        line-height: 1.2;
+      }
+
+      .settings-inline-button:hover,
+      .settings-inline-button:focus {
+        text-decoration: underline;
+        outline: none;
+      }
+
       .editor-shell {
         padding-left: 24px;
         position: relative;
@@ -539,7 +569,7 @@
         --safe-left: 0px;
         --safe-right: 0px;
         width: max-content;
-        min-width: calc(var(--editor-height) * 5900 / 3480);
+        min-width: calc(var(--editor-height) * var(--billboard-width) / var(--billboard-height));
         height: var(--editor-height);
         background-color: var(--editor-bg);
         background-image:
@@ -571,7 +601,7 @@
 
       .partition-visual-editor-block {
         --partition-width: 5900;
-        min-width: calc(var(--editor-height) * var(--partition-width) / 3480);
+        min-width: calc(var(--editor-height) * var(--partition-width) / var(--billboard-height));
         width: max-content;
       }
 
@@ -768,7 +798,7 @@
         --safe-right-ratio: 0;
         position: relative;
         width: 100%;
-        aspect-ratio: 5900 / 3480;
+        aspect-ratio: var(--billboard-width) / var(--billboard-height);
         min-height: 120px;
         background-color: var(--editor-bg);
         background-image:
@@ -863,7 +893,8 @@
       body.preview-mode-3d .settings-row .marquee-toggle,
       body.preview-mode-3d .settings-row .partition-tabs,
       body.preview-mode-3d .settings-row .padding-inline-controls,
-      body.preview-mode-3d .settings-row .color-inline-controls {
+      body.preview-mode-3d .settings-row .color-inline-controls,
+      body.preview-mode-3d .settings-row .camera-inline-controls {
         white-space: nowrap;
         flex-wrap: nowrap;
       }
