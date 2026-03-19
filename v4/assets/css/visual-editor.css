@@ -163,6 +163,35 @@
         margin: 0;
       }
 
+      .settings-title-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .settings-section-toggle {
+        border: 0;
+        background: transparent;
+        color: #1f1f1f;
+        padding: 0;
+        cursor: pointer;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        line-height: 1;
+        min-width: 12px;
+        text-align: center;
+      }
+
+      .settings-section-toggle:hover,
+      .settings-section-toggle:focus {
+        text-decoration: none;
+        outline: none;
+      }
+
+      .settings-section-body[hidden] {
+        display: none;
+      }
+
       .settings-new-billboard {
         border: 1px solid #1e6cff;
         background: #1e6cff;

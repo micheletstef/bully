@@ -73,15 +73,19 @@
             <input id="showGuidesControl" type="checkbox" checked />
           </div>
         </div>
-        <div class="settings-section">
+        <div id="layoutSettingsSection" class="settings-section">
           <div class="settings-title-row">
             <h2 class="settings-title">layout</h2>
-            <select id="partitionSettingsSelect" class="settings-partition-select" hidden aria-label="Partition settings target">
-              <option value="left">7th</option>
-              <option value="curve">curve</option>
-              <option value="right">47th</option>
-            </select>
+            <div class="settings-title-actions">
+              <select id="partitionSettingsSelect" class="settings-partition-select" hidden aria-label="Partition settings target">
+                <option value="left">7th</option>
+                <option value="curve">curve</option>
+                <option value="right">47th</option>
+              </select>
+              <button id="layoutToggleButton" type="button" class="settings-section-toggle" aria-expanded="true" aria-controls="layoutSettingsBody" aria-label="Collapse layout">-</button>
+            </div>
           </div>
+          <div id="layoutSettingsBody" class="settings-section-body">
           <div class="settings-row">
             <span class="settings-label">color</span>
             <div class="color-inline-controls">
@@ -166,11 +170,14 @@
               <option value="vertical">vertical</option>
             </select>
           </div>
+          </div>
         </div>
-        <div class="settings-section">
+        <div id="cameraSettingsSection" class="settings-section">
           <div class="settings-title-row">
             <h2 class="settings-title">camera</h2>
+            <button id="cameraToggleButton" type="button" class="settings-section-toggle" aria-expanded="true" aria-controls="cameraSettingsBody" aria-label="Collapse camera">-</button>
           </div>
+          <div id="cameraSettingsBody" class="settings-section-body">
           <div class="settings-row">
             <label class="settings-label" for="preview3dShadowControl">3d shadow</label>
             <input id="preview3dShadowControl" class="settings-input" type="range" min="0" max="1" step="0.01" value="0.35" />
@@ -223,6 +230,7 @@
               <button id="preview3dResetButton" type="button" class="settings-inline-button">reset</button>
             </div>
             <span></span>
+          </div>
           </div>
         </div>
       </aside>

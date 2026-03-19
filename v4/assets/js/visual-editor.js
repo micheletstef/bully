@@ -1,5 +1,6 @@
       const STORAGE_KEY = "v2VisualEditorState";
       const SNAPSHOTS_STORAGE_KEY = "v2VisualEditorSnapshots";
+      const UI_STORAGE_KEY = "v2VisualEditorUiState";
       let assetIdCounter = 1;
       let availableAssets = [];
       let savedBillboards = [];
@@ -14,6 +15,11 @@
       const savedBillboardsList = document.getElementById("savedBillboardsList");
       const savedToggleButton = document.getElementById("savedToggleButton");
       const assetsToggleButton = document.getElementById("assetsToggleButton");
+      const layoutToggleButton = document.getElementById("layoutToggleButton");
+      const cameraToggleButton = document.getElementById("cameraToggleButton");
+      const layoutSettingsBody = document.getElementById("layoutSettingsBody");
+      const cameraSettingsBody = document.getElementById("cameraSettingsBody");
+      const cameraSettingsSection = document.getElementById("cameraSettingsSection");
       const newBillboardButton = document.getElementById("newBillboardButton");
       const alignmentSettings = document.getElementById("alignmentSettings");
       const marqueeToggle = document.getElementById("marqueeToggle");
@@ -223,6 +229,7 @@
         const persist = options.persist !== false;
         previewMode = normalized;
         document.body.classList.toggle("preview-mode-3d", normalized === "3d");
+        syncCameraSectionVisibility();
         if (flatBillboard3d instanceof HTMLElement) {
           flatBillboard3d.setAttribute("aria-hidden", normalized === "3d" ? "false" : "true");
         }
@@ -1564,9 +1571,49 @@
         localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(savedBillboards));
       }
 
+      function loadUiState() {
+        const defaults = {
+          collapsedSections: {
+            saved: false,
+            assets: false,
+            layout: false,
+            camera: false,
+          },
+        };
+        try {
+          const raw = localStorage.getItem(UI_STORAGE_KEY);
+          if (!raw) {
+            return defaults;
+          }
+          const parsed = JSON.parse(raw);
+          const collapsed = parsed?.collapsedSections && typeof parsed.collapsedSections === "object"
+            ? parsed.collapsedSections
+            : {};
+          return {
+            collapsedSections: {
+              saved: collapsed.saved === true,
+              assets: collapsed.assets === true,
+              layout: collapsed.layout === true,
+              camera: collapsed.camera === true,
+            },
+          };
+        } catch (error) {
+          return defaults;
+        }
+      }
+
+      function persistUiState() {
+        localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(uiState));
+      }
+
+      const uiState = loadUiState();
       const assetsSectionCollapsedState = {
         saved: false,
         assets: false,
+      };
+      const settingsSectionCollapsedState = {
+        layout: false,
+        camera: false,
       };
 
       function setAssetsSectionCollapsed(sectionKey, shouldCollapse) {
@@ -1591,10 +1638,12 @@
         }
         const collapsed = !!shouldCollapse;
         assetsSectionCollapsedState[sectionKey] = collapsed;
+        uiState.collapsedSections[sectionKey] = collapsed;
         content.hidden = collapsed;
         button.textContent = collapsed ? "+" : "-";
         button.setAttribute("aria-expanded", String(!collapsed));
         button.setAttribute("aria-label", (collapsed ? "expand " : "collapse ") + sectionKey);
+        persistUiState();
       }
 
       function setupAssetsSectionToggles() {
@@ -1610,8 +1659,64 @@
             const nextState = !assetsSectionCollapsedState[section.key];
             setAssetsSectionCollapsed(section.key, nextState);
           });
-          setAssetsSectionCollapsed(section.key, false);
+          setAssetsSectionCollapsed(section.key, uiState.collapsedSections[section.key] === true);
         }
+      }
+
+      function setSettingsSectionCollapsed(sectionKey, shouldCollapse) {
+        const sectionMap = {
+          layout: {
+            button: layoutToggleButton,
+            content: layoutSettingsBody,
+          },
+          camera: {
+            button: cameraToggleButton,
+            content: cameraSettingsBody,
+          },
+        };
+        const targetSection = sectionMap[sectionKey];
+        if (!targetSection) {
+          return;
+        }
+        const button = targetSection.button;
+        const content = targetSection.content;
+        if (!(button instanceof HTMLButtonElement) || !(content instanceof HTMLElement)) {
+          return;
+        }
+        const collapsed = !!shouldCollapse;
+        settingsSectionCollapsedState[sectionKey] = collapsed;
+        uiState.collapsedSections[sectionKey] = collapsed;
+        content.hidden = collapsed;
+        button.textContent = collapsed ? "+" : "-";
+        button.setAttribute("aria-expanded", String(!collapsed));
+        button.setAttribute("aria-label", (collapsed ? "expand " : "collapse ") + sectionKey);
+        persistUiState();
+      }
+
+      function setupSettingsSectionToggles() {
+        const sections = [
+          { key: "layout", button: layoutToggleButton },
+          { key: "camera", button: cameraToggleButton },
+        ];
+        for (const section of sections) {
+          if (!(section.button instanceof HTMLButtonElement)) {
+            continue;
+          }
+          section.button.addEventListener("click", () => {
+            const nextState = !settingsSectionCollapsedState[section.key];
+            setSettingsSectionCollapsed(section.key, nextState);
+          });
+          setSettingsSectionCollapsed(section.key, uiState.collapsedSections[section.key] === true);
+        }
+      }
+
+      function syncCameraSectionVisibility() {
+        if (!(cameraSettingsSection instanceof HTMLElement)) {
+          return;
+        }
+        const is3d = previewMode === "3d";
+        cameraSettingsSection.hidden = !is3d;
+        cameraSettingsSection.setAttribute("aria-hidden", is3d ? "false" : "true");
       }
 
       function clearSavedBillboardDropIndicators() {
@@ -5070,6 +5175,8 @@
       PREVIEW3D_CAMERA.targetZ = editorState.settings.preview3dCamera.targetZ;
       savedBillboards = loadSavedBillboards();
       setupAssetsSectionToggles();
+      setupSettingsSectionToggles();
+      syncCameraSectionVisibility();
       renderSavedBillboardsList();
       updateAssetIdCounterFromState();
       recoverLikelyScaleRegression();
