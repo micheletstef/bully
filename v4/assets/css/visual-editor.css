@@ -837,6 +837,7 @@
       }
 
       .flat-billboard-wrap {
+        margin-top: 42px;
         margin-bottom: 78px;
       }
 
@@ -1051,6 +1052,9 @@
       }
 
       .flat-billboard-annotations {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
         pointer-events: none;
       }
 

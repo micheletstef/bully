@@ -347,7 +347,7 @@
           flatAnnoLabel1820.style.display = showCurveGuides ? "block" : "none";
         }
         if (flatAnnoLabelCurve instanceof HTMLElement) {
-          flatAnnoLabelCurve.textContent = curveWidth + "px curve";
+          flatAnnoLabelCurve.textContent = "curve";
           flatAnnoLabelCurve.style.display = showCurveGuides ? "block" : "none";
         }
         if (flatAnnoLabel2840 instanceof HTMLElement) {
