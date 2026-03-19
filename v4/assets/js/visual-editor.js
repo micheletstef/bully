@@ -330,6 +330,11 @@
         flatBillboard.style.setProperty("--curve-start-ratio", String(startRatio));
         flatBillboard.style.setProperty("--curve-end-ratio", String(endRatio));
         flatBillboard.style.setProperty("--curve-mid-ratio", String(midRatio));
+        // Curve annotation markers are rendered outside #flatBillboard, so publish
+        // the same ratios at document scope for shared CSS variable resolution.
+        document.documentElement.style.setProperty("--curve-start-ratio", String(startRatio));
+        document.documentElement.style.setProperty("--curve-end-ratio", String(endRatio));
+        document.documentElement.style.setProperty("--curve-mid-ratio", String(midRatio));
         const showCurveGuides = curveEnabled && curveWidth > 0;
         if (flatAnnoMarkerStart instanceof HTMLElement) {
           flatAnnoMarkerStart.style.display = showCurveGuides ? "block" : "none";
