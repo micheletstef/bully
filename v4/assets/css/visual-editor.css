@@ -24,7 +24,7 @@
         width: 100%;
         box-sizing: border-box;
         display: grid;
-        grid-template-columns: 320px 320px 1fr;
+        grid-template-columns: 280px 280px 1fr;
         align-items: stretch;
         min-height: calc(100vh - 36px);
       }
@@ -750,7 +750,7 @@
 
       .flat-billboard-shell {
         position: relative;
-        width: min(100%, 1300px);
+        width: min(100%, 1600px);
       }
 
       .flat-billboard {
