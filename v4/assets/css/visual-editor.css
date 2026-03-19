@@ -593,6 +593,11 @@
         outline-offset: -2px;
       }
 
+      .visual-editor-block.is-drop-target {
+        outline: 2px dashed rgba(211, 0, 0, 0.9);
+        outline-offset: -2px;
+      }
+
       .visual-editor-block {
         --editor-height: 200px;
         --asset-gap: 8px;

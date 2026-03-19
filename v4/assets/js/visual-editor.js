@@ -2504,22 +2504,7 @@
             return;
           }
 
-          const dimensions = await resolveAssetDimensions(asset);
-          const assetSnapshot = {
-            id: "asset-" + assetIdCounter++,
-            name: asset.name,
-            src: asset.src,
-            group: asset.group,
-            width: dimensions.width,
-            height: dimensions.height,
-            scalePercent: 100,
-            rotationTurns: 0,
-            cropLeft: 0,
-            cropRight: 0,
-          };
-          editorState.assets.push(assetSnapshot);
-          appendAssetBlock(assetSnapshot, visualEditorBlock, { select: true });
-          saveEditorState();
+          await addAssetTemplateToPrimaryEditor(asset);
         });
         return button;
       }
@@ -2589,6 +2574,124 @@
           // Fall back to deterministic placeholder sizes for unsupported/broken assets.
         }
         return fallbackDimensionsForAsset(asset);
+      }
+
+      const GRAPHICS_UPLOAD_EXTENSIONS = new Set(["png", "jpg", "jpeg", "svg", "gif", "webp"]);
+
+      function hasExternalFilePayload(event) {
+        const types = event?.dataTransfer?.types;
+        if (!types) {
+          return false;
+        }
+        return Array.from(types).includes("Files");
+      }
+
+      function isUploadableGraphicsFile(file) {
+        if (!(file instanceof File)) {
+          return false;
+        }
+        const extension = extensionOf(file.name);
+        if (GRAPHICS_UPLOAD_EXTENSIONS.has(extension)) {
+          return true;
+        }
+        const mimeType = String(file.type || "").toLowerCase();
+        return mimeType.startsWith("image/");
+      }
+
+      function assetTemplateFromEntry(entry) {
+        if (!entry) {
+          return null;
+        }
+        return {
+          src: entry.src,
+          name: entry.name,
+          group: entry.group,
+        };
+      }
+
+      async function uploadGraphicsFile(file) {
+        const formData = new FormData();
+        formData.append("group", "graphics");
+        formData.append("file", file, file.name || "asset");
+        const response = await fetch(apiPath("api/assets"), {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) {
+          let detail = "";
+          try {
+            const payload = await response.json();
+            detail = typeof payload?.error === "string" ? payload.error : "";
+          } catch (error) {
+            detail = "";
+          }
+          const suffix = detail ? (": " + detail) : "";
+          throw new Error("Upload failed" + suffix);
+        }
+        const payload = await response.json();
+        const normalized = normalizeAssetEntry(payload);
+        if (!normalized) {
+          throw new Error("Upload returned invalid asset metadata.");
+        }
+        return normalized;
+      }
+
+      async function addAssetTemplateToPrimaryEditor(template) {
+        const dimensions = await resolveAssetDimensions(template);
+        const assetSnapshot = {
+          id: "asset-" + assetIdCounter++,
+          name: template.name,
+          src: template.src,
+          group: template.group,
+          width: dimensions.width,
+          height: dimensions.height,
+          scalePercent: 100,
+          rotationTurns: 0,
+          cropLeft: 0,
+          cropRight: 0,
+        };
+        editorState.assets.push(assetSnapshot);
+        appendAssetBlock(assetSnapshot, visualEditorBlock, { select: true });
+        syncFlatBillboardArtworks();
+        saveEditorState();
+      }
+
+      async function handleGraphicsFilesDrop(event, options = {}) {
+        const partitionKey = typeof options.partitionKey === "string" ? options.partitionKey : "";
+        const droppedFiles = Array.from(event?.dataTransfer?.files || []);
+        if (!droppedFiles.length) {
+          return false;
+        }
+        const uploadableFiles = droppedFiles.filter((file) => isUploadableGraphicsFile(file));
+        if (!uploadableFiles.length) {
+          return false;
+        }
+        const uploadedEntries = [];
+        for (const file of uploadableFiles) {
+          try {
+            const uploaded = await uploadGraphicsFile(file);
+            uploadedEntries.push(uploaded);
+          } catch (error) {
+            // Keep processing remaining files even if one upload fails.
+            console.error(error);
+          }
+        }
+        if (!uploadedEntries.length) {
+          return true;
+        }
+        await loadAvailableAssets();
+        for (const uploadedEntry of uploadedEntries) {
+          const template = assetTemplateFromEntry(uploadedEntry);
+          if (!template) {
+            continue;
+          }
+          if (editorState.settings.partitionsEnabled && PARTITION_KEYS.includes(partitionKey)) {
+            await placePendingAssetInPartition(partitionKey, template);
+            continue;
+          }
+          await addAssetTemplateToPrimaryEditor(template);
+        }
+        return true;
       }
 
       async function loadAvailableAssets() {
@@ -5268,6 +5371,14 @@
         });
 
         partitionEditor.addEventListener("dragover", (event) => {
+          if (hasExternalFilePayload(event)) {
+            event.preventDefault();
+            partitionEditor.classList.add("is-drop-target");
+            if (event.dataTransfer) {
+              event.dataTransfer.dropEffect = "copy";
+            }
+            return;
+          }
           if (!editorState.settings.partitionsEnabled) {
             return;
           }
@@ -5285,6 +5396,9 @@
         partitionEditor.addEventListener("drop", async (event) => {
           event.preventDefault();
           partitionEditor.classList.remove("is-drop-target");
+          if (await handleGraphicsFilesDrop(event, { partitionKey: partitionEditor.dataset.partitionKey || "" })) {
+            return;
+          }
           const key = partitionEditor.dataset.partitionKey || "";
           let payload = null;
           if (event.dataTransfer) {
@@ -5404,6 +5518,14 @@
       });
 
       visualEditorBlock.addEventListener("dragover", (event) => {
+        if (hasExternalFilePayload(event)) {
+          event.preventDefault();
+          visualEditorBlock.classList.add("is-drop-target");
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "copy";
+          }
+          return;
+        }
         if (!draggingAssetId) {
           return;
         }
@@ -5411,6 +5533,10 @@
         if (event.dataTransfer) {
           event.dataTransfer.dropEffect = "move";
         }
+      });
+
+      visualEditorBlock.addEventListener("dragleave", () => {
+        visualEditorBlock.classList.remove("is-drop-target");
       });
 
       visualEditorBlock.addEventListener("dragenter", (event) => {
@@ -5435,7 +5561,13 @@
         positionScaleControls();
       });
 
-      visualEditorBlock.addEventListener("drop", (event) => {
+      visualEditorBlock.addEventListener("drop", async (event) => {
+        visualEditorBlock.classList.remove("is-drop-target");
+        if (hasExternalFilePayload(event)) {
+          event.preventDefault();
+          await handleGraphicsFilesDrop(event, {});
+          return;
+        }
         if (!draggingAssetId) {
           return;
         }
